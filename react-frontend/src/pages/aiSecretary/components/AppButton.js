@@ -1,6 +1,14 @@
-/* aiSecretary 전용 버튼 스타일 공통화 */
-// src/pages/aiSecretary/components/AppButton.js
-// primary / secondary 변형과 disabled 한 군데서 관리
+/**
+ * @FileName : AppButton.js
+ * @Description : aiSecretary 전용 버튼 스타일 공통 컴포넌트
+ * @Author : 송혜진
+ * @Date : 2026. 04. 29
+ * @Modification_History
+ * @
+ * @ 수정일         수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.04.29    송혜진        최초 생성
+ */
 
 import React from "react";
 import { C } from "../styles/aiSecretaryTheme";

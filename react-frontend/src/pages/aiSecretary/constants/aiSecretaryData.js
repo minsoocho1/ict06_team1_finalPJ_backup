@@ -1,4 +1,15 @@
-/* AI 비서 공용 데이터 */
+/**
+ * @FileName : aiSecretaryData.js
+ * @Description : AI 비서 공용 데이터
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.30  송혜진       최초 생성
+ * @ 2026.05.12  송혜진       templateCards 내 dept 추가
+ */
 
 export const docMeta = {
   REPORT: {

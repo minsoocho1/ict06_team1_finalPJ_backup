@@ -1,5 +1,14 @@
-/* aiSecretary 전용 입력창 공통화 */
-// src/pages/aiSecretary/components/TextInput.js
+/**
+ * @FileName : TextInput.js
+ * @Description : 사내 AI 포털 전용 입력창 공통화
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------    ---------    ----------------------------------------
+ * @ 2026.04.28    송혜진      최초 생성
+ */
 
 import React from "react";
 import { C } from "../styles/aiSecretaryTheme";

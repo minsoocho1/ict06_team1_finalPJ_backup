@@ -1,23 +1,23 @@
-/* AiSecretary.js 전용 사용자 AI 비서 문서 작성/수정 화면 */
-// src/pages/aiSecretary/screens/WriterScreen.js
+/**
+ * @FileName : WriterScreen.js
+ * @Description : AiSecretary.js 전용 사용자 AI 비서 문서 작성/수정 화면
+ *                - AI가 생성한 초안 문서를 화면에 표시
+ *                - 사용자가 추가 수정 요청을 입력하면 /assistant/revise API 호출
+ *                - 수정된 문서를 writerState.content에 반영
+ *                - 각 수정 결과를 versions에 content와 함께 저장
+ *                - 버전 미리보기 / 복원 / 복사 / 다운로드 기능 제공
+
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.13  송혜진       템플릿 생성 조건 변경
+ */
 
 /*
-  WriterScreen 역할
-  --------------------------------------------------
-  1. AI가 생성한 초안 문서를 화면에 표시
-  2. 사용자가 추가 수정 요청을 입력하면 /assistant/revise API 호출
-  3. 수정된 문서를 writerState.content에 반영
-  4. 각 수정 결과를 versions에 content와 함께 저장
-  5. 버전 미리보기 / 복원 / 복사 / 다운로드 기능 제공
-
-  문서 유형 기준
-  --------------------------------------------------
-  백엔드 / DB / 버전별 문서 유형값은 문자열로 통일한다.
-
-  - REPORT   : 보고서 초안
-  - MINUTES  : 회의록 정리
-  - APPROVAL : 결재 사유
-
   주의
   --------------------------------------------------
   - template는 문서 유형이 아니다.

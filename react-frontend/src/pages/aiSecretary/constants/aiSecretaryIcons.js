@@ -1,5 +1,14 @@
-/* aiSecretary 전용 아이콘 꾸러미 */
-// src/pages/aiSecretary/constants/aiSecretaryIcons.js
+/**
+ * @FileName : aiSecretaryIcons.js
+ * @Description : 사내 AI 포털 전용 아이콘 꾸러미
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ */
 
 import React from "react";
 

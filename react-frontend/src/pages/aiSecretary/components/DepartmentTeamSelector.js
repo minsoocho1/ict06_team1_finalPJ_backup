@@ -1,3 +1,16 @@
+/**
+ * @FileName : DepartmentTeamSelector.js
+ * @Description : 사내 AI 포털 사용자 본부 - 팀 - 사원 선택 컴포넌트
+ * @Author : 송혜진
+ * @Date : 2026. 05. 14
+ * @Modification_History
+ * @
+ * @ 수정일         수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.14    송혜진        최초 생성
+ */
+
+
 import React, { useEffect, useMemo, useState } from "react";
 import { getDepartmentTree, unwrapApiData } from "../api/aiSecretaryApi";
 import { C } from "../styles/aiSecretaryTheme";

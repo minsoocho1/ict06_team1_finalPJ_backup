@@ -1,14 +1,14 @@
 /**
  * @FileName : Sidebar.js
  * @Description : 사내 AI 포털 전용 사이드바
- * @Author : 박상지
+ * @Author : 송혜진
  * @Date : 2026. 04. 28
  * @Modification_History
  * @
  * @ 수정일       수정자       수정내용
  * @ ----------    ---------    ----------------------------------------
- * @ 2026.04.28    박상지      최초 생성 / BACKEND 연계
- * @ 2026.05.07    박상지      문서 유형 type 값을 REPORT / MINUTES / APPROVAL 기준으로 정리
+ * @ 2026.04.28    송혜진      최초 생성 / BACKEND 연계
+ * @ 2026.05.07    송혜진      문서 유형 type 값을 REPORT / MINUTES / APPROVAL 기준으로 정리
  */
 
 import React from "react";

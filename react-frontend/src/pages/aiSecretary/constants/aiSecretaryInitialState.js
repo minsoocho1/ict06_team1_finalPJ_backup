@@ -1,6 +1,14 @@
-/* AiSecretary.js 전용 초기 상태 묶음 */
-// src/pages/aiSecretary/constants/aiSecretaryInitialState.js
-
+/**
+ * @FileName : aiSecretaryInitialState.js
+ * @Description : AI 비서 전용 초기 상태 묶음
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ */
 
 /* AI 비서 문서 작성 시작 폼 초기값 (사용 : StartFormScreen)
    - 문서 유형 자체는 formData에 저장하지 않음

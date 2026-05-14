@@ -1,5 +1,14 @@
-/* AiSecretary.js 전용 문장 다듬기 화면 */
-// src/pages/aiSecretary/screens/CorrectionScreen.js
+/**
+ * @FileName : CorrectionScreen.js
+ * @Description : AiSecretary.js 전용 문장 다듬기 화면
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";

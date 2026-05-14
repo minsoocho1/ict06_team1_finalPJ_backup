@@ -11,6 +11,7 @@
  * @ 2026.05.05    송혜진        문장 다듬기 API 추가
  * @ 2026.05.06    송혜진        AI 비서 리스트 추가 API 추가
  * @ 2026.05.07    송혜진        문서 유형 type 값을 REPORT / MINUTES / APPROVAL 기준으로 보정
+ * @ 2026.05.07    송혜진        템플릿 요청 API + 조직 조회 API 추가
  */
 
 import axios from "axios";
@@ -187,7 +188,6 @@ export const createAssistantTemplate = (payload) =>
 // 조직 조회 API
 // -----------------------------------------------------
 
-// 
 export const getDepartmentTree = () =>
   api.get("/organization/departments/tree");
 

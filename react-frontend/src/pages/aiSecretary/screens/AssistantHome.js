@@ -1,22 +1,21 @@
-/* AiSecretary.js 전용 AI비서 홈 화면 */
-// src/pages/aiSecretary/screens/AssistantHome.js
+/**
+ * @FileName : AssistantHome.js
+ * @Description : AiSecretary.js 전용 AI비서 홈 화면
+ *                - AI 비서 진입 화면
+ *                - 보고서 초안 / 회의록 정리 / 결재 사유 / 템플릿 생성으로 이동하는 카드 제공
+ *                - DB에서 조회한 최근 작성 ASSISTANT 문서 목록 표시
+ *                - 최근 작성 문서 클릭 시 WriterScreen으로 이동
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.12    송혜진        로직 변경(lastMessage 기준 48시간 이후 삭제)
+ */
 
 /*
-  AssistantHome 역할
-  --------------------------------------------------
-  1. AI 비서 진입 화면
-  2. 보고서 초안 / 회의록 정리 / 결재 사유 / 템플릿 생성으로 이동하는 카드 제공
-  3. DB에서 조회한 최근 작성 ASSISTANT 문서 목록 표시
-  4. 최근 작성 문서 클릭 시 WriterScreen으로 이동
-
-  문서 유형 기준
-  --------------------------------------------------
-  백엔드 / DB / 프론트 문서 유형값은 대문자로 통일한다.
-
-  - REPORT   : 보고서 초안
-  - MINUTES  : 회의록 정리
-  - APPROVAL : 결재 사유
-
   주의
   --------------------------------------------------
   - template은 문서 유형이 아니라 템플릿 생성 화면이다.
@@ -38,15 +37,9 @@ export default function AssistantHome({
   loadingRecents = false,
   recentError = "",
 }) {
-  /**
-   * AI 비서 주요 기능 카드
-   *
-   * REPORT / MINUTES / APPROVAL:
-   * - StartFormScreen으로 이동
-   *
-   * template:
-   * - TemplateScreen으로 이동
-   */
+  // AI 비서 주요 기능 카드
+  // REPORT / MINUTES / APPROVAL: StartFormScreen으로 이동
+  // template: TemplateScreen으로 이동
   const quicks = [
     {
       id: "REPORT",

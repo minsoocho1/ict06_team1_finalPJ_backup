@@ -1,4 +1,17 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+﻿/**
+ * @FileName : TemplateScreen.js
+ * @Description : AiSecretary.js 전용 템플릿 생성 화면
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.13  송혜진       템플릿 생성 조건 변경
+ */
+
+import React, { useEffect, useMemo, useState } from "react";
 import AppButton from "../components/AppButton";
 import Chip from "../components/Chip";
 import DepartmentTeamSelector from "../components/DepartmentTeamSelector";

@@ -8,7 +8,7 @@
  * @ 수정일         수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.28    송혜진        최초 생성/ BACKEND 연결
- * @ 2026.04.29    송혜진        로직 변경(lastMessage 기준 48시간 이후 삭제)
+ * @ 2026.05.12    송혜진        로직 변경(lastMessage 기준 48시간 이후 삭제)
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";

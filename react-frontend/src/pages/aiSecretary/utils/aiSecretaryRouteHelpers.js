@@ -1,5 +1,14 @@
-/* AiSecretary.js 전용 라우팅 규칙 / 계산 유틸 */
-// src/pages/aiSecretary/utils/aiSecretaryRouteHelpers.js
+/**
+ * @FileName : aiSecretaryRouteHelpers.js
+ * @Description : AiSecretary.js 전용 라우팅 규칙 / 계산 유틸
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ */
 
 import { PATH } from "../../../constants/path";
 

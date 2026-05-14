@@ -1,5 +1,14 @@
-﻿/* AI 비서 문서 작성 시작 화면 */
-// src/pages/aiSecretary/screens/StartFormScreen.js
+﻿/**
+ * @FileName : StartFormScreen.js
+ * @Description : AiSecretary.js 전용 문서 작성 시작 화면
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ */
 
 import React, { useEffect, useRef, useState } from "react";
 import AppButton from "../components/AppButton";
