@@ -37,4 +37,6 @@ public class ScheduleListResponseDto {
 
     private String creatorNo;
 
+    private String creatorName;
+
 }

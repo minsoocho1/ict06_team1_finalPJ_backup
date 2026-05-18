@@ -5,13 +5,15 @@ import { request } from 'src/helpers/axios_helper';
 // CoreUI
 import { CButton, CCard, CCardBody, CCardHeader, CFormInput, CFormSelect, CFormTextarea } from '@coreui/react';
 import CIcon from '@coreui/icons-react';
-import { cilPencil, cilTrash, cilX } from '@coreui/icons';
+import { cilClock, cilLayers, cilLocationPin, cilPencil, cilTag, cilTrash, cilUser, cilX } from '@coreui/icons';
 
 // 일정 상세/수정 팝업
+// 수정 모드에서도 상세등록과 같은 권한 정책을 적용하기위해 userInfo를 함께 받음.
 const CalendarDetail = ({
     visible = false,
     onClose,
     schedule,
+    userInfo,
     popupPosition,
     onDelete,
     onUpdateSuccess,
@@ -29,6 +31,50 @@ const CalendarDetail = ({
     // 수정 팝업에서도 상세등록처럼 종일 체크 상태를 따로 관리한다.
     const [allDay, setAllDay] = useState(false);
 
+    // 일정 수정 권한은 상세등록과 같은 기준 사용.
+    const TEAM_LEADER_POSITION_NAMES = ['주임', '선임', '책임', '수석'];
+
+    // 로그인 정보의 role 값이 문자열/배열/객체 형태로 올 수 있어서 문자열로 정규화한다.
+    const normalizeRole = (roleValue) => {
+        if (typeof roleValue === 'string') return roleValue.toUpperCase();
+
+        if (Array.isArray(roleValue) && roleValue.length > 0) {
+            return normalizeRole(roleValue[0]);
+        }
+
+        if (roleValue && typeof roleValue === 'object') {
+            return String(roleValue.roleName || roleValue.authority || roleValue.name || '').toUpperCase();
+        }
+
+        return '';
+    };
+
+    // userInfo 구조가 화면마다 조금 다를 수 있어서 가능한 직급명 필드를 모두 확인한다.
+    const getPositionName = (user) => {
+        return user?.position?.positionName || user?.positionName || user?.position_name || '';
+    };
+
+    const userRole = normalizeRole(userInfo?.role);
+    const positionName = getPositionName(userInfo);
+
+    const isAdmin = userRole.includes('ADMIN');
+
+    // 부서일정은 관리자이거나, 팀장 권한 role이 있거나, 주임 이상 직급이면 선택 가능하다.
+    const isTeamLeaderLevel =
+        isAdmin ||
+        userRole.includes('TEAM_LEADER') ||
+        TEAM_LEADER_POSITION_NAMES.some((name) => positionName.includes(name));
+
+    // 구분 select에는 현재 사용자 권한으로 수정 가능한 일정 범위만 보여준다.
+    const scheduleTypeOptions = [
+        { value: 'PERSONAL', label: '개인일정' },
+        ...(isTeamLeaderLevel ? [{ value: 'DEPARTMENT', label: '부서일정' }] : []),
+        ...(isAdmin ? [{ value: 'COMPANY', label: '전사일정' }] : []),
+    ];
+
+    // 공개된 다른 사람 일정은 조회만 가능해야 하므로 수정/삭제 버튼은 작성자 또는 관리자에게만 보여줌.
+    const isScheduleOwner = String(schedule?.creatorNo || '') === String(userInfo?.empNo || '');
+    const canManageSchedule = isAdmin || isScheduleOwner;
 
     // 수정 폼 입력값
     // 기존 일정 데이터를 복사해서 수정 중인 값으로 따로 관리한다.
@@ -43,8 +89,6 @@ const CalendarDetail = ({
         repeatRule: '',
         visibility: 'PRIVATE',
     });
-
-
 
     // 팝업 상태 초기화
     // 다른 일정을 다시 열면 항상 읽기 전용 요약 화면부터 보여줌.
@@ -104,12 +148,46 @@ const CalendarDetail = ({
         const { name, value } = e.target;
 
         setFormData((prev) => {
-            // 반복 일정은 개인일정만 허용한다.
-            if (name === 'type' && value !== 'PERSONAL') {
+            if (name === 'type') {
+                // 화면에 노출되지 않은 구분 값이 임의로 들어오는 경우를 막는다.
+                const canSelectType = scheduleTypeOptions.some((option) => option.value === value);
+
+                if (!canSelectType) {
+                    return prev;
+                }
+
+                // 부서/전사일정은 공개 범위를 사용자가 따로 고르지 않고 정책에 맞게 자동 고정한다.
+                // 개인일정만 비공개/공개를 선택할 수 있다.
+                const nextVisibility =
+                    value === 'DEPARTMENT'
+                        ? 'DEPARTMENT'
+                        : value === 'COMPANY'
+                            ? 'COMPANY'
+                            : prev.visibility === 'PRIVATE'
+                                ? 'PRIVATE'
+                                : 'COMPANY';
+
                 return {
                     ...prev,
                     type: value,
-                    repeatRule: '',
+                    visibility: nextVisibility,
+
+                    // 반복 일정은 1차 구현에서 개인일정만 허용한다.
+                    repeatRule: value === 'PERSONAL' ? prev.repeatRule : '',
+                };
+            }
+
+            if (name === 'visibility') {
+                // 공개 범위 직접 선택은 개인일정에서만 허용한다.
+                if (prev.type !== 'PERSONAL') {
+                    return prev;
+                }
+
+                return {
+                    ...prev,
+                    // 현재 백엔드는 공개 여부를 isPublic boolean으로 저장하므로,
+                    // 개인일정의 "공개"는 내부적으로 COMPANY 값을 사용해 공개 상태로만 구분한다.
+                    visibility: value === 'PRIVATE' ? 'PRIVATE' : 'COMPANY',
                 };
             }
 
@@ -156,9 +234,21 @@ const CalendarDetail = ({
         return `${period} ${String(displayHour).padStart(2, '0')}:${minute}`;
     };
 
-    const getDisplayDateTimeRange = (startValue, endValue) => {
+    const getDisplayDateTimeRange = (startValue, endValue, isAllDay = false) => {
+        // 종일 일정은 시간 범위를 보여주지 않고 날짜 + 종일로 간단하게 표시한다.
+        if (isAllDay) {
+            const allDayDate = getDateText(startValue || endValue);
+
+            return (
+                <>
+                    <span>{allDayDate || '날짜 정보 없음'}</span>
+                    <span style={{ marginLeft: '10px' }}>종일</span>
+                </>
+            );
+        }
+
         if (!startValue || !endValue) {
-            return '-';
+            return '시간 정보 없음';
         }
 
         const startDate = getDateText(startValue);
@@ -167,7 +257,12 @@ const CalendarDetail = ({
         const endTime = getDisplayTimeText(endValue);
 
         if (startDate === endDate) {
-            return `${startDate} ${startTime} ~ ${endTime}`;
+            return (
+                <>
+                    <span>{startDate}</span>
+                    <span style={{ marginLeft: '10px' }}>{startTime} ~ {endTime}</span>
+                </>
+            );
         }
 
         return `${startDate} ${startTime} ~ ${endDate} ${endTime}`;
@@ -195,6 +290,30 @@ const CalendarDetail = ({
         };
 
         return labels[type] || type || '개인일정';
+    };
+
+    // 일정 작성자 표시명
+    // 개인 일정은 내 일정/작성자 일정으로 보여주가, 부서/전사 일정은 조직 일정 성격을 우선 표시.
+    const getScheduleOwnerLabel = () => {
+        const type = schedule?.type || 'PERSONAL';
+
+        if (type === 'DEPARTMENT') {
+            return '부서 일정';
+        }
+
+        if (type === 'COMPANY') {
+            return '전사 일정';
+        }
+
+        const isMine = String(schedule?.creatorNo || '') === String(userInfo?.empNo || '');
+
+        if (isMine) {
+            return '내 일정';
+        }
+
+        return schedule?.creatorName
+            ? `${schedule.creatorName} 일정`
+            : '팀원 일정';
     };
 
     // 백엔드 LocalDateTime 요청 형식으로 변환
@@ -263,7 +382,11 @@ const CalendarDetail = ({
         };
 
         try {
-            await request('PUT', `/calendar/${schedule.scheduleId}`, payload);
+            await request(
+                'PUT',
+                `/calendar/${schedule.scheduleId}?requesterNo=${encodeURIComponent(userInfo?.empNo || '')}`,
+                payload
+            );
 
             await onUpdateSuccess?.();
             onClose?.();
@@ -311,6 +434,35 @@ const CalendarDetail = ({
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
+    };
+
+    const detailInfoListStyle = {
+        marginTop: '14px',
+        borderTop: '1px solid #e5e7eb',
+    };
+
+    const detailInfoRowStyle = {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '12px',
+        minHeight: '38px',
+        borderBottom: '1px solid #eef2f7',
+        fontSize: '13px',
+        color: '#374151',
+    };
+
+    const detailInfoIconStyle = {
+        width: '14px',
+        height: '14px',
+        color: '#6b7280',
+        flexShrink: 0,
+    };
+
+    const detailInfoValueStyle = {
+        minWidth: 0,
+        flex: 1,
+        color: '#111827',
+        fontWeight: '600',
     };
 
     const editInputStyle = {
@@ -511,27 +663,32 @@ const CalendarDetail = ({
                             </button>
                         ) : (
                             <>
-                                <button
-                                    type="button"
-                                    aria-label="수정"
-                                    onClick={() => setEditMode(true)}
-                                    style={iconButtonStyle}
-                                    className="calendar-detail-action-button"
-                                >
-                                    <CIcon icon={cilPencil} size="sm" />
-                                    <span className="calendar-detail-tooltip">일정 수정</span>
-                                </button>
+                                {/* 작성자 또는 관리자만 일정을 수정/삭제할 수 있다. */}
+                                {canManageSchedule && (
+                                    <>
+                                        <button
+                                            type="button"
+                                            aria-label="수정"
+                                            onClick={() => setEditMode(true)}
+                                            style={iconButtonStyle}
+                                            className="calendar-detail-action-button"
+                                        >
+                                            <CIcon icon={cilPencil} size="sm" />
+                                            <span className="calendar-detail-tooltip">일정 수정</span>
+                                        </button>
 
-                                <button
-                                    type="button"
-                                    aria-label="삭제"
-                                    onClick={() => onDelete?.(schedule)}
-                                    style={iconButtonStyle}
-                                    className="calendar-detail-action-button"
-                                >
-                                    <CIcon icon={cilTrash} size="sm" />
-                                    <span className="calendar-detail-tooltip">일정 삭제</span>
-                                </button>
+                                        <button
+                                            type="button"
+                                            aria-label="삭제"
+                                            onClick={() => onDelete?.(schedule)}
+                                            style={iconButtonStyle}
+                                            className="calendar-detail-action-button"
+                                        >
+                                            <CIcon icon={cilTrash} size="sm" />
+                                            <span className="calendar-detail-tooltip">일정 삭제</span>
+                                        </button>
+                                    </>
+                                )}
 
                                 <button
                                     type="button"
@@ -559,11 +716,24 @@ const CalendarDetail = ({
                                 {schedule.title || '(제목 없음)'}
                             </div>
 
-                            <div style={{ marginTop: '10px', fontSize: '14px', color: '#374151' }}>
-                                {getDisplayDateTimeRange(
-                                    schedule.startTime || schedule.start,
-                                    schedule.endTime || schedule.end
-                                )}
+                            <div
+                                style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '8px',
+                                    marginTop: '10px',
+                                    fontSize: '14px',
+                                    color: '#374151',
+                                }}
+                            >
+                                <CIcon icon={cilClock} style={detailInfoIconStyle} />
+                                <span>
+                                    {getDisplayDateTimeRange(
+                                        schedule.startTime || schedule.start,
+                                        schedule.endTime || schedule.end,
+                                        Boolean(schedule.isAllDay)
+                                    )}
+                                </span>
                             </div>
 
                             {schedule.repeatRule && (
@@ -586,30 +756,34 @@ const CalendarDetail = ({
 
                             <div style={{ marginTop: '14px', borderTop: '1px solid #e5e7eb' }} />
 
-                            <div style={{ marginTop: '14px', fontSize: '14px', color: '#374151' }}>
-                                <strong style={{ marginRight: '8px' }}>장소</strong>
-                                {schedule.location || '장소 없음'}
-                            </div>
+                            {/* 일정 부가 정보: 아이콘을 붙여 빠르게 스캔할 수 있게 정리한다. */}
+                            <div style={detailInfoListStyle}>
+                                <div style={detailInfoRowStyle}>
+                                    <CIcon icon={cilUser} style={detailInfoIconStyle} />
+                                    <span style={detailInfoValueStyle}>{getScheduleOwnerLabel()}</span>
+                                </div>
 
-                            <div style={{ marginTop: '14px', borderTop: '1px solid #e5e7eb' }} />
+                                <div style={detailInfoRowStyle}>
+                                    <CIcon icon={cilLocationPin} style={detailInfoIconStyle} />
+                                    <span style={detailInfoValueStyle}>{schedule.location || '장소 없음'}</span>
+                                </div>
 
-                            <div style={{ marginTop: '14px', fontSize: '14px', color: '#374151' }}>
-                                <strong style={{ marginRight: '8px' }}>분류</strong>
-                                {getCategoryLabel(schedule.category)}
-                            </div>
+                                <div style={detailInfoRowStyle}>
+                                    <CIcon icon={cilTag} style={detailInfoIconStyle} />
+                                    <span style={detailInfoValueStyle}>{getCategoryLabel(schedule.category)}</span>
+                                </div>
 
-                            <div style={{ marginTop: '14px', borderTop: '1px solid #e5e7eb' }} />
-
-                            <div style={{ marginTop: '14px', fontSize: '14px', color: '#374151' }}>
-                                <strong style={{ marginRight: '8px' }}>구분</strong>
-                                {getTypeLabel(schedule.type)}
+                                <div style={detailInfoRowStyle}>
+                                    <CIcon icon={cilLayers} style={detailInfoIconStyle} />
+                                    <span style={detailInfoValueStyle}>{getTypeLabel(schedule.type)}</span>
+                                </div>
                             </div>
 
                             {schedule.content && (
                                 <>
                                     <div style={{ marginTop: '14px', borderTop: '1px solid #e5e7eb' }} />
 
-                                    <div style={{ marginTop: '14px', fontSize: '14px', color: '#374151', lineHeight: 1.6 }}>
+                                    <div style={{ marginTop: '14px', fontSize: '13px', color: '#374151', lineHeight: 1.6 }}>
                                         {schedule.content}
                                     </div>
                                 </>
@@ -625,16 +799,18 @@ const CalendarDetail = ({
                                 style={titleInputStyle}
                             />
 
-                            {/* 일정 구분 */}
+                            {/* 일정 구분: 현재 사용자 권한으로 수정 가능한 일정 범위만 보여준다. */}
                             <CFormSelect
                                 name="type"
                                 value={formData.type}
                                 onChange={handleChange}
                                 style={{ ...fieldBlockStyle, ...selectInputStyle }}
                             >
-                                <option value="PERSONAL">개인일정</option>
-                                <option value="DEPARTMENT">부서일정</option>
-                                <option value="COMPANY">전사일정</option>
+                                {scheduleTypeOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
                             </CFormSelect>
 
                             {/* 카테고리 */}
@@ -742,11 +918,26 @@ const CalendarDetail = ({
                                 name="visibility"
                                 value={formData.visibility}
                                 onChange={handleChange}
+                                disabled={formData.type !== 'PERSONAL'}
                                 style={selectInputStyle}
                             >
-                                <option value="PRIVATE">비공개</option>
-                                <option value="DEPARTMENT">부서 공개</option>
-                                <option value="COMPANY">전사 공개</option>
+                                {/* 개인일정만 비공개/공개를 직접 선택할 수 있다. */}
+                                {formData.type === 'PERSONAL' && (
+                                    <>
+                                        <option value="PRIVATE">비공개</option>
+                                        <option value="COMPANY">공개</option>
+                                    </>
+                                )}
+
+                                {/* 부서일정은 부서 공개로 자동 고정한다. */}
+                                {formData.type === 'DEPARTMENT' && (
+                                    <option value="DEPARTMENT">부서 공개</option>
+                                )}
+
+                                {/* 전사일정은 전사 공개로 자동 고정한다. */}
+                                {formData.type === 'COMPANY' && (
+                                    <option value="COMPANY">전사 공개</option>
+                                )}
                             </CFormSelect>
 
                             <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>

@@ -45,6 +45,47 @@ const CalendarDetailAdd = ({
     // edit 모드면 기존 일정 데이터를 채우고, 이후 수정 로직을 호출.
     const isEditMode = mode === 'edit';
 
+    // 일정 등록 권한은 현재 프로젝트의 직급 체계 기준으로 판단한다.
+    const TEAM_LEADER_POSITION_NAMES = ['주임', '선임', '책임', '수석'];
+
+    // 로그인 정보의 role 값이 문자열/배열/객체 형태로 올 수 있어서 문자열로 정규화한다.
+    const normalizeRole = (roleValue) => {
+        if (typeof roleValue === 'string') return roleValue.toUpperCase();
+
+        if (Array.isArray(roleValue) && roleValue.length > 0) {
+            return normalizeRole(roleValue[0]);
+        }
+
+        if (roleValue && typeof roleValue === 'object') {
+            return String(roleValue.roleName || roleValue.authority || roleValue.name || '').toUpperCase();
+        }
+
+        return '';
+    };
+
+    // userInfo 구조가 화면마다 조금 다를 수 있어서 가능한 직급명 필드를 모두 확인한다.
+    const getPositionName = (user) => {
+        return user?.position?.positionName || user?.positionName || user?.position_name || '';
+    };
+
+    const userRole = normalizeRole(userInfo?.role);
+    const positionName = getPositionName(userInfo);
+
+    const isAdmin = userRole.includes('ADMIN');
+
+    // 부서일정은 관리자이거나, 팀장 권한 role이 있거나, 주임 이상 직급이면 선택 가능하다.
+    const isTeamLeaderLevel =
+        isAdmin ||
+        userRole.includes('TEAM_LEADER') ||
+        TEAM_LEADER_POSITION_NAMES.some((name) => positionName.includes(name));
+
+    // 구분 select에는 현재 사용자 권한으로 등록 가능한 일정 범위만 보여준다.
+    const scheduleTypeOptions = [
+        { value: 'PERSONAL', label: '개인일정' },
+        ...(isTeamLeaderLevel ? [{ value: 'DEPARTMENT', label: '부서일정' }] : []),
+        ...(isAdmin ? [{ value: 'COMPANY', label: '전사일정' }] : []),
+    ];
+
     // 선택 날짜가 있으면 현재 시각 기준 다음 정각으로 기본 시간 설정
     const getDefaultDateTime = (dateStr, plusHour = 0) => {
         if (!dateStr) return '';
@@ -306,12 +347,46 @@ const CalendarDetailAdd = ({
         const { name, value } = e.target;
 
         setFormData((prev) => {
-            // 반복 일정은 1차 구현에서 개인일정만 허용한다.
-            if (name === 'type' && value !== 'PERSONAL') {
+            if (name === 'type') {
+                // 화면에 노출되지 않은 구분 값이 임의로 들어오는 경우를 막는다.
+                const canSelectType = scheduleTypeOptions.some((option) => option.value === value);
+
+                if (!canSelectType) {
+                    return prev;
+                }
+
+                // 부서/전사일정은 공개 범위를 사용자가 따로 고르지 않고 정책에 맞게 자동 고정한다.
+                // 개인일정만 비공개/공개 선택 가능.
+                const nextVisibility =
+                    value === 'DEPARTMENT'
+                        ? 'DEPARTMENT'
+                        : value === 'COMPANY'
+                            ? 'COMPANY'
+                            : prev.visibility === 'PRIVATE'
+                                ? 'PRIVATE'
+                                : 'COMPANY';
+
                 return {
                     ...prev,
                     type: value,
-                    repeatRule: '',
+                    visibility: nextVisibility,
+
+                    // 반복 일정은 1차 구현에서 개인일정만 허용한다.
+                    repeatRule: value === 'PERSONAL' ? prev.repeatRule : '',
+                };
+            }
+
+            if (name === 'visibility') {
+                // 공개 범위 직접 선택은 개인일정에서만 허용한다.
+                if (prev.type !== 'PERSONAL') {
+                    return prev;
+                }
+
+                return {
+                    ...prev,
+                    // 현재 백엔드는 공개 여부를 isPublic boolean으로 저장하므로,
+                    // 개인일정의 "공개"는 내부적으로 COMPANY 값을 사용해 공개 상태로만 구분한다.
+                    visibility: value === 'PRIVATE' ? 'PRIVATE' : 'COMPANY',
                 };
             }
 
@@ -565,9 +640,11 @@ const CalendarDetailAdd = ({
                                 onChange={handleChange}
                                 style={{ ...fieldBlockStyle, ...selectInputStyle }}
                             >
-                                <option value="PERSONAL">개인일정</option>
-                                <option value="DEPARTMENT">부서일정</option>
-                                <option value="COMPANY">전사일정</option>
+                                {scheduleTypeOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
                             </CFormSelect>
 
                             {/* 카테고리 */}
@@ -693,11 +770,26 @@ const CalendarDetailAdd = ({
                                 name="visibility"
                                 value={formData.visibility}
                                 onChange={handleChange}
+                                disabled={formData.type !== 'PERSONAL'}
                                 style={selectInputStyle}
                             >
-                                <option value="PRIVATE">비공개</option>
-                                <option value="DEPARTMENT">부서 공개</option>
-                                <option value="COMPANY">전사 공개</option>
+                                {/* 개인일정만 비공개/공개를 직접 선택할 수 있다. */}
+                                {formData.type === 'PERSONAL' && (
+                                    <>
+                                        <option value="PRIVATE">비공개</option>
+                                        <option value="COMPANY">공개</option>
+                                    </>
+                                )}
+
+                                {/* 부서일정은 부서 공개로 자동 고정한다. */}
+                                {formData.type === 'DEPARTMENT' && (
+                                    <option value="DEPARTMENT">부서 공개</option>
+                                )}
+
+                                {/* 전사일정은 전사 공개로 자동 고정한다. */}
+                                {formData.type === 'COMPANY' && (
+                                    <option value="COMPANY">전사 공개</option>
+                                )}
                             </CFormSelect>
 
                             {errorMessage && (
