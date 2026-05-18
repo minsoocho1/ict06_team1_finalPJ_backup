@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>배열 관련 메서드 - $.map() / $.grep() 메서드 => 매우 중요 </title>
+<!-- 1.다운로드 방식으로 연동하기 -->
+<script type="text/javascript" src="./js/jquery-3.7.1.min.js"></script>
+<script type="text/javascript">
+	
+/*
+	- 배열에 저장된 요소의 개수만큼 메서드를 반복 실행한다.
+	- 메서드를 실행할 때마다 매개변수1, 매개변수2에는 인덱스의 값과 배열데이터가 오름차순으로 대입된다.
+	- 변환된 데이터는 새 배열에 저장되고 새롭게 가공된 배열 객체를 반환한다.
+		
+		$.map(Array, function(매개변수1, 매개변수2) {  // Array, 콜백함수
+			return 데이터;
+		}); 
+		
+		
+	- 배열에 저장된 요소의 개수만큼 메서드를 반복 실행한다.
+	- 메서드를 실행할 때마다 매개변수1, 매개변수2에는 인덱스의 값과 배열데이터가 오름차순으로 대입된다.
+	- 반환된 데이터가 true이면 인덱스 오름차순으로 데이터를 새 배열에 저장하고, 새롭게 가공된 배열 객체를 반환한다.
+	
+		$.grep(Array, function(매개변수1, 매개변수2) {
+			return [true|false];
+		});
+*/
+	
+	$(function() {
+		// JSON 기본형 : {"속성1":값1, "속성2":값2,  "속성3":값3, ..}  
+	
+		let arr1 =  [ {"area" : "뉴욕",  "name" : "김태희"} 
+					, {"area" : "이탈리아",  "name" : "아이유"} 
+					, {"area" : "뉴욕",  "name" : "이재"} 
+					, {"area" : "독일",  "name" : "박명수"} 
+					];
+		
+		// $.map(Array, function(매개변수1, 매개변수2) { return 데이터;	}); 
+		let result1 = $.map(arr1, function(item) {
+			if(item.area == "독일") {
+				return item;
+			}
+		});
+		
+		console.log("result1 =>", result1);
+		
+		// 0: {"area" : "독일",  "name" : "박명수"} 
+		// length : 1
+		
+		console.log("================");
+		
+		let result2 = $.map(arr1, function(item) {
+			if(item.area == "이탈리아") {
+				return item;
+			}
+		});
+		
+		console.log("result2 =>", result2);
+		// 0: {"area" : "이탈리아",  "name" : "아이유"} 
+		// length : 1
+		
+		
+		console.log("================");
+		
+		let result3 = $.map(arr1, function(item) {
+			if(item.name == "김태희") {
+				return item;
+			}
+		});
+		
+		console.log("result3 =>", result3);
+		// 0 : {area: '뉴욕', name: '김태희'}
+		// length : 1
+		
+		console.log("================");
+		
+		// $.grep(Array, function(매개변수1, 매개변수2) {
+		//		return [true|false];
+		// });
+		
+		let result4 = $.grep(arr1, function(item) {
+			if(item.area == "뉴욕") {
+				return true;
+			}
+			else {
+				return false;
+			}
+		});
+		
+		console.log("result4 =>", result4);
+		// 0:	{area: '뉴욕', name: '김태희'}
+		// 1:	{area: '뉴욕', name: '이재'}
+		// length:	2
+	});
+	
+</script>
+</head>
+<body>
+	<h3> 배열 관련 메서드 - $.map() / $.grep() 메서드 </h3>
+</body>
+</html>

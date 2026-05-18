@@ -51,11 +51,19 @@ const MyPage = () => {
     // 수정 처리: API 호출 성공 시 사용자 정보 업데이트하고 전역 상태에 반영
     const handleUpdate = async() => {
         try {
-            // axiosInstance를 통해 인증 토큰 포함하여 API 호출(PUT 요청)
-            const response = await axiosInstance.put('/user/update', formData);
+            // 백엔드 EmpServiceImpl.updateEmpInfo에서 empNo를 식별자로 사용하므로 요청 데이터에 포함
+            // formData(이름, 이메일, 전화번호)에 현재 로그인한 사용자의 사번을 추가합니다.
+            const payload = {
+                ...formData,
+                empNo: userInfo.empNo || userInfo.emp_no
+            };
+
+            const response = await axiosInstance.put('/user/update', payload);
+
             if(response.status === 200) {
-                // DB 수정 성공 시 전역 컨테스트(UserContext) 정보 동기화
-                updateUserInfo(formData);
+                // DB 수정 성공 시 전역 컨텍스트를 업데이트합니다.
+                // 주의: formData만 넘기면 부서/직급 등 다른 정보가 사라지므로 기존 userInfo와 병합합니다.
+                updateUserInfo({ ...userInfo, ...formData });
                 setIsEditing(false);
             }
         } catch(error) {
@@ -80,7 +88,7 @@ const MyPage = () => {
                     <div style={profileCover}></div>
                     <CCardBody className='pt-0'>
                         <div className='d-flex align-items-end' style={profileHeader}>
-                            <CAvatar src={userInfo?.profile_img || 'avatars/8.jpg'}
+                            <CAvatar src={userInfo?.profileImg || userInfo?.profile_img || 'avatars/8.jpg'}
                                 size="xl"
                                 className="border border-4 border-white shadow"
                                 style={profileAvatar}
@@ -92,8 +100,8 @@ const MyPage = () => {
 
                                 {/* 부서 및 직급 정보 */}
                                 <div className='text-secondary small fw-semibold'>
-                                    {userInfo?.department?.deptName || userInfo?.dept_name || '부서 없음'} · 
-                                    {userInfo?.position?.positionName || userInfo?.position_name || '직급 없음'}
+                                    {userInfo?.department?.deptName || userInfo?.dept?.deptName || userInfo?.department?.name || userInfo?.deptName || userInfo?.dept_name || '부서 없음'} · 
+                                    {userInfo?.position?.positionName || userInfo?.posName || userInfo?.positionName || userInfo?.position_name || '직급 없음'}
                                 </div>
 
                                 <div className='text-muted small mt-1'>
@@ -191,12 +199,12 @@ const MyPage = () => {
                             <CCol sm={9}>
                                 <span className="me-4 text-muted small">부서</span>
                                 <span className={valueStyle}>
-                                {userInfo?.department?.deptName || userInfo?.dept_name || '정보 없음'}
+                                {userInfo?.department?.deptName || userInfo?.dept?.deptName || userInfo?.department?.name || userInfo?.deptName || userInfo?.dept_name || '정보 없음'}
                                 </span>
 
                                 <span className="ms-5 me-4 text-muted small">직급</span>
                                 <span className={valueStyle}>
-                                {userInfo?.position?.positionName || userInfo?.position_name || '정보 없음'}
+                                {userInfo?.position?.positionName || userInfo?.posName || userInfo?.positionName || userInfo?.position_name || '정보 없음'}
                                 </span>
                             </CCol>
                             </CRow>

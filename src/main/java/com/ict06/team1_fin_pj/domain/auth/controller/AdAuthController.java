@@ -29,8 +29,4 @@ public class AdAuthController {
     public String loginPage() {
         return "redirect:" + commonLoginUrl;
     }
-
-    // 관리자 홈 (임시)
-    @GetMapping("/home")
-    public String home() { return "admin/auth/home"; }
 }

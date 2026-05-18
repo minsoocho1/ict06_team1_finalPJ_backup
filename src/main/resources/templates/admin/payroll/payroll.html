@@ -1,0 +1,610 @@
+<!--
+[ 관리자용 페이지 템플릿 사용 방법]
+1. 핵심 콘텐츠 작성법
+<div class="container-fluid">
+    이 사이에 넣을 핵심콘텐츠에 필요한 타임리프 코드를 작성해주세요
+</div>
+
+2. 모든 관리자용 페이지에 반드시 포함시킬 파일: header, head, sidebar, commonJs.html (이 파일들은 수정 시 반드시 팀원들과 협의해주세요)
+-->
+<!doctype html>
+<html xmlns:th="http://www.thymleaf.org">
+<!--begin::Head-->
+<head th:insert="/admin/common/head.html :: common_header">
+  <title id="page_title">관리자 템플릿</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
+</head>
+<!--end::Head-->
+<!--begin::Body-->
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<!--begin::App Wrapper-->
+<div class="app-wrapper">
+  <!-- 헤더 시작 -->
+  <th:block th:replace="~{/admin/common/header}"></th:block>
+  <!-- 헤더 끝 -->
+
+  <!-- 사이드바 시작-->
+  <th:block th:replace="~{/admin/common/sidebar}"></th:block>
+  <!-- 사이드바 끝-->
+
+  <!-- 메인 콘텐츠 시작 -->
+  <main class="app-main">
+    <!--begin::App Content-->
+    <div class="app-content">
+      <!--begin::Container-->
+      <div class="container-fluid">
+        <br>
+        <!-- ===================================================== -->
+        <!-- 페이지 제목 -->
+        <!-- ===================================================== -->
+        <div class="row mb-3">
+          <div class="col">
+            <h3 class="fw-bold mb-1">급여대장 관리</h3>
+            <p class="text-muted mb-0">
+              사원별 급여대장을 작성하고 계산 미리보기, 저장, 확정, 지급처리를 관리합니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 사원 검색 영역 -->
+        <!-- ===================================================== -->
+        <div class="card mb-3">
+          <div class="card-body">
+
+            <div class="d-flex justify-content-between align-items-start mb-3">
+              <div>
+                <h5 class="fw-bold mb-1">사원 검색</h5>
+                <p class="text-muted mb-0">
+                  사원명 또는 사번을 입력한 뒤 자동완성 목록에서 사원을 선택하세요.
+                </p>
+              </div>
+            </div>
+
+            <div class="row g-3 align-items-end">
+              <div class="col-md-5 position-relative">
+                <label class="form-label">사원명 / 사번</label>
+
+                <div class="input-group">
+                  <input type="text"
+                         id="employeeSearchInput"
+                         class="form-control"
+                         autocomplete="off"
+                         placeholder="사원명 2글자 이상 또는 사번 6자리 이상 입력">
+
+                  <button type="button"
+                          id="employeeSearchBtn"
+                          class="btn btn-primary">
+                    <i class="fa-solid fa-magnifying-glass"></i>
+                  </button>
+                </div>
+
+                <!-- 자동완성 목록 -->
+                <div id="employeeAutocompleteBox"
+                     class="list-group position-absolute w-100 d-none"
+                     style="z-index: 1050; max-height: 260px; overflow-y: auto;">
+                </div>
+
+                <div id="employeeSearchMessage"
+                     class="form-text text-danger">
+                </div>
+
+                <!-- 실제 선택된 사번 저장 -->
+                <input type="hidden" id="selectedEmpNo">
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 인사정보 카드 -->
+        <!-- ===================================================== -->
+        <div class="card mb-3">
+          <div class="card-body">
+
+            <div class="d-flex justify-content-between align-items-start mb-4">
+              <div>
+                <h5 class="fw-bold mb-1">인사정보</h5>
+                <p class="text-muted mb-0">
+                  선택한 사원의 급여 계산 기준 정보를 확인합니다.
+                </p>
+              </div>
+            </div>
+
+            <div class="row g-3">
+
+              <div class="col-md-2">
+                <label class="form-label">사번</label>
+                <input type="text" id="empNo" class="form-control" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">성명</label>
+                <input type="text" id="empName" class="form-control" readonly>
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label">부서</label>
+                <input type="text" id="deptName" class="form-control" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">직급</label>
+                <input type="text" id="positionName" class="form-control" readonly>
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label">급여등급</label>
+                <input type="text" id="gradeId" class="form-control" readonly>
+
+                <!-- 기본급관리 화면처럼 등급 설명을 작은 글씨로 표시 -->
+                <div id="gradeDescription"
+                     class="form-text text-primary fw-semibold">
+                </div>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">재직상태</label>
+                <input type="text" id="empStatus" class="form-control" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">입사일</label>
+                <input type="text" id="hireDate" class="form-control" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">은행</label>
+                <input type="text" id="bank" class="form-control" readonly>
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label">계좌번호</label>
+                <input type="text" id="accountNo" class="form-control" readonly>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 작성년월 / 상태 / 정책 경고 -->
+        <!-- ===================================================== -->
+        <div class="card mb-3">
+          <div class="card-body">
+
+            <div class="row g-3 align-items-end">
+
+              <div class="col-md-2">
+                <label class="form-label">작성년도</label>
+                <select id="payYear" class="form-select" disabled>
+                  <option value="">작성년도 선택</option>
+                </select>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">작성월</label>
+                <select id="payMonth" class="form-select" disabled>
+                  <option value="">작성월 선택</option>
+                </select>
+              </div>
+
+              <div class="col-md-2">
+                <button type="button"
+                        id="periodSearchBtn"
+                        class="btn btn-outline-primary w-100"
+                        disabled>
+                  조회
+                </button>
+              </div>
+
+              <div class="col-md-3">
+                <label class="form-label">급여대장 상태</label>
+                <input type="text"
+                       id="payrollStatusName"
+                       class="form-control"
+                       readonly>
+                <div id="payDateText"
+                     class="form-text text-primary fw-semibold">
+                </div>
+              </div>
+
+            </div>
+
+            <!-- 기본급 정책 경고 -->
+            <div id="baseSalaryWarningBox"
+                 class="alert alert-warning mt-3 d-none">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>기본급 정책 확인</strong>
+                  <div id="baseSalaryWarningMessage" class="small"></div>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="button"
+                          id="applyPolicySalaryBtn"
+                          class="btn btn-sm btn-primary">
+                    변경 기본급 적용
+                  </button>
+                  <button type="button"
+                          id="keepSavedSalaryBtn"
+                          class="btn btn-sm btn-outline-secondary">
+                    기존 저장값 유지
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 지급/공제항목 설정 변경 경고 -->
+            <div id="itemSettingWarningBox"
+                 class="alert alert-warning mt-3 d-none">
+              <div class="d-flex justify-content-between align-items-center">
+                <div>
+                  <strong>지급/공제항목 설정 변경</strong>
+                  <div id="itemSettingWarningMessage" class="small"></div>
+                </div>
+                <div class="d-flex gap-2">
+                  <button type="button"
+                          id="applyLatestItemSettingBtn"
+                          class="btn btn-sm btn-primary">
+                    최신 설정 적용
+                  </button>
+                  <button type="button"
+                          id="keepSavedItemSettingBtn"
+                          class="btn btn-sm btn-outline-secondary">
+                    기존 항목 유지
+                  </button>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 지급 / 공제 입력 영역 -->
+        <!-- ===================================================== -->
+        <div class="card mb-3">
+          <div class="card-body">
+
+            <div class="d-flex justify-content-between align-items-start mb-4">
+              <div>
+                <h5 class="fw-bold mb-1">지급 / 공제 항목</h5>
+                <p class="text-muted mb-0">
+                  항목명, 유형, 금액을 확인하고 입력합니다.
+                </p>
+              </div>
+
+              <!-- 지급/공제 통합 설정 버튼 -->
+              <button type="button"
+                      id="payItemSettingBtn"
+                      class="btn btn-outline-primary"
+                      data-bs-toggle="modal"
+                      data-bs-target="#payItemSettingModal"
+                      disabled>
+                <i class="fa-solid fa-gear"></i>
+                항목설정
+              </button>
+            </div>
+
+            <div class="row g-3">
+
+              <!-- 지급항목 -->
+              <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                  <h6 class="fw-bold mb-3">지급 항목</h6>
+
+                  <div class="table-responsive">
+                    <table class="table table-bordered table-hover text-center align-middle mb-0">
+                      <thead class="table-light">
+                      <tr>
+                        <th style="width: 25%;">항목명</th>
+                        <th style="width: 15%;">과세유형</th>
+                        <th style="width: 40%;">금액</th>
+                      </tr>
+                      </thead>
+                      <tbody>
+                      <tr class="payroll-base-salary-row">
+                        <td class="fw-semibold">기본급</td>
+                        <td><span class="badge text-bg-primary">과세</span></td>
+                        <td>
+                          <input type="text"
+                                 id="baseSalaryInput"
+                                 class="form-control text-end"
+                                 placeholder="0"
+                                 disabled>
+                        </td>
+                      </tr>
+                      </tbody>
+                      <tbody id="allowanceTableBody">
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 공제항목 -->
+              <div class="col-md-6">
+                <div class="border rounded p-3 h-100">
+                  <h6 class="fw-bold mb-3">공제 항목</h6>
+
+                  <div class="table-responsive">
+                    <table class="table table-bordered table-hover text-center align-middle mb-0">
+                      <thead class="table-light">
+                      <tr>
+                        <th style="width: 25%;">항목명</th>
+                        <th style="width: 15%;">계산유형</th>
+                        <th style="width: 40%;">금액</th>
+                      </tr>
+                      </thead>
+                      <tbody id="deductionTableBody">
+                      <tr>
+                        <td colspan="3" class="text-muted py-4">
+                          공제항목이 없습니다.
+                        </td>
+                      </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 4대보험 결과 영역 -->
+        <!-- ===================================================== -->
+        <div class="card mb-3">
+          <div class="card-body">
+
+            <div class="d-flex justify-content-between align-items-start mb-4">
+              <div>
+                <h5 class="fw-bold mb-1">4대보험</h5>
+                <p class="text-muted mb-0">
+                  계산 미리보기 후 반영된 4대보험 금액입니다.
+                </p>
+              </div>
+              <div>
+                <span id="previewStateBadge"
+                      class="badge text-bg-secondary">
+                  계산 필요
+                </span>
+              </div>
+            </div>
+
+            <div class="row g-3">
+
+              <div class="col-md-2">
+                <label class="form-label">국민연금</label>
+                <input type="text" id="nationalPensionAmount" class="form-control text-end" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">건강보험</label>
+                <input type="text" id="healthInsuranceAmount" class="form-control text-end" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">장기요양보험</label>
+                <input type="text" id="longTermCareAmount" class="form-control text-end" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label">고용보험</label>
+                <input type="text" id="employmentInsuranceAmount" class="form-control text-end" readonly>
+              </div>
+
+              <div class="col-md-2">
+                <label class="form-label fw-bold">4대보험 합계</label>
+                <input type="text" id="totalInsurance" class="form-control text-end fw-bold" readonly>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 버튼 영역 -->
+        <!-- ===================================================== -->
+        <div class="card mb-4">
+          <div class="card-body">
+
+            <div class="d-flex justify-content-between align-items-center">
+              <div class="text-muted small">
+                계산 미리보기 후 4대보험이 반영되어야 확정 또는 지급확정이 가능합니다.
+              </div>
+
+              <div class="d-flex gap-2">
+                <button type="button" id="previewBtn" class="btn btn-info" disabled>
+                  계산 미리보기
+                </button>
+
+                <button type="button" id="saveBtn" class="btn btn-primary" disabled>
+                  저장
+                </button>
+
+                <button type="button" id="confirmBtn" class="btn btn-success" disabled>
+                  확정
+                </button>
+
+                <button type="button" id="payConfirmBtn" class="btn btn-warning" disabled>
+                  지급확정
+                </button>
+
+                <button type="button" id="deleteBtn" class="btn btn-outline-danger" disabled>
+                  삭제
+                </button>
+
+                <button type="button" id="resetBtn" class="btn btn-outline-secondary" disabled>
+                  초기화
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 지급/공제항목 설정 모달 -->
+        <!-- ===================================================== -->
+        <div class="modal fade" id="payItemSettingModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+
+              <div class="modal-header">
+                <h5 class="modal-title fw-bold">지급/공제항목 설정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+              </div>
+
+              <div class="modal-body">
+
+                <div class="alert alert-info small">
+                  지급 또는 공제를 선택한 뒤 항목명과 과세/비과세 여부를 설정합니다.
+                  지급항목에서 비과세를 선택한 경우에만 비과세 항목을 선택합니다.
+                </div>
+
+                <div class="d-flex justify-content-end mb-3">
+                  <button type="button" id="addPayItemSettingRowBtn" class="btn btn-sm btn-outline-primary">
+                    항목 추가
+                  </button>
+                </div>
+
+                <div class="table-responsive">
+                  <table class="table table-bordered text-center align-middle">
+                    <thead class="table-light">
+                    <tr>
+                      <th style="width: 15%;">지급/공제</th>
+                      <th style="width: 18%;">과세/비과세</th>
+                      <th style="width: 18%;">비과세 항목</th>
+                      <th style="width: 23%;">항목명</th>
+                      <th style="width: 8%;">삭제</th>
+                    </tr>
+                    </thead>
+                    <tbody id="payItemSettingTableBody">
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" id="resetPayItemSettingBtn" class="btn btn-outline-secondary">
+                  초기화
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                  취소
+                </button>
+                <button type="button" id="savePayItemSettingBtn" class="btn btn-primary">
+                  등록
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 계산 미리보기 모달 -->
+        <!-- ===================================================== -->
+        <div class="modal fade" id="payrollPreviewModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+
+              <div class="modal-header">
+                <h5 class="modal-title fw-bold">급여 계산 미리보기</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+              </div>
+
+              <div class="modal-body">
+
+                <div id="previewSummaryArea" class="mb-3">
+                  <!-- JS 렌더링 -->
+                </div>
+
+                <div class="row g-3">
+                  <div class="col-md-6">
+                    <h6 class="fw-bold">지급 상세</h6>
+                    <div id="previewAllowanceArea" class="table-responsive"></div>
+                  </div>
+
+                  <div class="col-md-6">
+                    <h6 class="fw-bold">공제 상세</h6>
+                    <div id="previewDeductionArea" class="table-responsive"></div>
+                  </div>
+                </div>
+
+                <hr>
+
+                <h6 class="fw-bold">4대보험 상세</h6>
+                <div id="previewInsuranceArea" class="table-responsive"></div>
+
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                  닫기
+                </button>
+                <button type="button" id="applyPreviewBtn" class="btn btn-primary">
+                  계산결과 반영
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 지급확정 모달 -->
+        <!-- ===================================================== -->
+        <div class="modal fade" id="payConfirmModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+
+              <div class="modal-header">
+                <h5 class="modal-title fw-bold">지급확정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+              </div>
+
+              <div class="modal-body">
+                <div id="payConfirmWarning" class="alert alert-warning">
+                  지급완료 처리 후에는 수정, 삭제, 초기화가 불가능합니다.
+                </div>
+
+                <label class="form-label">지급일</label>
+                <input type="date" id="payDate" class="form-control">
+              </div>
+
+              <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                  취소
+                </button>
+                <button type="button" id="executePayConfirmBtn" class="btn btn-warning">
+                  지급완료 처리
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+  <!-- 메인 콘텐츠 끝 -->
+  <!-- 푸터 시작 -->
+  <th:block th:replace="~{/admin/common/footer}"></th:block>
+  <!-- 푸터 끝 -->
+</div>
+<!--end::App Wrapper-->
+<!--스크립트 시작-->
+<th:block th:replace="~{/admin/common/commonJs}"></th:block> <!-- 공통 사용 스크립트 불러오기-->
+
+<!-- 각 페이지 별로 필요한 스크립트 작성 혹은 임포트 -->
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script> <!-- jQuery -->
+<script src="/js/payroll/payroll.js"></script>
+<!--스크립트 끝-->
+</body>
+<!--end::Body-->
+</html>

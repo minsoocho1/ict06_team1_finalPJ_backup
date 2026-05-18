@@ -40,4 +40,10 @@ public class AiQuizGenerationRequestDto {
     private String tags;
 
     private String path;
+
+    @JsonProperty("rag_summary")
+    private String ragSummary;
+
+    @JsonProperty("rag_context")
+    private String ragContext;
 }

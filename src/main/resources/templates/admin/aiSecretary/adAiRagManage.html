@@ -1,0 +1,2024 @@
+<!--
+ * @author : 송혜진
+ * description : 관리자 AI 지식 베이스 및 RAG 관리 페이지
+ *               - 챗봇 답변 활용 사내 문서의 처리 상태 확인
+ *               - 사용자 자료 등록 요청 목록 확인
+ *               - 관리자가 직접 새 문서를 업로드할 수 있는 UI 제공
+ *               - 문서 처리 상태별 관리자 조치 기준 안내
+5. 임베딩 처리 상태 확인
+ * ========================================
+ * DATE         AUTHOR      NOTE
+ * 2026-05-11   송혜진       최초 생성
+-->
+
+<!--
+[관리자용 페이지 템플릿 사용 방법]
+
+1. 핵심 콘텐츠 작성법
+<div class="container-fluid">
+    이 사이에 넣을 핵심 콘텐츠에 필요한 Thymeleaf 코드를 작성한다.
+</div>
+
+2. 모든 관리자용 페이지에 반드시 포함시킬 파일
+- /admin/common/head.html
+- /admin/common/header
+- /admin/common/sidebar
+- /admin/common/footer
+- /admin/common/commonJs
+
+주의:
+- 위 공통 파일들은 수정 시 반드시 팀원들과 협의한다.
+- 관리자 페이지는 Thymeleaf 기준으로 작성한다.
+-->
+
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+
+<!-- begin::Head -->
+<head th:include="/admin/common/head.html :: common_header">
+  <title id="page_title">지식 베이스 및 RAG 관리</title>
+</head>
+<!-- end::Head -->
+
+<!-- begin::Body -->
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+
+<!-- begin::App Wrapper -->
+<div class="app-wrapper">
+
+  <!-- 헤더 시작 -->
+  <th:block th:replace="~{/admin/common/header}"></th:block>
+  <!-- 헤더 끝 -->
+
+  <!-- 사이드바 시작 -->
+  <th:block th:replace="~{/admin/common/sidebar}"></th:block>
+  <!-- 사이드바 끝 -->
+
+  <!-- 메인 콘텐츠 시작 -->
+  <main class="app-main">
+
+    <!-- begin::App Content -->
+    <div class="app-content">
+
+      <!-- begin::Container -->
+      <div class="container-fluid">
+        <br>
+
+        <!--
+        ============================================================
+        1. 페이지 상단 타이틀 영역
+        ============================================================
+
+        역할:
+        - 현재 페이지가 지식 베이스/RAG 관리 화면임을 표시한다.
+        - 이 화면은 문서 등록, 자료 등록 요청 검토, 문서 처리 상태 확인을 담당한다.
+        - 세부 접근 권한 관리와 비인가 접근 로그는 보안 및 권한 제어 화면에서 담당한다.
+        -->
+        <div class="row mb-3">
+          <div class="col-12">
+            <h3 class="fw-bold mb-2">지식 베이스 및 RAG 관리</h3>
+            <p class="text-muted mb-0">
+              챗봇 답변에 활용되는 사내 문서, 사용자 자료 등록 요청, 임베딩 처리 상태를 관리합니다.
+            </p>
+          </div>
+        </div>
+
+
+        <!--
+        ============================================================
+        2. 지식 베이스 / RAG 상태 요약 카드 영역
+        ============================================================
+
+        model attribute:
+        - embeddingSummary
+
+        표시 상태:
+        - 처리 실패
+        - 승인 대기
+        - 임베딩 완료
+        - 임베딩 진행
+        - 업로드 완료
+
+        실제 DB 조건:
+        - 처리 실패   : current_stage IN ('CHUNK_FAILED', 'EMBED_FAILED')
+        - 승인 대기   : current_stage = 'APPROVAL_PENDING'
+        - 임베딩 완료 : current_stage = 'REFLECTED'
+        - 임베딩 진행 : current_stage IN ('CHUNKING', 'EMBEDDING')
+        - 업로드 완료 : current_stage = 'UPLOADED'
+
+        화면 기준:
+        - 상태 내부 라벨은 직접 노출하지 않는다.
+        - 제목 옆 ? 아이콘 hover 시 상태 의미를 설명한다.
+        -->
+        <div class="row mb-4">
+
+          <!-- 상태 요약 카드 반복 출력 -->
+          <div class="col"
+               th:each="item : ${embeddingSummary}">
+
+            <div class="card shadow-sm border-0 h-100">
+              <div class="card-body">
+
+                <!-- 카드 제목 + 도움말 아이콘 -->
+                <div class="d-flex align-items-center gap-2 mb-2">
+
+                  <!-- 카드 제목 -->
+                  <p class="text-muted fw-bold mb-0"
+                     th:text="${item.title}">
+                    처리 실패
+                  </p>
+
+                  <!-- 도움말 아이콘 -->
+                  <button type="button"
+                          class="btn btn-sm btn-light border rounded-circle p-0"
+                          style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                          data-bs-toggle="tooltip"
+                          data-bs-placement="top"
+                          th:attr="title=${item.description}">
+                    ?
+                  </button>
+                </div>
+
+                <!-- 현재 건수 -->
+                <div class="d-flex align-items-end gap-2 mb-2">
+                  <h3 class="fw-bold mb-0"
+                      th:text="${item.count}">
+                    2
+                  </h3>
+
+                  <span class="fw-bold text-muted mb-1">건</span>
+                </div>
+
+                <small class="text-muted">
+                  현재 상태 문서 수
+                </small>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- 상태 요약 데이터가 없을 때 -->
+          <div class="col-12"
+               th:if="${embeddingSummary == null or #lists.isEmpty(embeddingSummary)}">
+            <div class="alert alert-secondary mb-0">
+              지식 베이스 상태 요약 데이터가 없습니다.
+            </div>
+          </div>
+        </div>
+
+
+        <!--
+        ============================================================
+        3. 자료 등록 요청 목록 영역
+        ============================================================
+
+        model attribute:
+        - knowledgeRequests
+        - requestStartDate
+        - requestEndDate
+        - selectedRequestStatus
+        - selectedRequestType
+        - selectedRequestCategory
+        - requestTypeOptions
+        - categoryOptions
+        - requestPage
+        - requestTotalPages
+        - requestTotalCount
+
+        역할:
+        - 사용자가 챗봇 지식 반영을 요청한 자료를 관리자가 검토한다.
+        - 반려된 요청은 이 목록에서 상태 = 반려로 확인한다.
+        - 추후 AI_KNOWLEDGE_REQUEST 테이블과 연결한다.
+
+        필터:
+        1. 요청 시작일
+        2. 요청 종료일
+        3. 상태
+        4. 자료 유형
+        5. 카테고리
+
+        주의:
+        - 이 필터는 AI_KNOWLEDGE_REQUEST 요청 목록 필터이다.
+        - 전체 등록 문서 리스트의 DOCUMENT.current_stage 필터와 성격이 다르다.
+        -->
+        <div class="row mb-4">
+          <div class="col-12">
+
+            <div class="card shadow-sm border-0">
+
+              <!-- 카드 헤더 -->
+              <div class="card-header bg-white">
+
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <h5 class="fw-bold mb-1">자료 등록 요청 목록</h5>
+                    <p class="text-muted mb-0">
+                      사용자가 챗봇 지식 반영을 요청한 자료를 검토합니다.
+                      반려된 요청은 상태 필터에서 확인할 수 있습니다.
+                    </p>
+                  </div>
+                </div>
+
+                <!--
+                자료 등록 요청 목록 필터 영역
+
+                배치 기준:
+                - 좌측: 상태 / 자료 유형 / 카테고리 / 검색 / 초기화
+                - 우측: 조회 기간 버튼
+                -->
+                <form th:action="@{/admin/AiSecretary/rag}"
+                      method="get"
+                      class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+                  <!-- 좌측 일반 필터 -->
+                  <div class="d-flex flex-wrap gap-2 align-items-center">
+
+                    <!-- 상태 선택 -->
+                    <select class="form-select form-select-sm"
+                            name="requestStatus"
+                            style="width: 150px;">
+                      <option value=""
+                              th:selected="${selectedRequestStatus == ''}">
+                        상태
+                      </option>
+                      <option value="PENDING"
+                              th:selected="${selectedRequestStatus == 'PENDING'}">
+                        검토 대기
+                      </option>
+                      <option value="APPROVED"
+                              th:selected="${selectedRequestStatus == 'APPROVED'}">
+                        승인
+                      </option>
+                      <option value="REJECTED"
+                              th:selected="${selectedRequestStatus == 'REJECTED'}">
+                        반려
+                      </option>
+                      <option value="REFLECTED"
+                              th:selected="${selectedRequestStatus == 'REFLECTED'}">
+                        반영 완료
+                      </option>
+                    </select>
+
+                    <!-- 자료 유형 선택 -->
+                    <select class="form-select form-select-sm"
+                            name="requestType"
+                            style="width: 170px;">
+                      <option value=""
+                              th:selected="${selectedRequestType == ''}">
+                        자료 유형
+                      </option>
+
+                      <option th:each="type : ${requestTypeOptions}"
+                              th:value="${type}"
+                              th:text="${type}"
+                              th:selected="${selectedRequestType == type}">
+                        업무 매뉴얼
+                      </option>
+                    </select>
+
+                    <!-- 카테고리 선택 -->
+                    <select class="form-select form-select-sm"
+                            name="requestCategory"
+                            style="width: 150px;">
+                      <option value=""
+                              th:selected="${selectedRequestCategory == ''}">
+                        카테고리
+                      </option>
+
+                      <option th:each="category : ${categoryOptions}"
+                              th:value="${category}"
+                              th:text="${category}"
+                              th:selected="${selectedRequestCategory == category}">
+                        근태
+                      </option>
+                    </select>
+
+                    <!-- 검색 버튼 -->
+                    <button type="submit"
+                            class="btn btn-sm btn-primary px-4">
+                      검색
+                    </button>
+
+                    <!-- 초기화 버튼 -->
+                    <a th:href="@{/admin/AiSecretary/rag}"
+                       class="btn btn-sm btn-outline-secondary px-4">
+                      초기화
+                    </a>
+                  </div>
+
+                  <!-- 우측 조회 기간 -->
+                  <div class="d-flex align-items-center gap-2 ms-auto">
+
+                    <span class="small fw-bold text-muted">조회 기간</span>
+
+                    <div class="dropdown">
+                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle js-date-range-label"
+                              type="button"
+                              data-bs-toggle="dropdown"
+                              data-default-label="0000.00.00 - 0000.00.00">
+                <span th:text="${requestStartDate != '' and requestEndDate != ''} ?
+                    ${#strings.replace(requestStartDate, '-', '.') + ' - ' + #strings.replace(requestEndDate, '-', '.')} :
+                    '0000.00.00 - 0000.00.00'">
+                    0000.00.00 - 0000.00.00
+                </span>
+                      </button>
+
+                      <div class="dropdown-menu dropdown-menu-end p-3"
+                           style="min-width: 280px;">
+
+                        <div class="mb-2">
+                          <label class="form-label small fw-bold text-muted">시작일</label>
+                          <input type="date"
+                                 class="form-control form-control-sm js-date-start"
+                                 name="requestStartDate"
+                                 th:value="${requestStartDate}">
+                        </div>
+
+                        <div class="mb-3">
+                          <label class="form-label small fw-bold text-muted">종료일</label>
+                          <input type="date"
+                                 class="form-control form-control-sm js-date-end"
+                                 name="requestEndDate"
+                                 th:value="${requestEndDate}">
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-sm btn-primary w-100">
+                          적용
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <!-- 카드 바디 -->
+              <div class="card-body p-0">
+
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                    <tr>
+                      <th>요청일</th>
+                      <th>상태</th>
+                      <th>요청 제목</th>
+                      <th>카테고리</th>
+                      <th>자료 유형</th>
+                      <th>요청자</th>
+                      <th class="text-center">관리</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <!-- 자료 등록 요청 반복 출력 -->
+                    <tr th:each="request : ${knowledgeRequests}">
+
+                      <!-- 요청일 -->
+                      <td th:text="${request.createdAt}">
+                        2026-05-11
+                      </td>
+
+                      <!-- 상태 -->
+                      <td>
+                                                <span class="badge"
+                                                      th:classappend="${request.status == 'APPROVED'} ? ' text-bg-success' :
+                                                                      (${request.status == 'REJECTED'} ? ' text-bg-danger' :
+                                                                      (${request.status == 'REFLECTED'} ? ' text-bg-info' : ' text-bg-primary'))"
+                                                      th:text="${request.statusLabel}">
+                                                    검토 대기
+                                                </span>
+                      </td>
+
+                      <!-- 요청 제목 -->
+                      <td class="fw-bold"
+                          th:text="${request.title}">
+                        조퇴 신청 기준 챗봇 반영 요청
+                      </td>
+
+                      <!-- 카테고리 -->
+                      <td th:text="${request.category}">
+                        근태
+                      </td>
+
+                      <!-- 자료 유형 -->
+                      <td th:text="${request.requestType}">
+                        업무 매뉴얼
+                      </td>
+
+                      <!-- 요청자 -->
+                      <td th:text="${request.requester}">
+                        송혜진
+                      </td>
+
+                      <!-- 관리 버튼 -->
+                      <td class="text-center">
+
+                        <!--
+                        자료 등록 요청 상세 버튼
+
+                        역할:
+                        - 사용자가 요청한 자료 등록 내용을 상세 모달에서 확인한다.
+                        - 관리자는 상세 모달 안에서 내용을 수정한 뒤 승인 또는 반려할 수 있다.
+                        - 추후 data-request-id 기준으로 상세 API 조회 또는 서버 렌더링 데이터로 교체한다.
+                        -->
+                        <button type="button"
+                                class="btn btn-sm btn-outline-secondary"
+                                data-bs-toggle="modal"
+                                data-bs-target="#knowledgeRequestDetailModal"
+                                th:attr="data-request-title=${request.title}">
+                          상세
+                        </button>
+                      </td>
+                    </tr>
+
+                    <!-- 자료 등록 요청이 없을 때 -->
+                    <tr th:if="${knowledgeRequests == null or #lists.isEmpty(knowledgeRequests)}">
+                      <td colspan="7" class="text-center text-muted py-4">
+                        조건에 해당하는 자료 등록 요청이 없습니다.
+                      </td>
+                    </tr>
+
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- 카드 푸터: 자료 등록 요청 목록 페이징 -->
+              <div class="card-footer bg-white">
+
+                <div class="d-flex justify-content-between align-items-center">
+
+                  <!-- 총 건수 -->
+                  <small class="text-muted"
+                         th:text="'총 ' + ${requestTotalCount} + '건'">
+                    총 0건
+                  </small>
+
+                  <!-- 페이징 -->
+                  <nav aria-label="자료 등록 요청 목록 페이지">
+                    <ul class="pagination pagination-sm mb-0">
+
+                      <!-- 이전 -->
+                      <li class="page-item"
+                          th:classappend="${requestPage <= 1} ? ' disabled'">
+                        <a class="page-link"
+                           th:href="@{/admin/AiSecretary/rag(
+                                                        requestStartDate=${requestStartDate},
+                                                        requestEndDate=${requestEndDate},
+                                                        requestStatus=${selectedRequestStatus},
+                                                        requestType=${selectedRequestType},
+                                                        requestCategory=${selectedRequestCategory},
+                                                        requestPage=${requestPage - 1}
+                                                   )}">
+                          이전
+                        </a>
+                      </li>
+
+                      <!-- 페이지 번호 -->
+                      <li class="page-item"
+                          th:each="pageNo : ${#numbers.sequence(1, requestTotalPages)}"
+                          th:classappend="${pageNo == requestPage} ? ' active'">
+                        <a class="page-link"
+                           th:text="${pageNo}"
+                           th:href="@{/admin/AiSecretary/rag(
+                                                        requestStartDate=${requestStartDate},
+                                                        requestEndDate=${requestEndDate},
+                                                        requestStatus=${selectedRequestStatus},
+                                                        requestType=${selectedRequestType},
+                                                        requestCategory=${selectedRequestCategory},
+                                                        requestPage=${pageNo}
+                                                   )}">
+                          1
+                        </a>
+                      </li>
+
+                      <!-- 다음 -->
+                      <li class="page-item"
+                          th:classappend="${requestPage >= requestTotalPages} ? ' disabled'">
+                        <a class="page-link"
+                           th:href="@{/admin/AiSecretary/rag(
+                                                        requestStartDate=${requestStartDate},
+                                                        requestEndDate=${requestEndDate},
+                                                        requestStatus=${selectedRequestStatus},
+                                                        requestType=${selectedRequestType},
+                                                        requestCategory=${selectedRequestCategory},
+                                                        requestPage=${requestPage + 1}
+                                                   )}">
+                          다음
+                        </a>
+                      </li>
+                    </ul>
+                  </nav>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+
+        <!--
+        ============================================================
+        4. 새 문서 업로드 CTA 영역
+        ============================================================
+
+        역할:
+        - 자료 등록 요청 목록을 확인한 뒤 관리자가 문서를 등록할 수 있도록 배치한다.
+        - 사용자 요청 검토 → 새 문서 업로드 → 전체 등록 문서 리스트 확인 흐름을 만든다.
+        - 관리자 처리 기준은 부가 안내이므로 버튼 클릭 시 모달로 제공한다.
+
+        추후 연결:
+        - 새 문서 업로드 버튼 → DOCUMENT 생성 / 파일 저장 / DOCUMENT_PROCESS_LOG 생성
+        - 관리자 처리 기준 안내 버튼 → 상태별 관리자 조치 기준 모달
+        -->
+        <div class="row mb-4">
+          <div class="col-12">
+
+            <div class="card border-0 shadow-sm bg-primary text-white">
+              <div class="card-body p-4">
+
+                <div class="row align-items-center g-3">
+
+                  <!-- 좌측: 액션 버튼 영역 -->
+                  <div class="col-md-4">
+                    <div class="d-grid gap-2">
+
+                      <!-- 새 문서 업로드 큰 버튼 -->
+                      <button type="button"
+                              class="btn btn-light btn-lg fw-bold text-primary"
+                              data-bs-toggle="modal"
+                              data-bs-target="#uploadDocumentModal">
+                        새 문서 업로드
+                      </button>
+
+                      <!-- 관리자 처리 기준 안내 버튼 -->
+                      <button type="button"
+                              class="btn btn-outline-light fw-bold"
+                              data-bs-toggle="modal"
+                              data-bs-target="#adminActionGuideModal">
+                        관리자 처리 기준 안내
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- 우측: 안내 문구 영역 -->
+                  <div class="col-md-8">
+                    <h4 class="fw-bold mb-2">새 문서 업로드</h4>
+
+                    <p class="mb-2">
+                      사내 규정, 업무 매뉴얼, FAQ, 서비스 이용 안내 문서를 업로드하여
+                      챗봇/RAG 검색 지식으로 반영할 수 있습니다.
+                    </p>
+
+                    <p class="mb-0 opacity-75">
+                      승인 대기 문서는 검토 후 반영하고,
+                      처리 실패 문서는 오류 확인 후 재시도하세요.
+                    </p>
+                  </div>
+
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+
+        <!--
+        ============================================================
+        5. 전체 등록 문서 리스트 영역
+        ============================================================
+
+        model attribute:
+        - documents
+        - docStartDate
+        - docEndDate
+        - selectedDocStage
+        - selectedDocCategory
+        - selectedDocType
+        - selectedAccessLevel
+        - docTypeOptions
+        - docCategoryOptions
+        - accessLevelOptions
+        - docPage
+        - docTotalPages
+        - docTotalCount
+
+        역할:
+        - 실제 RAG 검색에 사용되거나 처리 중인 DOCUMENT 목록을 확인한다.
+        - 날짜, 처리 상태, 카테고리, 자료 유형, 접근 권한 기준으로 필터링한다.
+        - 현재는 더미 데이터 기반 화면이다.
+        - 추후 DOCUMENT / DOCUMENT_PROCESS_LOG 기반 조회로 연결한다.
+
+        주의:
+        - 반려 상태는 기본적으로 전체 등록 문서 리스트가 아니라 자료 등록 요청 목록에서 확인한다.
+        - 이 리스트의 상태는 DOCUMENT.current_stage 기준이다.
+        -->
+        <div class="row mb-4">
+          <div class="col-12">
+
+            <div class="card shadow-sm border-0">
+
+              <!-- 카드 헤더 -->
+              <div class="card-header bg-white">
+
+                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+                  <div>
+                    <h5 class="fw-bold mb-1">전체 등록 문서 리스트</h5>
+                    <p class="text-muted mb-0">
+                      RAG 검색에 사용되는 문서와 처리 상태를 확인합니다.
+                    </p>
+                  </div>
+                </div>
+
+                <!--
+                전체 등록 문서 리스트 필터 영역
+
+                배치 기준:
+                - 좌측: 처리 상태 / 카테고리 / 자료 유형 / 접근 권한 / 검색 / 초기화
+                - 우측: 조회 기간 버튼
+                -->
+                <form th:action="@{/admin/AiSecretary/rag}"
+                      method="get"
+                      class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+
+                  <!-- 좌측 일반 필터 -->
+                  <div class="d-flex flex-wrap gap-2 align-items-center">
+
+                    <!-- 처리 상태 -->
+                    <select class="form-select form-select-sm"
+                            name="docStage"
+                            style="width: 160px;">
+                      <option value=""
+                              th:selected="${selectedDocStage == ''}">
+                        처리 상태
+                      </option>
+                      <option value="UPLOADED"
+                              th:selected="${selectedDocStage == 'UPLOADED'}">
+                        업로드 완료
+                      </option>
+                      <option value="PROCESSING"
+                              th:selected="${selectedDocStage == 'PROCESSING'}">
+                        임베딩 진행
+                      </option>
+                      <option value="FAILED"
+                              th:selected="${selectedDocStage == 'FAILED'}">
+                        처리 실패
+                      </option>
+                      <option value="APPROVAL_PENDING"
+                              th:selected="${selectedDocStage == 'APPROVAL_PENDING'}">
+                        승인 대기
+                      </option>
+                      <option value="REFLECTED"
+                              th:selected="${selectedDocStage == 'REFLECTED'}">
+                        임베딩 완료
+                      </option>
+                    </select>
+
+                    <!-- 카테고리 -->
+                    <select class="form-select form-select-sm"
+                            name="docCategory"
+                            style="width: 150px;">
+                      <option value=""
+                              th:selected="${selectedDocCategory == ''}">
+                        카테고리
+                      </option>
+
+                      <option th:each="category : ${docCategoryOptions}"
+                              th:value="${category}"
+                              th:text="${category}"
+                              th:selected="${selectedDocCategory == category}">
+                        근태
+                      </option>
+                    </select>
+
+                    <!-- 자료 유형 -->
+                    <select class="form-select form-select-sm"
+                            name="docType"
+                            style="width: 170px;">
+                      <option value=""
+                              th:selected="${selectedDocType == ''}">
+                        자료 유형
+                      </option>
+
+                      <option th:each="type : ${docTypeOptions}"
+                              th:value="${type}"
+                              th:text="${type}"
+                              th:selected="${selectedDocType == type}">
+                        업무 매뉴얼
+                      </option>
+                    </select>
+
+                    <!-- 접근 권한 -->
+                    <select class="form-select form-select-sm"
+                            name="accessLevel"
+                            style="width: 160px;">
+                      <option value=""
+                              th:selected="${selectedAccessLevel == ''}">
+                        접근 권한
+                      </option>
+
+                      <option th:each="level : ${accessLevelOptions}"
+                              th:value="${level}"
+                              th:text="${level}"
+                              th:selected="${selectedAccessLevel == level}">
+                        전체 공개
+                      </option>
+                    </select>
+
+                    <!-- 검색 버튼 -->
+                    <button type="submit"
+                            class="btn btn-sm btn-primary px-4">
+                      검색
+                    </button>
+
+                    <!-- 초기화 버튼 -->
+                    <a th:href="@{/admin/AiSecretary/rag}"
+                       class="btn btn-sm btn-outline-secondary px-4">
+                      초기화
+                    </a>
+                  </div>
+
+                  <!-- 우측 조회 기간 -->
+                  <div class="d-flex align-items-center gap-2 ms-auto">
+
+                    <span class="small fw-bold text-muted">조회 기간</span>
+
+                    <div class="dropdown">
+                      <button class="btn btn-sm btn-outline-secondary dropdown-toggle js-date-range-label"
+                              type="button"
+                              data-bs-toggle="dropdown"
+                              data-default-label="0000.00.00 - 0000.00.00">
+                <span th:text="${docStartDate != '' and docEndDate != ''} ?
+                    ${#strings.replace(docStartDate, '-', '.') + ' - ' + #strings.replace(docEndDate, '-', '.')} :
+                    '0000.00.00 - 0000.00.00'">
+                    0000.00.00 - 0000.00.00
+                </span>
+                      </button>
+
+                      <div class="dropdown-menu dropdown-menu-end p-3"
+                           style="min-width: 280px;">
+
+                        <div class="mb-2">
+                          <label class="form-label small fw-bold text-muted">시작일</label>
+                          <input type="date"
+                                 class="form-control form-control-sm js-date-start"
+                                 name="docStartDate"
+                                 th:value="${docStartDate}">
+                        </div>
+
+                        <div class="mb-3">
+                          <label class="form-label small fw-bold text-muted">종료일</label>
+                          <input type="date"
+                                 class="form-control form-control-sm js-date-end"
+                                 name="docEndDate"
+                                 th:value="${docEndDate}">
+                        </div>
+
+                        <button type="submit"
+                                class="btn btn-sm btn-primary w-100">
+                          적용
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </form>
+              </div>
+
+              <!-- 카드 바디 -->
+              <div class="card-body p-0">
+
+                <!-- 문서 목록 테이블 -->
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                    <tr>
+                      <th>등록일</th>
+                      <th>처리 상태</th>
+                      <th>문서명</th>
+                      <th>카테고리</th>
+                      <th>자료 유형</th>
+                      <th>등록자</th>
+                      <th>접근 권한</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <!-- 등록 문서 반복 출력 -->
+                    <tr th:each="doc : ${documents}">
+
+                      <!-- 등록일 -->
+                      <td th:text="${doc.createdAt}">
+                        2026-05-09
+                      </td>
+
+                      <!-- 처리 상태 -->
+                      <td>
+                                                <span class="badge"
+                                                      th:classappend="${doc.stage == 'REFLECTED'} ? ' text-bg-success' :
+                                                                      (${doc.stage == 'APPROVAL_PENDING'} ? ' text-bg-warning' :
+                                                                      (${doc.stage == 'CHUNK_FAILED' or doc.stage == 'EMBED_FAILED'} ? ' text-bg-danger' :
+                                                                      (${doc.stage == 'CHUNKING' or doc.stage == 'EMBEDDING'} ? ' text-bg-primary' : ' text-bg-secondary')))"
+                                                      th:text="${doc.stageLabel}">
+                                                    임베딩 완료
+                                                </span>
+                      </td>
+
+                      <!-- 문서명 -->
+                      <td class="fw-bold"
+                          th:text="${doc.title}">
+                        근태관리 사용자 매뉴얼
+                      </td>
+
+                      <!-- 카테고리 -->
+                      <td th:text="${doc.category}">
+                        근태
+                      </td>
+
+                      <!-- 자료 유형 -->
+                      <td th:text="${doc.documentType}">
+                        업무 매뉴얼
+                      </td>
+
+                      <!-- 등록자 -->
+                      <td th:text="${doc.owner}">
+                        인사팀
+                      </td>
+
+                      <!-- 접근 권한 -->
+                      <td th:text="${doc.accessLevel}">
+                        전체 공개
+                      </td>
+                    </tr>
+
+                    <!-- 등록 문서가 없을 때 -->
+                    <tr th:if="${documents == null or #lists.isEmpty(documents)}">
+                      <td colspan="7" class="text-center text-muted py-4">
+                        조건에 해당하는 등록 문서가 없습니다.
+                      </td>
+                    </tr>
+
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!--
+              카드 푸터: 전체 등록 문서 리스트 페이징 + 다운로드
+
+              정책:
+              - 전체 등록 문서 리스트는 한 페이지에 10개씩 노출한다.
+              - CSV / 엑셀 다운로드는 현재 필터 조건 기준으로 추후 연결한다.
+              -->
+              <div class="card-footer bg-white">
+
+                <!-- 상단: 총 건수 / 페이지 크기 / 다운로드 버튼 -->
+                <div class="d-flex justify-content-between align-items-center mb-2">
+
+                  <!-- 총 건수 및 페이지당 노출 수 -->
+                  <small class="text-muted">
+                    총
+                    <span th:text="${docTotalCount}">0</span>건 ·
+                    페이지당
+                    <span th:text="${docPageSize}">10</span>개씩 노출
+                  </small>
+
+                  <!-- 다운로드 버튼 -->
+                  <div class="d-flex gap-2">
+
+                    <!-- CSV 다운로드 -->
+                    <!-- 추후 현재 필터 조건 기준 다운로드 API 연결 -->
+                    <button type="button"
+                            class="btn btn-sm btn-outline-secondary"
+                            id="downloadDocumentCsvBtn">
+                      CSV 다운로드
+                    </button>
+
+                    <!-- 엑셀 다운로드 -->
+                    <!-- 추후 현재 필터 조건 기준 다운로드 API 연결 -->
+                    <button type="button"
+                            class="btn btn-sm btn-outline-success"
+                            id="downloadDocumentExcelBtn">
+                      엑셀 다운로드
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 하단: 페이징 -->
+                <div class="d-flex justify-content-center">
+                  <nav aria-label="전체 등록 문서 리스트 페이지">
+                    <ul class="pagination pagination-sm mb-0">
+
+                      <!-- 이전 -->
+                      <li class="page-item"
+                          th:classappend="${docPage <= 1} ? ' disabled'">
+                        <a class="page-link"
+                           th:href="@{/admin/AiSecretary/rag(
+                            docStartDate=${docStartDate},
+                            docEndDate=${docEndDate},
+                            docStage=${selectedDocStage},
+                            docCategory=${selectedDocCategory},
+                            docType=${selectedDocType},
+                            accessLevel=${selectedAccessLevel},
+                            docPage=${docPage - 1}
+                       )}">
+                          이전
+                        </a>
+                      </li>
+
+                      <!-- 페이지 번호 -->
+                      <li class="page-item"
+                          th:each="pageNo : ${#numbers.sequence(1, docTotalPages)}"
+                          th:classappend="${pageNo == docPage} ? ' active'">
+                        <a class="page-link"
+                           th:text="${pageNo}"
+                           th:href="@{/admin/AiSecretary/rag(
+                            docStartDate=${docStartDate},
+                            docEndDate=${docEndDate},
+                            docStage=${selectedDocStage},
+                            docCategory=${selectedDocCategory},
+                            docType=${selectedDocType},
+                            accessLevel=${selectedAccessLevel},
+                            docPage=${pageNo}
+                       )}">
+                          1
+                        </a>
+                      </li>
+
+                      <!-- 다음 -->
+                      <li class="page-item"
+                          th:classappend="${docPage >= docTotalPages} ? ' disabled'">
+                        <a class="page-link"
+                           th:href="@{/admin/AiSecretary/rag(
+                            docStartDate=${docStartDate},
+                            docEndDate=${docEndDate},
+                            docStage=${selectedDocStage},
+                            docCategory=${selectedDocCategory},
+                            docType=${selectedDocType},
+                            accessLevel=${selectedAccessLevel},
+                            docPage=${docPage + 1}
+                       )}">
+                          다음
+                        </a>
+                      </li>
+                    </ul>
+                  </nav>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+
+        <!--
+        ============================================================
+        6. 새 문서 업로드 모달
+        ============================================================
+
+        역할:
+        - 관리자가 직접 문서를 업로드할 때 사용하는 UI
+        - 사용자 자료 등록 요청이 승인된 경우에도 이 모달로 연결 가능하다.
+
+        현재 상태:
+        - UI만 구성
+        - 실제 파일 업로드 API 미연결
+        - DOCUMENT insert 미연결
+        - DOCUMENT_PROCESS_LOG insert 미연결
+        -->
+        <div class="modal fade"
+             id="uploadDocumentModal"
+             tabindex="-1"
+             aria-labelledby="uploadDocumentModalLabel"
+             aria-hidden="true">
+
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+
+            <div class="modal-content">
+
+              <!-- 모달 헤더 -->
+              <div class="modal-header">
+                <h5 class="modal-title fw-bold"
+                    id="uploadDocumentModalLabel">
+                  새 문서 업로드
+                </h5>
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                </button>
+              </div>
+
+              <!-- 모달 바디 -->
+              <div class="modal-body">
+
+                <!--
+                ============================================================
+                1. 문서 기본 정보
+                ============================================================
+
+                역할:
+                - DOCUMENT 생성 시 필요한 기본 문서 정보를 입력한다.
+                - 문서명, 문서 유형, 카테고리, 원본 파일을 등록한다.
+                -->
+                <div class="mb-4">
+                  <h6 class="fw-bold mb-3">문서 기본 정보</h6>
+
+                  <!-- 문서명 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">문서명</label>
+                    <input type="text"
+                           class="form-control"
+                           name="title"
+                           placeholder="예) 근태관리 사용자 매뉴얼">
+                  </div>
+
+                  <!-- 문서 유형 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">문서 유형</label>
+                    <select class="form-select" name="documentType">
+                      <option value="">문서 유형을 선택하세요</option>
+                      <option>사내 규정</option>
+                      <option>업무 매뉴얼</option>
+                      <option>FAQ</option>
+                      <option>서비스 이용 안내</option>
+                      <option>기타</option>
+                    </select>
+                  </div>
+
+                  <!-- 카테고리 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">카테고리</label>
+                    <select class="form-select" name="category">
+                      <option value="">카테고리를 선택하세요</option>
+                      <option>근태</option>
+                      <option>인사</option>
+                      <option>전자결재</option>
+                      <option>교육</option>
+                      <option>복지</option>
+                      <option>시스템</option>
+                      <option>기타</option>
+                    </select>
+                  </div>
+
+                  <!--
+                  요청 사유
+
+                  역할:
+                  - 관리자가 이 문서를 업로드하는 이유를 기록한다.
+                  - 사용자 자료 등록 요청에서 넘어온 경우, 사용자가 작성한 요청 사유를 기본값으로 세팅할 수 있다.
+                  - 직접 업로드인 경우 관리자가 직접 입력한다.
+
+                  추후 연결:
+                  - AI_KNOWLEDGE_REQUEST.reason
+                  - 또는 DOCUMENT의 운영 메모/등록 사유 필드
+                  -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">요청 사유</label>
+                    <textarea class="form-control"
+                              rows="3"
+                              name="requestReason"
+                              placeholder="예) 챗봇이 조퇴 신청 기준을 정확히 답변하지 못해 해당 문서를 반영합니다."></textarea>
+                  </div>
+
+                  <!--
+                  챗봇 질문 예시
+
+                  역할:
+                  - 이 문서가 어떤 사용자 질문에 답변하기 위해 필요한지 기록한다.
+                  - RAG 테스트 질문 또는 검증용 질문으로 활용할 수 있다.
+
+                  추후 활용:
+                  - 문서 반영 후 챗봇 테스트 케이스
+                  - 관리자 검수 기준
+                  - 사용자 자료 등록 요청과 연결
+                  -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">챗봇 질문 예시</label>
+                    <textarea class="form-control"
+                              rows="3"
+                              name="questionExample"
+                              placeholder="예) 조퇴 신청은 어디에서 하나요?"></textarea>
+                  </div>
+
+                  <!-- 파일 선택 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">파일</label>
+                    <input type="file"
+                           class="form-control"
+                           name="file">
+                  </div>
+                </div>
+
+
+                <!--
+                ============================================================
+                2. 기본 접근 권한
+                ============================================================
+
+                역할:
+                - 문서 업로드 시 최초로 적용할 기본 열람 권한을 지정한다.
+                - 업로드 이후 세부 권한 정책은 보안 및 권한 제어 화면에서 수정할 수 있다.
+
+                용어:
+                - 기본 열람 권한:
+                  문서를 어떤 방식으로 공개/제한할지 선택한다.
+                  예: 전체 공개 / 조건 조합 / 관리자 전용
+
+                주의:
+                - "기본 적용 대상"이라는 별도 라벨은 노출하지 않는다.
+                - 선택한 기본 열람 권한에 따라 설명 문구 또는 조건 선택 영역만 보여준다.
+                -->
+                <div class="mb-4">
+                  <h6 class="fw-bold mb-3">기본 열람 권한</h6>
+
+                  <!-- 기본 열람 권한 선택 -->
+                  <div class="mb-3">
+                    <div class="form-text mb-2">
+                      업로드 시 설정한 기본 열람 권한은 문서 등록 후
+                      <strong>보안 및 권한 제어</strong> 화면에서 세부 수정할 수 있습니다.
+                    </div>
+
+                    <select class="form-select"
+                            name="defaultAccessLevel"
+                            id="uploadDefaultAccessLevel">
+                      <option value="PUBLIC" selected>전체 공개</option>
+                      <option value="CUSTOM">조건 조합</option>
+                      <option value="ADMIN_ONLY">관리자 전용</option>
+                    </select>
+                  </div>
+
+                  <!-- 전체 공개 안내 -->
+                  <div class="mb-3 js-upload-access-guide"
+                       id="uploadPublicGuide">
+                    <div class="alert alert-secondary py-2 mb-0">
+                      전체 공개 문서는 모든 직원이 챗봇/RAG 검색 결과로 접근할 수 있습니다.
+                    </div>
+                  </div>
+
+                  <!-- 관리자 전용 안내 -->
+                  <div class="mb-3 js-upload-access-guide d-none"
+                       id="uploadAdminOnlyGuide">
+                    <div class="alert alert-warning py-2 mb-0">
+                      관리자 전용 문서는 관리자 권한 사용자만 챗봇/RAG 검색 결과로 접근할 수 있습니다.
+                    </div>
+                  </div>
+
+                  <!-- 조건 조합 영역 -->
+                  <div class="border rounded p-3 bg-light d-none"
+                       id="uploadCustomAccessWrap">
+
+                    <div class="mb-3">
+                      <div class="fw-bold">조건 조합</div>
+                      <div class="text-muted small">
+                        부서, 역할, 직책, 등급 조건을 조합하여 기본 접근 대상을 지정합니다.
+                        예: 개발본부 + 선임 이상
+                      </div>
+                    </div>
+
+                    <div class="row g-3">
+
+                      <!-- 대상 부서 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          대상 부서
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="defaultTargetDeptId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="dept : ${departmentOptions}"
+                                  th:value="${dept.id}"
+                                  th:text="${dept.name}">
+                            개발본부
+                          </option>
+                        </select>
+                      </div>
+
+                      <!-- 대상 역할 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          대상 역할
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="defaultTargetRoleId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="role : ${roleOptions}"
+                                  th:value="${role.id}"
+                                  th:text="${role.name}">
+                            TEAM_LEADER
+                          </option>
+                        </select>
+                      </div>
+
+                      <!-- 직책 기준 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          직책 기준
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="defaultMinPositionId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="position : ${positionOptions}"
+                                  th:value="${position.id}"
+                                  th:text="${position.name + ' 이상'}">
+                            선임 이상
+                          </option>
+                        </select>
+                      </div>
+
+                      <!-- 등급 기준 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          등급 기준
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="defaultMinGradeId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="grade : ${gradeOptions}"
+                                  th:value="${grade.id}"
+                                  th:text="${grade.name + ' 이상'}">
+                            G1 이상
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <!-- 조건 조합 안내 -->
+                    <div class="alert alert-light border mt-3 mb-0 small">
+                      선택한 조건은 AND 조건으로 적용됩니다.
+                      예를 들어 대상 부서가 개발본부이고 직책 기준이 선임 이상이면,
+                      개발본부 소속이면서 선임 이상인 직원만 해당 문서에 접근할 수 있습니다.
+                    </div>
+                  </div>
+                </div>
+
+
+                <!--
+                ============================================================
+                3. 관리자 메모
+                ============================================================
+
+                역할:
+                - 문서 업로드 사유 또는 기본 권한 설정 사유를 기록한다.
+                - 추후 DOCUMENT_PROCESS_LOG 또는 권한 변경 이력과 연결 가능하다.
+                -->
+                <div class="mb-3">
+                  <label class="form-label fw-bold">관리자 메모</label>
+                  <textarea class="form-control"
+                            rows="3"
+                            name="adminMemo"
+                            placeholder="문서 업로드 사유 또는 기본 권한 설정 사유를 입력합니다."></textarea>
+                </div>
+              </div>
+
+              <!-- 모달 푸터 -->
+              <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                  취소
+                </button>
+
+                <button type="button"
+                        class="btn btn-primary">
+                  업로드
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!--
+        ============================================================
+        자료 등록 요청 상세 모달
+        ============================================================
+
+        역할:
+        - 사용자가 챗봇 지식 반영을 요청한 자료 등록 요청의 상세 내용을 확인한다.
+        - 관리자는 요청 내용을 검토하고 필요한 경우 내용을 수정할 수 있다.
+        - 사용자가 첨부했거나 참고한 파일/URL을 확인 또는 다운로드할 수 있다.
+        - 승인/반려 처리는 이 모달 하단에서 수행한다.
+
+        흐름:
+        자료 등록 요청 목록
+        → 상세
+        → 요청 내용 확인/수정
+        → 파일 보기/다운로드
+        → 승인 또는 반려
+
+        주의:
+        - 현재는 더미 UI이다.
+        - 추후 AI_KNOWLEDGE_REQUEST 상세 조회 API 또는 서버 렌더링 데이터와 연결한다.
+        - 승인 시 DOCUMENT 생성 또는 새 문서 업로드 흐름과 연결할 수 있다.
+        -->
+        <div class="modal fade"
+             id="knowledgeRequestDetailModal"
+             tabindex="-1"
+             aria-labelledby="knowledgeRequestDetailModalLabel"
+             aria-hidden="true">
+
+          <div class="modal-dialog modal-xl modal-dialog-centered">
+
+            <div class="modal-content">
+
+              <!-- 모달 헤더 -->
+              <div class="modal-header">
+                <div>
+                  <h5 class="modal-title fw-bold"
+                      id="knowledgeRequestDetailModalLabel">
+                    자료 등록 요청 상세
+                  </h5>
+
+                  <p class="text-muted mb-0 small">
+                    사용자가 요청한 내용을 검토하고, 필요한 경우 수정 후 승인 또는 반려합니다.
+                  </p>
+                </div>
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                </button>
+              </div>
+
+              <!-- 모달 바디 -->
+              <div class="modal-body">
+
+                <!--
+                ============================================================
+                1. 요청 기본 정보
+                ============================================================
+
+                역할:
+                - 사용자가 요청한 자료 등록 내용을 문서 업로드 형식과 유사하게 보여준다.
+                - 관리자는 승인 전 제목/문서유형/카테고리/설명 등을 수정할 수 있다.
+                -->
+                <div class="mb-4">
+                  <h6 class="fw-bold mb-3">요청 기본 정보</h6>
+
+                  <!-- 요청 제목 / 문서명 후보 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">문서명</label>
+                    <input type="text"
+                           class="form-control"
+                           name="requestTitle"
+                           value="조퇴 신청 기준 챗봇 반영 요청"
+                           placeholder="예) 근태관리 사용자 매뉴얼">
+                  </div>
+
+                  <!-- 자료 유형 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">자료 유형</label>
+                    <select class="form-select" name="requestType">
+                      <option>사내 규정</option>
+                      <option selected>업무 매뉴얼</option>
+                      <option>FAQ</option>
+                      <option>서비스 이용 안내</option>
+                      <option>기타</option>
+                    </select>
+                  </div>
+
+                  <!-- 카테고리 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">카테고리</label>
+                    <select class="form-select" name="requestCategory">
+                      <option selected>근태</option>
+                      <option>인사</option>
+                      <option>전자결재</option>
+                      <option>교육</option>
+                      <option>복지</option>
+                      <option>시스템</option>
+                      <option>기타</option>
+                    </select>
+                  </div>
+
+                  <!-- 요청자 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">요청자</label>
+                    <input type="text"
+                           class="form-control"
+                           value="송혜진"
+                           readonly>
+                  </div>
+
+                  <!-- 요청일 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">요청일</label>
+                    <input type="text"
+                           class="form-control"
+                           value="2026-05-11"
+                           readonly>
+                  </div>
+
+                  <!-- 요청 사유 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">요청 사유</label>
+                    <textarea class="form-control"
+                              rows="3"
+                              name="requestReason"
+                              placeholder="사용자가 요청한 사유를 확인하고 필요 시 수정합니다.">챗봇이 조퇴 신청 기준을 정확히 답변하지 못해 근태 매뉴얼 반영이 필요합니다.</textarea>
+                  </div>
+
+                  <!-- 질문 예시 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">챗봇 질문 예시</label>
+                    <textarea class="form-control"
+                              rows="3"
+                              name="questionExample"
+                              placeholder="예) 조퇴 신청은 어디에서 하나요?">조퇴 신청은 어디에서 하나요?</textarea>
+                  </div>
+                </div>
+
+
+                <!--
+                ============================================================
+                2. 요청 첨부/참고 자료
+                ============================================================
+
+                역할:
+                - 사용자가 참고한 파일 또는 URL을 확인한다.
+                - 관리자는 승인 전 원본 자료를 검토할 수 있다.
+
+                현재 상태:
+                - UI만 구성
+                - 추후 파일 경로 또는 다운로드 API와 연결한다.
+                -->
+                <div class="mb-4">
+                  <h6 class="fw-bold mb-3">요청 첨부/참고 자료</h6>
+
+                  <div class="card border-0 bg-light">
+                    <div class="card-body">
+
+                      <div class="row g-3 align-items-center">
+
+                        <!-- 참고 파일명 -->
+                        <div class="col-md-6">
+                          <div class="text-muted small fw-bold mb-1">참고 파일명 또는 URL</div>
+                          <div class="fw-bold">
+                            근태관리_조퇴신청_기준.pdf
+                          </div>
+                        </div>
+
+                        <!-- 파일 액션 -->
+                        <div class="col-md-6 text-md-end">
+                          <button type="button"
+                                  class="btn btn-sm btn-outline-primary"
+                                  id="previewKnowledgeRequestFileBtn"
+                                  data-preview-url="">
+                            파일 보기
+                          </button>
+
+                          <button type="button"
+                                  class="btn btn-sm btn-outline-secondary"
+                                  id="downloadKnowledgeRequestFileBtn"
+                                  data-download-url="">
+                            다운로드
+                          </button>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+
+
+                <!--
+                ============================================================
+                3. 기본 접근 권한
+                ============================================================
+
+                역할:
+                - 승인 후 문서 등록 시 기본으로 적용할 열람 권한을 지정한다.
+                - 새 문서 업로드 모달과 동일한 기준을 사용한다.
+                - 문서 등록 후 보안 및 권한 제어 화면에서 세부 수정 가능하다.
+                -->
+                <div class="mb-4">
+                  <h6 class="fw-bold mb-3">기본 접근 권한</h6>
+
+                  <!-- 기본 열람 권한 선택 -->
+                  <div class="mb-3">
+                    <label class="form-label fw-bold">기본 열람 권한</label>
+
+                    <div class="form-text mb-2">
+                      업로드 시 설정한 기본 열람 권한은 문서 등록 후
+                      <strong>보안 및 권한 제어</strong> 화면에서 세부 수정할 수 있습니다.
+                    </div>
+
+                    <select class="form-select"
+                            name="requestDefaultAccessLevel"
+                            id="requestDefaultAccessLevel">
+                      <option value="PUBLIC" selected>전체 공개</option>
+                      <option value="CUSTOM">조건 조합</option>
+                      <option value="ADMIN_ONLY">관리자 전용</option>
+                    </select>
+                  </div>
+
+                  <!-- 전체 공개 안내 -->
+                  <div class="mb-3 js-request-access-guide"
+                       id="requestPublicGuide">
+                    <div class="alert alert-secondary py-2 mb-0">
+                      전체 공개 문서는 모든 직원이 챗봇/RAG 검색 결과로 접근할 수 있습니다.
+                    </div>
+                  </div>
+
+                  <!-- 관리자 전용 안내 -->
+                  <div class="mb-3 js-request-access-guide d-none"
+                       id="requestAdminOnlyGuide">
+                    <div class="alert alert-warning py-2 mb-0">
+                      관리자 전용 문서는 관리자 권한 사용자만 챗봇/RAG 검색 결과로 접근할 수 있습니다.
+                    </div>
+                  </div>
+
+                  <!-- 조건 조합 영역 -->
+                  <div class="border rounded p-3 bg-light d-none"
+                       id="requestCustomAccessWrap">
+
+                    <div class="mb-3">
+                      <div class="fw-bold">조건 조합</div>
+                      <div class="text-muted small">
+                        부서, 역할, 직책, 등급 조건을 조합하여 기본 접근 대상을 지정합니다.
+                        예: 개발본부 + 선임 이상
+                      </div>
+                    </div>
+
+                    <div class="row g-3">
+
+                      <!-- 대상 부서 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          대상 부서
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="requestDefaultTargetDeptId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="dept : ${departmentOptions}"
+                                  th:value="${dept.id}"
+                                  th:text="${dept.name}">
+                            개발본부
+                          </option>
+                        </select>
+                      </div>
+
+                      <!-- 대상 역할 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          대상 역할
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="requestDefaultTargetRoleId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="role : ${roleOptions}"
+                                  th:value="${role.id}"
+                                  th:text="${role.name}">
+                            TEAM_LEADER
+                          </option>
+                        </select>
+                      </div>
+
+                      <!-- 직책 기준 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          직책 기준
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="requestDefaultMinPositionId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="position : ${positionOptions}"
+                                  th:value="${position.id}"
+                                  th:text="${position.name + ' 이상'}">
+                            선임 이상
+                          </option>
+                        </select>
+                      </div>
+
+                      <!-- 등급 기준 -->
+                      <div class="col-md-3">
+                        <label class="form-label small fw-bold text-muted">
+                          등급 기준
+                        </label>
+
+                        <select class="form-select form-select-sm"
+                                name="requestDefaultMinGradeId">
+                          <option value="">선택 없음</option>
+
+                          <option th:each="grade : ${gradeOptions}"
+                                  th:value="${grade.id}"
+                                  th:text="${grade.name + ' 이상'}">
+                            G1 이상
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="alert alert-light border mt-3 mb-0 small">
+                      선택한 조건은 AND 조건으로 적용됩니다.
+                      예를 들어 대상 부서가 개발본부이고 직책 기준이 선임 이상이면,
+                      개발본부 소속이면서 선임 이상인 직원만 해당 문서에 접근할 수 있습니다.
+                    </div>
+                  </div>
+                </div>
+
+
+                <!--
+                ============================================================
+                4. 관리자 검토 메모
+                ============================================================
+
+                역할:
+                - 승인/반려 사유를 기록한다.
+                - 반려 시 사용자에게 노출될 수 있는 메모로도 활용 가능하다.
+                -->
+                <div class="mb-3">
+                  <label class="form-label fw-bold">관리자 검토 메모</label>
+                  <textarea class="form-control"
+                            rows="3"
+                            name="adminReviewMemo"
+                            placeholder="승인 또는 반려 사유를 입력합니다."></textarea>
+                </div>
+
+              </div>
+
+              <!-- 모달 푸터 -->
+              <div class="modal-footer">
+
+                <!-- 승인 버튼 -->
+                <!-- 추후 AI_KNOWLEDGE_REQUEST.status = APPROVED 처리 및 DOCUMENT 생성 흐름과 연결 -->
+                <button type="button"
+                        class="btn btn-success">
+                  승인
+                </button>
+
+                <!-- 반려 버튼 -->
+                <!-- 추후 AI_KNOWLEDGE_REQUEST.status = REJECTED 처리 -->
+                <button type="button"
+                        class="btn btn-danger">
+                  반려
+                </button>
+
+                <!-- 닫기 버튼 -->
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                  닫기
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+
+        <!--
+        ============================================================
+        7. 관리자 처리 기준 안내 모달
+        ============================================================
+
+        역할:
+        - 상태별 관리자 조치 기준을 안내한다.
+        - 기존 큰 처리 기준표를 모달로 축소한다.
+        -->
+        <div class="modal fade"
+             id="adminActionGuideModal"
+             tabindex="-1"
+             aria-labelledby="adminActionGuideModalLabel"
+             aria-hidden="true">
+
+          <div class="modal-dialog modal-lg modal-dialog-centered">
+
+            <div class="modal-content">
+
+              <!-- 모달 헤더 -->
+              <div class="modal-header">
+                <h5 class="modal-title fw-bold"
+                    id="adminActionGuideModalLabel">
+                  관리자 처리 기준 안내
+                </h5>
+
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                </button>
+              </div>
+
+              <!-- 모달 바디 -->
+              <div class="modal-body">
+
+                <div class="alert alert-light border mb-3">
+                  <strong>핵심 조치 대상은 처리 실패와 승인 대기입니다.</strong>
+                  <br>
+                  처리 실패 문서는 오류 확인 후 재시도하고,
+                  승인 대기 문서는 문서 내용과 권한을 검토한 뒤 승인 또는 반려합니다.
+                </div>
+
+                <div class="table-responsive">
+                  <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                    <tr>
+                      <th>상태</th>
+                      <th>판단 기준</th>
+                      <th>관리자 조치</th>
+                      <th>우선순위</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+
+                    <!-- 관리자 처리 기준 반복 출력 -->
+                    <tr th:each="guide : ${adminActionGuides}">
+
+                      <td class="fw-bold"
+                          th:text="${guide.statusName}">
+                        처리 실패
+                      </td>
+
+                      <td>
+                        <code th:text="${guide.stageCondition}">
+                          CHUNK_FAILED / EMBED_FAILED
+                        </code>
+                      </td>
+
+                      <td th:text="${guide.mainAction}">
+                        실패 사유 확인 후 재시도 또는 보류
+                      </td>
+
+                      <td>
+                                                <span class="badge"
+                                                      th:classappend="${guide.priority == '높음'} ? ' text-bg-danger' :
+                                                                      (${guide.priority == '보통'} ? ' text-bg-warning' : ' text-bg-secondary')"
+                                                      th:text="${guide.priority}">
+                                                    높음
+                                                </span>
+                      </td>
+                    </tr>
+
+                    <tr th:if="${adminActionGuides == null or #lists.isEmpty(adminActionGuides)}">
+                      <td colspan="4" class="text-center text-muted py-4">
+                        관리자 처리 기준 데이터가 없습니다.
+                      </td>
+                    </tr>
+
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+
+              <!-- 모달 푸터 -->
+              <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                  닫기
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <!-- end::Container -->
+
+    </div>
+    <!-- end::App Content -->
+
+  </main>
+  <!-- 메인 콘텐츠 끝 -->
+
+  <!-- 푸터 시작 -->
+  <th:block th:replace="~{/admin/common/footer}"></th:block>
+  <!-- 푸터 끝 -->
+
+</div>
+<!-- end::App Wrapper -->
+
+
+<!-- 스크립트 시작 -->
+
+<!-- 공통 사용 스크립트 불러오기 -->
+<th:block th:replace="~{/admin/common/commonJs}"></th:block>
+
+<!--
+[adAiRagManage 페이지 전용 스크립트]
+
+역할:
+1. Bootstrap tooltip 초기화
+2. 조회 기간 버튼 라벨 갱신
+3. 새 문서 업로드 / 관리자 처리 기준 모달은 Bootstrap data-bs-* 속성으로 처리
+-->
+<script>
+  document.addEventListener("DOMContentLoaded", function () {
+      /*
+       * 1. Bootstrap tooltip 초기화
+       *
+       * 상태 요약 카드의 ? 아이콘 hover 설명에 사용한다.
+       */
+      if (window.bootstrap) {
+          document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (tooltipEl) {
+              bootstrap.Tooltip.getOrCreateInstance(tooltipEl);
+          });
+      }
+
+      /*
+       * 2. 조회 기간 버튼 라벨 갱신
+       *
+       * 대상 구조:
+       * .dropdown
+       *   ├─ .js-date-range-label
+       *   │    └─ span
+       *   ├─ .js-date-start
+       *   └─ .js-date-end
+       *
+       * 동작:
+       * - 시작일/종료일 변경 시 버튼 텍스트를
+       *   YYYY.MM.DD - YYYY.MM.DD 형식으로 갱신한다.
+       */
+      document.querySelectorAll(".dropdown").forEach(function (dropdown) {
+          const labelButton = dropdown.querySelector(".js-date-range-label");
+          const startInput = dropdown.querySelector(".js-date-start");
+          const endInput = dropdown.querySelector(".js-date-end");
+
+          if (!labelButton || !startInput || !endInput) return;
+
+          const labelSpan = labelButton.querySelector("span");
+
+          function formatDate(value) {
+              if (!value) return "0000.00.00";
+              return value.replaceAll("-", ".");
+          }
+
+          function updateDateRangeLabel() {
+              if (!labelSpan) return;
+
+              const startText = formatDate(startInput.value);
+              const endText = formatDate(endInput.value);
+
+              labelSpan.textContent = startText + " - " + endText;
+          }
+
+          startInput.addEventListener("change", updateDateRangeLabel);
+          endInput.addEventListener("change", updateDateRangeLabel);
+      });
+
+       /*
+         * Bootstrap tooltip 초기화
+         */
+        if (window.bootstrap) {
+            document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (tooltipEl) {
+                bootstrap.Tooltip.getOrCreateInstance(tooltipEl);
+            });
+        }
+
+        /*
+         * 조회 기간 버튼 라벨 갱신
+         */
+        document.querySelectorAll(".dropdown").forEach(function (dropdown) {
+            const labelButton = dropdown.querySelector(".js-date-range-label");
+            const startInput = dropdown.querySelector(".js-date-start");
+            const endInput = dropdown.querySelector(".js-date-end");
+
+            if (!labelButton || !startInput || !endInput) return;
+
+            const labelSpan = labelButton.querySelector("span");
+
+            function formatDate(value) {
+                if (!value) return "0000.00.00";
+                return value.replaceAll("-", ".");
+            }
+
+            function updateDateRangeLabel() {
+                if (!labelSpan) return;
+
+                const startText = formatDate(startInput.value);
+                const endText = formatDate(endInput.value);
+
+                labelSpan.textContent = startText + " - " + endText;
+            }
+
+            startInput.addEventListener("change", updateDateRangeLabel);
+            endInput.addEventListener("change", updateDateRangeLabel);
+        });
+
+        /*
+         * 새 문서 업로드 모달 - 기본 열람 권한 제어
+         *
+         * 기능:
+         * - 전체 공개 선택 시 전체 공개 안내만 표시
+         * - 조건 조합 선택 시 기본 적용 대상 조건 영역 표시
+         * - 관리자 전용 선택 시 관리자 전용 안내만 표시
+         */
+        const uploadDefaultAccessLevel = document.getElementById("uploadDefaultAccessLevel");
+        const uploadPublicGuide = document.getElementById("uploadPublicGuide");
+        const uploadAdminOnlyGuide = document.getElementById("uploadAdminOnlyGuide");
+        const uploadCustomAccessWrap = document.getElementById("uploadCustomAccessWrap");
+
+        function updateUploadAccessArea() {
+            if (!uploadDefaultAccessLevel) return;
+
+            const selectedAccessLevel = uploadDefaultAccessLevel.value;
+
+            uploadPublicGuide?.classList.add("d-none");
+            uploadAdminOnlyGuide?.classList.add("d-none");
+            uploadCustomAccessWrap?.classList.add("d-none");
+
+            if (selectedAccessLevel === "PUBLIC") {
+                uploadPublicGuide?.classList.remove("d-none");
+            } else if (selectedAccessLevel === "CUSTOM") {
+                uploadCustomAccessWrap?.classList.remove("d-none");
+            } else if (selectedAccessLevel === "ADMIN_ONLY") {
+                uploadAdminOnlyGuide?.classList.remove("d-none");
+            }
+        }
+
+        uploadDefaultAccessLevel?.addEventListener("change", updateUploadAccessArea);
+
+        updateUploadAccessArea();
+
+        /*
+         * 자료 등록 요청 상세 모달 - 기본 열람 권한 제어
+         */
+        const requestDefaultAccessLevel = document.getElementById("requestDefaultAccessLevel");
+        const requestPublicGuide = document.getElementById("requestPublicGuide");
+        const requestAdminOnlyGuide = document.getElementById("requestAdminOnlyGuide");
+        const requestCustomAccessWrap = document.getElementById("requestCustomAccessWrap");
+
+        function updateRequestAccessArea() {
+            if (!requestDefaultAccessLevel) return;
+
+            const selectedAccessLevel = requestDefaultAccessLevel.value;
+
+            requestPublicGuide?.classList.add("d-none");
+            requestAdminOnlyGuide?.classList.add("d-none");
+            requestCustomAccessWrap?.classList.add("d-none");
+
+            if (selectedAccessLevel === "PUBLIC") {
+                requestPublicGuide?.classList.remove("d-none");
+            } else if (selectedAccessLevel === "CUSTOM") {
+                requestCustomAccessWrap?.classList.remove("d-none");
+            } else if (selectedAccessLevel === "ADMIN_ONLY") {
+                requestAdminOnlyGuide?.classList.remove("d-none");
+            }
+        }
+
+        requestDefaultAccessLevel?.addEventListener("change", updateRequestAccessArea);
+
+        updateRequestAccessArea();
+
+        /*
+         * 자료 등록 요청 첨부 파일 보기
+         */
+        const previewKnowledgeRequestFileBtn = document.getElementById("previewKnowledgeRequestFileBtn");
+
+        previewKnowledgeRequestFileBtn?.addEventListener("click", function () {
+            const previewUrl = previewKnowledgeRequestFileBtn.dataset.previewUrl;
+
+            if (!previewUrl) {
+                alert("요청 첨부 파일 보기 기능은 추후 파일 경로와 연결됩니다.");
+                return;
+            }
+
+            window.open(previewUrl, "_blank");
+        });
+
+        /*
+         * 자료 등록 요청 첨부 파일 다운로드
+         */
+        const downloadKnowledgeRequestFileBtn = document.getElementById("downloadKnowledgeRequestFileBtn");
+
+        downloadKnowledgeRequestFileBtn?.addEventListener("click", function () {
+            const downloadUrl = downloadKnowledgeRequestFileBtn.dataset.downloadUrl;
+
+            if (!downloadUrl) {
+                alert("요청 첨부 파일 다운로드 기능은 추후 다운로드 API와 연결됩니다.");
+                return;
+            }
+
+            window.location.href = downloadUrl;
+        });
+  });
+</script>
+
+<!-- 스크립트 끝 -->
+
+</body>
+<!-- end::Body -->
+
+</html>

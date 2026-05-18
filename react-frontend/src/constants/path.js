@@ -123,9 +123,19 @@ export const PATH = {
     USER_ME: '/user/me',
     USER_UPDATE: '/user/update',
 
+    APPROVAL: {
+      FORMS: '/approval/forms',
+      FORM_DETAIL: (formId) => `/approval/forms/${formId}`,
+      LINE_TEMPLATE_DETAIL: (templateId) => `/approval/line-templates/${templateId}`,
+      EMPLOYEES: '/approval/employees',
+      DRAFTS: '/approval/drafts',
+      SUBMIT: '/approval/submit',
+    },
+
     ONBOARDING: {
       ROADMAP: (empNo) => `/onboarding/roadmap/${empNo}`,
       DASHBOARD: (empNo) => `/onboarding/dashboard/${empNo}`,
+      CONTENT_DETAIL: (contentId) => `/onboarding/dashboard/content/${contentId}`,
       CHECKLIST_LIST: (empNo) => `/onboarding/checklist/${empNo}`,
       CHECKLIST_COMPLETE: "/onboarding/checklist/complete",
       CHECKLIST_UNCOMPLETE: "/onboarding/checklist/uncomplete",

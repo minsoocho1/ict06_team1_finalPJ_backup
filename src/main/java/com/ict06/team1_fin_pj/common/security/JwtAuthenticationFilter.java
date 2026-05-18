@@ -44,9 +44,14 @@ public class JwtAuthenticationFilter extends GenericFilterBean {
 
         HttpServletRequest httpRequest = (HttpServletRequest) request;
         String uri = httpRequest.getRequestURI();
+        String method = httpRequest.getMethod();
+
+        // [필수 로그] 모든 요청의 경로와 메서드 출력하여 필터 작동 여부 확인
+        System.out.println("[JWT Filter] 요청 수신 -> [" + method + "] " + uri);
 
         // 1. 관리자 페이지는 JWT 검사 제외(세션/폼로그인에서 처리)
         if (uri.startsWith("/admin")) {
+            System.out.println("[JWT Filter] 관리자 경로 스킵 (Session 사용): " + uri);
             chain.doFilter(request, response);
             return;
         }
@@ -60,19 +65,24 @@ public class JwtAuthenticationFilter extends GenericFilterBean {
         // 2-2. 헤더에 없으면 쿼리 파라미터에서 추출
         if(!StringUtils.hasText(token) && "/api/noti/subscribe".equals(uri)) {
             token = httpRequest.getParameter("token");
+            System.out.println("[JWT Filter] SSE 구독: 쿼리 파라미터에서 토큰 추출 시도");
         }
 
         // 2-3. 토큰 유효성 검증
-        if(token != null && jwtTokenProvider.validateToken(token)) {
-            // 유효하면 Authentication 객체 생성 -> SecurityContext에 저장
-            Authentication authentication = jwtTokenProvider.getAuthentication(token);
-            SecurityContextHolder.getContext().setAuthentication(authentication);
+        if(token != null) {
+            boolean isValid = jwtTokenProvider.validateToken(token);
+            System.out.println("[JWT Filter] 토큰 유효성 검증 결과: " + isValid + " (토큰 앞부분: " + token.substring(0, Math.min(token.length(), 10)) + "...)");
+            
+            if(isValid) {
+                // 유효하면 Authentication 객체 생성 -> SecurityContext에 저장
+                Authentication authentication = jwtTokenProvider.getAuthentication(token);
+                SecurityContextHolder.getContext().setAuthentication(authentication);
 
-            System.out.println("[JWT Filter] 인증 성공 - empNo:" + authentication.getName());
-        } else if(token != null) {
-            System.out.println("[JWT Filter] 토큰 유효하지 않음");
+                System.out.println("[JWT Filter] 인증 성공 - 사번: " + authentication.getName());
+            }
         } else {
-            System.out.println("[JWT Filter] 토큰 없음 - URI:" + uri);
+            // [로그 추가] 토큰이 없는 경우 (로그인 전이거나 비인가 경로 요청)
+            System.out.println("[JWT Filter] 전달된 토큰 없음 (Anonymous User)");
         }
 
         // 원본: 관리자 페이지 세션 처리 안 한 경우

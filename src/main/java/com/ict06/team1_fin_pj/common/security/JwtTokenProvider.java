@@ -66,6 +66,7 @@ public class JwtTokenProvider {
         claims.put("role", role);
         Date now = new Date();
 
+        System.out.println("[JWT Provider] Access Token 생성 완료 - 사번: " + empNo);
         return Jwts.builder()
                 .setClaims(claims)
                 .setIssuedAt(now)
@@ -81,6 +82,7 @@ public class JwtTokenProvider {
         Claims claims = Jwts.claims().setSubject(empNo);
         Date now = new Date();
 
+        System.out.println("[JWT Provider] Refresh Token 생성 완료 - 사번: " + empNo);
         return Jwts.builder()
                 .setClaims(claims)
                 .setIssuedAt(now)
@@ -122,9 +124,13 @@ public class JwtTokenProvider {
     //@return 유효 여부
     public boolean validateToken(String jwtToken) {
         try {
-            Jws<Claims> claims = Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwtToken);
-            return !claims.getBody().getExpiration().before(new Date());
-        } catch (Exception e) {
+            Jwts.parserBuilder().setSigningKey(key).build().parseClaimsJws(jwtToken);
+            return true;
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            System.out.println("[JWT Provider] 토큰 만료됨 (ExpiredJwtException)");
+            return false;
+        } catch (io.jsonwebtoken.JwtException | IllegalArgumentException e) {
+            System.out.println("[JWT Provider] 유효하지 않은 토큰: " + e.getMessage());
             return false;
         }
     }

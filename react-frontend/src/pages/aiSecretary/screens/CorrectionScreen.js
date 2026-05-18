@@ -1,5 +1,14 @@
-/* AiSecretary.js 전용 문장 다듬기 화면 */
-// src/pages/aiSecretary/screens/CorrectionScreen.js
+/**
+ * @FileName : CorrectionScreen.js
+ * @Description : AiSecretary.js 전용 문장 다듬기 화면
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
@@ -7,6 +16,7 @@ import axios from "axios";
 import { useUser } from "src/api/UserContext";
 import { correctText, unwrapApiData } from "../api/aiSecretaryApi";
 import { C, styles } from "../styles/aiSecretaryTheme";
+import { PATH } from 'src/constants/path';
 
 /**
  * 문장 다듬기 모드 목록
@@ -106,7 +116,7 @@ export default function CorrectionScreen() {
     setError("");
 
     try {
-      const response = await axios.get("http://localhost:8081/api/user/welcome", {
+      const response = await axios.get(PATH.AUTH.WELCOME, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -192,9 +202,6 @@ export default function CorrectionScreen() {
     } catch (err) {
       console.error("문장 다듬기 실패", err);
 
-      /**
-       * Gemini 원본 에러나 서버 내부 에러를 사용자에게 그대로 노출하지 않는다.
-       */
       setError("문장 다듬기 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
     } finally {
       setLoadingCorrection(false);

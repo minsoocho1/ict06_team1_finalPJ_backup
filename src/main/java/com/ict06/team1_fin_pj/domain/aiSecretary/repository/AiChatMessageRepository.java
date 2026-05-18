@@ -2,6 +2,7 @@ package com.ict06.team1_fin_pj.domain.aiSecretary.repository;
 
 
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatMessageEntity;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.MessageRole;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -16,5 +17,10 @@ public interface AiChatMessageRepository extends JpaRepository<AiChatMessageEnti
 
     // 세션 내 메시지 순번(seq_no) 중 가장 마지막 메시지 찾기
     Optional<AiChatMessageEntity> findTopBySessionSessionIdOrderBySeqNoDesc(Integer sessionId);
+
+    Optional<AiChatMessageEntity> findTopBySessionSessionIdAndRoleOrderBySeqNoAsc(
+            Integer sessionId,
+            MessageRole role
+    );
 
 }

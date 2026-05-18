@@ -1,3 +1,15 @@
+/**
+ * @FileName : SummaryView.js
+ * @Description : AI 온보딩 평가 결과 요약 화면
+ * @Author : 김다솜
+ * @Date : 2026. 05. 15
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.06    김다솜       최초 생성, Quiz.js에서 평가 진행 현황/결과 요약 컴포넌트 분리
+ * @ 2026.05.15    김다솜       UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ */
 import { CBadge, CCard, CCardBody } from '@coreui/react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -90,7 +102,7 @@ const SummaryView = ({
           </p>
         </div>
         <div style={{ textAlign: 'center' }}>
-          <div style={{ fontSize: '28px', fontWeight: 700, color: '#321fdb' }}>
+          <div style={{ fontSize: '28px', fontWeight: 700, color: '#2563EB' }}>
             {passedCount} / {completedCategories.length}
           </div>
           <div style={{ fontSize: '13px', color: '#6c757d' }}>
@@ -115,18 +127,18 @@ const SummaryView = ({
                 <CCard
                   key={item.categoryName}
                   style={{
-                    borderRadius: '12px',
+                    borderRadius: '18px',
                     border: item.isLearningCompleted
                       ? item.submitted
                         ? '1px solid #ffe8a1'
-                        : '1px solid #dee2e6'
+                        : '1px solid #DDE3EA'
                       : '1px solid #d6d8db',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)',
                     background: !item.isLearningCompleted
-                      ? '#f1f3f5'
+                      ? '#F4F7FB'
                       : item.submitted
                         ? '#fff3f3'
-                        : '#f8f9fa',
+                        : '#FFFFFF',
                     cursor: !item.isLearningCompleted ? 'pointer' : 'default',
                   }}
                   onClick={() => {
@@ -161,8 +173,16 @@ const SummaryView = ({
 
                         navigate(PATH.EVALUATION.QUIZ(item.categoryName));
                       }}
-                      className={`btn btn-sm ${item.isLearningCompleted ? 'btn-primary' : 'btn-secondary'}`}
-                      style={{ marginTop: '12px', width: '100%' }}
+                      className="btn btn-sm"
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        borderRadius: '999px',
+                        border: item.isLearningCompleted ? '1px solid #2563EB' : '1px solid #DDE3EA',
+                        background: item.isLearningCompleted ? '#2563EB' : '#FFFFFF',
+                        color: item.isLearningCompleted ? '#FFFFFF' : '#6B7280',
+                        fontWeight: 700,
+                      }}
                     >
                       {getPendingButtonLabel(item)}
                     </button>
@@ -192,9 +212,9 @@ const SummaryView = ({
                 <CCard
                   key={`${result.categoryName}-${idx}`}
                   style={{
-                    borderRadius: '12px',
+                    borderRadius: '18px',
                     border: '1px solid #c3e6cb',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                    boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)',
                   }}
                 >
                   <CCardBody>
@@ -228,7 +248,7 @@ const SummaryView = ({
                           style={{
                             width: `${scoreRate}%`,
                             height: '100%',
-                            background: '#28a745',
+                            background: '#16A34A',
                             borderRadius: '4px',
                             transition: 'width 0.4s ease',
                           }}
@@ -246,8 +266,16 @@ const SummaryView = ({
 
                     <button
                       onClick={() => navigate(PATH.EVALUATION.QUIZ_DETAIL(userInfo.empNo, result.categoryName))}
-                      className="btn btn-sm btn-outline-primary"
-                      style={{ marginTop: '12px', width: '100%' }}
+                      className="btn btn-sm"
+                      style={{
+                        marginTop: '12px',
+                        width: '100%',
+                        borderRadius: '999px',
+                        border: '1px solid #2563EB',
+                        color: '#2563EB',
+                        background: '#FFFFFF',
+                        fontWeight: 700,
+                      }}
                     >
                       상세 결과 보기
                     </button>

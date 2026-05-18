@@ -1,0 +1,500 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:include="/admin/common/head.html :: common_header">
+    <title id="page_title">AI 비서 운영 대시보드</title>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+<style>
+    .flatpickr-calendar {
+        z-index: 9999 !important;
+    }
+
+    .flatpickr-calendar:not(.open) {
+        display: none !important;
+    }
+
+    .flatpickr-calendar .flatpickr-prev-month,
+    .flatpickr-calendar .flatpickr-next-month {
+        width: 34px !important;
+        height: 34px !important;
+        padding: 8px !important;
+        line-height: 1 !important;
+        color: #334155 !important;
+        background: transparent !important;
+        border: 0 !important;
+        box-shadow: none !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-size: 0 !important;
+        text-indent: -9999px !important;
+        overflow: hidden !important;
+        position: relative !important;
+    }
+
+    .flatpickr-calendar .flatpickr-prev-month svg,
+    .flatpickr-calendar .flatpickr-next-month svg {
+        width: 14px !important;
+        height: 14px !important;
+        display: block !important;
+    }
+
+    .flatpickr-calendar .flatpickr-prev-month svg path,
+    .flatpickr-calendar .flatpickr-next-month svg path {
+        fill: currentColor !important;
+    }
+
+    .flatpickr-calendar .flatpickr-prev-month:before,
+    .flatpickr-calendar .flatpickr-next-month:before,
+    .flatpickr-calendar .flatpickr-prev-month:after,
+    .flatpickr-calendar .flatpickr-next-month:after {
+        display: none !important;
+        content: none !important;
+    }
+
+    .dashboard-filter-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: .5rem;
+    }
+
+    .dashboard-filter-bar .btn-group,
+    .dashboard-filter-bar form {
+        flex: 0 0 auto;
+    }
+
+    .dashboard-filter-bar .dashboard-filter-range {
+        min-width: 240px;
+        width: clamp(240px, 24vw, 320px);
+        flex: 0 1 clamp(240px, 24vw, 320px);
+    }
+
+    .dashboard-filter-bar .dashboard-filter-range input {
+        min-height: 31px;
+    }
+
+    .dashboard-filter-bar .dashboard-filter-range .form-control {
+        width: 100%;
+    }
+
+    .dashboard-filter-bar .btn {
+        white-space: nowrap;
+    }
+
+    @media (min-width: 992px) {
+        .dashboard-filter-bar {
+            flex-wrap: nowrap;
+        }
+    }
+</style>
+<div class="app-wrapper">
+    <th:block th:replace="~{/admin/common/header}"></th:block>
+    <th:block th:replace="~{/admin/common/sidebar}"></th:block>
+
+    <main class="app-main">
+        <div class="app-content">
+            <div class="container-fluid py-3">
+                <div class="row mb-3">
+                    <div class="col-12 d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                        <div>
+                            <h3 class="fw-bold mb-2">AI 비서 운영 대시보드</h3>
+                            <p class="text-muted mb-0">관리자 AI 사용 현황과 최근 로그를 한눈에 확인할 수 있습니다.</p>
+                        </div>
+
+                        <div class="dashboard-filter-bar">
+                            <div class="btn-group btn-group-sm" role="group" aria-label="최근 AI 사용 기간 빠른 선택">
+                                <a class="btn btn-outline-primary"
+                                   th:href="@{/admin/AiSecretary/dashboard(period=7, page=1)}">최근 7일</a>
+                                <a class="btn btn-outline-primary"
+                                   th:href="@{/admin/AiSecretary/dashboard(period=30, page=1)}">최근 30일</a>
+                            </div>
+
+                            <form th:action="@{/admin/AiSecretary/dashboard}" method="get"
+                                  id="dashboardDateFilterForm"
+                                  class="d-flex flex-wrap gap-2 align-items-end">
+                                <input type="hidden" name="period" th:value="${selectedPeriod}">
+                                <input type="hidden" name="department" th:value="${selectedDepartment}">
+                                <input type="hidden" name="aiType" th:value="${selectedAiType}">
+                                <input type="hidden" name="result" th:value="${selectedResult}">
+                                <input type="hidden" name="page" value="1">
+                                <input type="hidden" name="startDate" th:value="${selectedStartDate}">
+                                <input type="hidden" name="endDate" th:value="${selectedEndDate}">
+
+                                <div class="dashboard-filter-range">
+                                    <input type="text"
+                                           class="form-control form-control-sm"
+                                           id="dashboardDateRangePicker"
+                                           placeholder="2026-05-08 ~ 2026-05-14">
+                                </div>
+
+                                <button type="submit" class="btn btn-sm btn-primary">조회</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-3 mb-3" th:each="card : ${summaryCards}">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <p class="text-muted fw-bold mb-2" th:text="${card.label}">전체 AI 요청 수</p>
+                                <div class="d-flex align-items-end gap-2 mb-2">
+                                    <h3 class="fw-bold mb-0" th:text="${card.value}">0</h3>
+                                    <span class="fw-bold text-muted mb-1" th:text="${card.unit}">건</span>
+                                    <span class="badge mb-1"
+                                          th:classappend="${card.trend == 'up'} ? ' text-bg-success' :
+                                          (${card.trend == 'down'} ? ' text-bg-danger' : ' text-bg-secondary')"
+                                          th:text="${card.changeRate}">
+                                        0.0%
+                                    </span>
+                                </div>
+                                <div class="small fw-bold"
+                                     th:classappend="${card.trend == 'up'} ? ' text-success' :
+                                     (${card.trend == 'down'} ? ' text-danger' : ' text-muted')">
+                                    <span th:text="${card.changeRate}">0.0%</span>
+                                    <span th:text="${' ' + card.compareText}">전기간 대비</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12" th:if="${summaryCards == null or #lists.isEmpty(summaryCards)}">
+                        <div class="alert alert-secondary mb-0">표시할 요약 데이터가 없습니다.</div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-lg-8 mb-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white border-0 pb-0">
+                                <h5 class="fw-bold mb-1">AI 사용 추이</h5>
+                                <p class="text-muted mb-0">선택한 기간의 전체 요청 수와 기능별 추이를 확인합니다.</p>
+                            </div>
+                            <div class="card-body">
+                                <div class="bg-light rounded p-3">
+                                    <div id="aiUsageTrendChart"
+                                         style="min-height: 280px;"
+                                         th:classappend="${usageTrendList == null or #lists.isEmpty(usageTrendList)} ? ' d-none'"></div>
+                                    <div id="aiUsageTrendEmptyState"
+                                         class="text-center text-muted py-4"
+                                         th:classappend="${usageTrendList != null and !#lists.isEmpty(usageTrendList)} ? ' d-none'">
+                                        표시할 사용 추이 데이터가 없습니다.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-4 mb-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-header bg-white border-0 pb-0">
+                                <h5 class="fw-bold mb-1">기능별 사용량</h5>
+                                <p class="text-muted mb-0">챗봇, AI 비서, 문장 다듬기, 템플릿 생성의 비중을 확인합니다.</p>
+                            </div>
+                            <div class="card-body">
+                                <div id="featureUsageChart"
+                                     style="min-height: 300px;"
+                                     th:classappend="${featureUsageList == null or #lists.isEmpty(featureUsageList)} ? ' d-none'"></div>
+                                <div id="featureUsageEmptyState"
+                                     class="text-center text-muted py-4"
+                                     th:classappend="${featureUsageList != null and !#lists.isEmpty(featureUsageList)} ? ' d-none'">
+                                    표시할 기능별 사용량 데이터가 없습니다.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-header bg-white border-0 pb-0">
+                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                    <div>
+                                        <h5 class="fw-bold mb-1">최근 AI 사용 로그</h5>
+                                        <p class="text-muted mb-0">최근 10건씩 페이징하여 선택한 기간 내 로그를 확인합니다.</p>
+                                    </div>
+                                </div>
+
+                                <form th:action="@{/admin/AiSecretary/dashboard}" method="get"
+                                      class="row g-2 mt-3 align-items-end">
+                                    <input type="hidden" name="period" th:value="${selectedPeriod}">
+                                    <input type="hidden" name="startDate" th:value="${selectedStartDate}">
+                                    <input type="hidden" name="endDate" th:value="${selectedEndDate}">
+                                    <input type="hidden" name="page" value="1">
+
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold text-muted">부서</label>
+                                        <select class="form-select form-select-sm" name="department">
+                                            <option value="" th:selected="${selectedDepartment == null or selectedDepartment == ''}">전체 부서</option>
+                                            <option value="경영지원팀" th:selected="${selectedDepartment == '경영지원팀'}">경영지원팀</option>
+                                            <option value="인사팀" th:selected="${selectedDepartment == '인사팀'}">인사팀</option>
+                                            <option value="개발1팀(BE)" th:selected="${selectedDepartment == '개발1팀(BE)'}">개발1팀(BE)</option>
+                                            <option value="개발2팀(FE)" th:selected="${selectedDepartment == '개발2팀(FE)'}">개발2팀(FE)</option>
+                                            <option value="디자인팀" th:selected="${selectedDepartment == '디자인팀'}">디자인팀</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold text-muted">AI 기능</label>
+                                        <select class="form-select form-select-sm" name="aiType">
+                                            <option value="" th:selected="${selectedAiType == null or selectedAiType == ''}">전체 기능</option>
+                                            <option value="CHATBOT" th:selected="${selectedAiType == 'CHATBOT'}">챗봇</option>
+                                            <option value="ASSISTANT" th:selected="${selectedAiType == 'ASSISTANT'}">AI 비서</option>
+                                            <option value="CORRECTION" th:selected="${selectedAiType == 'CORRECTION'}">문장 다듬기</option>
+                                            <option value="TEMPLATE" th:selected="${selectedAiType == 'TEMPLATE'}">템플릿 생성</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <label class="form-label small fw-bold text-muted">처리 결과</label>
+                                        <select class="form-select form-select-sm" name="result">
+                                            <option value="" th:selected="${selectedResult == null or selectedResult == ''}">전체 결과</option>
+                                            <option value="SUCCESS" th:selected="${selectedResult == 'SUCCESS'}">성공</option>
+                                            <option value="FALLBACK" th:selected="${selectedResult == 'FALLBACK'}">대체 응답</option>
+                                            <option value="FAIL" th:selected="${selectedResult == 'FAIL'}">실패</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="col-md-3">
+                                        <button type="submit" class="btn btn-sm btn-primary w-100">필터 적용</button>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-hover align-middle mb-0">
+                                        <thead class="table-light">
+                                        <tr>
+                                            <th>사용자</th>
+                                            <th>부서</th>
+                                            <th>AI 기능</th>
+                                            <th>요청 요약</th>
+                                            <th>상세</th>
+                                            <th>처리 결과</th>
+                                            <th>응답 소요 시간</th>
+                                            <th>사용 시각</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <tr th:each="log : ${recentLogList}">
+                                            <td th:text="${log.user}">홍길동</td>
+                                            <td th:text="${log.department}">인사팀</td>
+                                            <td th:text="${log.type}">AI 비서</td>
+                                            <td th:text="${log.requestSummary}">요청 요약</td>
+                                            <td>
+                                                <button type="button"
+                                                        class="btn btn-sm btn-outline-primary ai-log-detail-btn"
+                                                        th:attr="data-log-id=${log.logId},
+                                                                 data-user=${log.user},
+                                                                 data-department=${log.department},
+                                                                 data-type=${log.type},
+                                                                 data-request-summary=${log.requestSummary},
+                                                                 data-response-summary=${log.responseSummary},
+                                                                 data-result=${log.result},
+                                                                 data-result-label=${log.resultLabel},
+                                                                 data-duration-text=${log.durationText},
+                                                                 data-created-at=${log.createdAt},
+                                                                 data-error-message=${log.errorMessage},
+                                                                 data-message-content=${log.messageContent},
+                                                                 data-session-id=${log.sessionId},
+                                                                 data-message-id=${log.messageId},
+                                                                 data-fallback=${log.fallback}">
+                                                    상세
+                                                </button>
+                                            </td>
+                                            <td>
+                                                <span class="badge"
+                                                      th:classappend="${log.result == 'SUCCESS'} ? ' text-bg-success' :
+                                                                      (${log.result == 'FALLBACK'} ? ' text-bg-warning' : ' text-bg-danger')"
+                                                      th:text="${log.resultLabel}">
+                                                    성공
+                                                </span>
+                                            </td>
+                                            <td th:text="${log.durationText}">0.0초</td>
+                                            <td th:text="${log.createdAt}">2026-05-14 09:00</td>
+                                        </tr>
+                                        <tr th:if="${recentLogList == null or #lists.isEmpty(recentLogList)}">
+                                            <td colspan="8" class="text-center text-muted py-4">표시할 로그가 없습니다.</td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="card-footer bg-white">
+                                <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                    <small class="text-muted"
+                                           th:text="${'총 ' + totalLogCount + '건 | ' + currentPage + ' / ' + totalPages + ' 페이지'}">
+                                        총 0건 | 1 / 1 페이지
+                                    </small>
+
+                                    <nav th:if="${totalPages != null and totalPages > 1}" aria-label="최근 AI 사용 로그 페이지 이동">
+                                        <ul class="pagination pagination-sm mb-0">
+                                            <li class="page-item" th:classappend="${!hasPrevious} ? ' disabled'">
+                                                <a class="page-link"
+                                                   th:href="@{/admin/AiSecretary/dashboard(period=${selectedPeriod}, startDate=${selectedStartDate}, endDate=${selectedEndDate}, department=${selectedDepartment}, aiType=${selectedAiType}, result=${selectedResult}, page=${currentPage - 1})}">
+                                                    이전
+                                                </a>
+                                            </li>
+                                            <li class="page-item"
+                                                th:each="pageNo : ${#numbers.sequence(1, totalPages)}"
+                                                th:classappend="${pageNo == currentPage} ? ' active'">
+                                                <a class="page-link"
+                                                   th:href="@{/admin/AiSecretary/dashboard(period=${selectedPeriod}, startDate=${selectedStartDate}, endDate=${selectedEndDate}, department=${selectedDepartment}, aiType=${selectedAiType}, result=${selectedResult}, page=${pageNo})}"
+                                                   th:text="${pageNo}">1</a>
+                                            </li>
+                                            <li class="page-item" th:classappend="${!hasNext} ? ' disabled'">
+                                                <a class="page-link"
+                                                   th:href="@{/admin/AiSecretary/dashboard(period=${selectedPeriod}, startDate=${selectedStartDate}, endDate=${selectedEndDate}, department=${selectedDepartment}, aiType=${selectedAiType}, result=${selectedResult}, page=${currentPage + 1})}">
+                                                    다음
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </nav>
+
+                                    <div class="d-flex gap-2">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" id="downloadAiLogCsvBtn">CSV 다운로드</button>
+                                        <button type="button" class="btn btn-sm btn-outline-success" id="downloadAiLogExcelBtn">엑셀 다운로드</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-12">
+                        <div class="card shadow-sm border-0 bg-primary text-white">
+                            <div class="card-header bg-primary border-0 pb-0 text-white">
+                                <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap">
+                                    <div>
+                                        <h5 class="fw-bold mb-1 text-white" th:text="${documentStatusTitle}">5월 2째 주 문서 처리 상태 요약</h5>
+                                        <p class="mb-0 text-white-50">문서 처리 단계별 상태를 확인합니다.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="row row-cols-1 row-cols-md-5 g-3"
+                                     th:if="${documentStatusList != null and !#lists.isEmpty(documentStatusList)}">
+                                    <div class="col" th:each="status : ${documentStatusList}">
+                                        <div class="card h-100 border border-white border-opacity-25 shadow-sm bg-white bg-opacity-10 text-white">
+                                            <div class="card-body">
+                                                <div class="d-flex justify-content-between align-items-start mb-3">
+                                                    <div>
+                                                        <span class="badge mb-2 bg-white text-primary" th:text="${status.key}">UPLOADED</span>
+                                                        <h6 class="fw-bold mb-1 text-white" th:text="${status.title}">업로드 완료</h6>
+                                                    </div>
+                                                    <h3 class="fw-bold mb-0 text-white" th:text="${status.count}">0</h3>
+                                                </div>
+                                                <p class="mb-0 text-white-75" th:text="${status.description}">
+                                                    문서 처리 단계별 상태를 확인합니다.
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div th:if="${documentStatusList == null or #lists.isEmpty(documentStatusList)}"
+                                     class="text-center text-white-50 py-4">등록된 문서 처리 상태가 없습니다.</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal fade" id="aiLogDetailModal" tabindex="-1" aria-labelledby="aiLogDetailModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="aiLogDetailModalLabel">최근 AI 사용 로그 상세</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+                            </div>
+                            <div class="modal-body">
+                                <dl class="row mb-0">
+                                    <dt class="col-sm-3 text-muted">사용자</dt>
+                                    <dd class="col-sm-9" data-log-field="user">-</dd>
+
+                                    <dt class="col-sm-3 text-muted">부서</dt>
+                                    <dd class="col-sm-9" data-log-field="department">-</dd>
+
+                                    <dt class="col-sm-3 text-muted">AI 기능</dt>
+                                    <dd class="col-sm-9" data-log-field="type">-</dd>
+
+                                    <dt class="col-sm-3 text-muted">처리 결과</dt>
+                                    <dd class="col-sm-9" data-log-field="resultLabel">-</dd>
+
+                                    <dt class="col-sm-3 text-muted">응답 소요 시간</dt>
+                                    <dd class="col-sm-9" data-log-field="durationText">-</dd>
+
+                                    <dt class="col-sm-3 text-muted">사용 시각</dt>
+                                    <dd class="col-sm-9" data-log-field="createdAt">-</dd>
+
+                                    <dt class="col-sm-3 text-muted">세션 ID</dt>
+                                    <dd class="col-sm-9" data-log-field="sessionId">-</dd>
+
+                                    <dt class="col-sm-3 text-muted">메시지 ID</dt>
+                                    <dd class="col-sm-9" data-log-field="messageId">-</dd>
+                                </dl>
+
+                                <div class="mt-4">
+                                    <div class="fw-bold mb-2">요청 요약</div>
+                                    <div class="border rounded p-3 bg-light text-dark"
+                                         data-log-summary-field="requestSummary"
+                                         style="white-space: pre-wrap; max-height: 180px; overflow: auto;">-</div>
+                                </div>
+
+                                <div class="mt-4">
+                                    <div class="fw-bold mb-2">응답 요약</div>
+                                    <div class="border rounded p-3 bg-light text-dark"
+                                         data-log-summary-field="responseSummary"
+                                         style="white-space: pre-wrap; max-height: 180px; overflow: auto;">-</div>
+                                </div>
+
+                                <div class="mt-4 d-none" data-log-fallback-box>
+                                    <div class="alert alert-warning mb-0">
+                                        <div class="fw-bold mb-2">대체 응답 사용</div>
+                                        <div data-log-fallback-message>AI 응답 생성 중 오류가 발생하여 대체 응답이 사용되었습니다.</div>
+                                        <div class="mt-2 small" data-log-fallback-error></div>
+                                    </div>
+                                </div>
+
+                                <div class="mt-4">
+                                    <div class="fw-bold mb-2">메시지 내용</div>
+                                    <div class="border rounded p-3 bg-light text-dark"
+                                         data-log-summary-field="messageContent"
+                                         style="white-space: pre-wrap; max-height: 220px; overflow: auto;">연결된 메시지가 없습니다.</div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <th:block th:replace="~{/admin/common/footer}"></th:block>
+</div>
+
+<script th:inline="javascript">
+    window.adAiDashboardData = {
+        usageTrendList: /*[[${usageTrendList}]]*/ [],
+        featureUsageList: /*[[${featureUsageList}]]*/ [],
+        period: /*[[${selectedPeriod}]]*/ 7,
+        selectedPeriod: /*[[${selectedPeriod}]]*/ 7,
+        startDate: /*[[${selectedStartDate}]]*/ '',
+        endDate: /*[[${selectedEndDate}]]*/ '',
+        selectedStartDate: /*[[${selectedStartDate}]]*/ '',
+        selectedEndDate: /*[[${selectedEndDate}]]*/ ''
+    };
+</script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr/dist/l10n/ko.js"></script>
+<th:block th:replace="~{/admin/common/commonJs}"></th:block>
+<script th:src="@{/js/aiSecretary/adAiDashboard.js}"></script>
+</body>
+</html>

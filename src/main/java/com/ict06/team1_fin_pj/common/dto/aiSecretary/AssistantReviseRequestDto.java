@@ -12,7 +12,7 @@ public class AssistantReviseRequestDto {
     @NotNull(message = "sessionId는 필수입니다.")
     private Integer sessionId;
 
-    // report / minutes / approval
+    // REPORT / minutes / approval
     @NotBlank(message = "문서 유형은 필수입니다.")
     private String type;
 

@@ -1,11 +1,25 @@
+/**
+ * @FileName : CrawlingServiceImpl.java
+ * @Description : 사용자 홈 피드용 외부 날씨/뉴스 데이터 조회 서비스
+ * @Author : 김다솜
+ * @Date : 2026. 05. 15
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.15    김다솜       OpenWeather 좌표 기반 조회와 역지오코딩 위치명 보강
+ */
 package com.ict06.team1_fin_pj.external.crawling;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.core.parameters.P;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.client.RestTemplate;
 
 import java.io.IOException;
@@ -21,15 +35,63 @@ public class CrawlingServiceImpl {
     @Value("${weather.api.key}")
     private String apiKey;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     //날씨 데이터 가져오기
-    public String getWeatherData(String city) {
+    public String getWeatherData(String city, Double lat, Double lon) {
         System.out.println("[external > crawling > CrawlingServiceImpl - getWeatherData()]");
 
-        System.out.println("API key: " + apiKey);
-        String url = "https://api.openweathermap.org/data/2.5/weather?q=" + city + "&appid=" + apiKey + "&units=metric";
+        UriComponentsBuilder weatherUrlBuilder = UriComponentsBuilder
+                .fromUriString("https://api.openweathermap.org/data/2.5/weather")
+                .queryParam("appid", apiKey)
+                .queryParam("units", "metric")
+                .queryParam("lang", "kr")
+                .queryParam(lat != null && lon != null ? "lat" : "q", lat != null && lon != null ? lat : city);
+
+        if (lat != null && lon != null) {
+            weatherUrlBuilder.queryParam("lon", lon);
+        }
+
+        String url = weatherUrlBuilder.build().toUriString();
 
         RestTemplate restTemplate = new RestTemplate();
-        return restTemplate.getForObject(url, String.class);
+        String weatherJson = restTemplate.getForObject(url, String.class);
+
+        if (lat == null || lon == null || weatherJson == null) {
+            return weatherJson;
+        }
+
+        try {
+            ObjectNode weatherNode = (ObjectNode) objectMapper.readTree(weatherJson);
+            String reverseUrl = UriComponentsBuilder
+                    .fromUriString("https://api.openweathermap.org/geo/1.0/reverse")
+                    .queryParam("lat", lat)
+                    .queryParam("lon", lon)
+                    .queryParam("limit", 1)
+                    .queryParam("appid", apiKey)
+                    .build()
+                    .toUriString();
+
+            String reverseJson = restTemplate.getForObject(reverseUrl, String.class);
+            JsonNode locationNode = objectMapper.readTree(reverseJson);
+
+            if (locationNode.isArray() && !locationNode.isEmpty()) {
+                JsonNode firstLocation = locationNode.get(0);
+                String localName = firstLocation.path("local_names").path("ko").asText("");
+                String defaultName = firstLocation.path("name").asText("");
+                String displayLocation = localName.isBlank() ? defaultName : localName;
+
+                if (!displayLocation.isBlank()) {
+                    weatherNode.put("display_location", displayLocation);
+                }
+            }
+
+            weatherNode.put("location_source", "GPS");
+            return objectMapper.writeValueAsString(weatherNode);
+        } catch (Exception e) {
+            System.err.println("위치명 보강 실패: " + e.getMessage());
+            return weatherJson;
+        }
     }
 
     //뉴스 데이터 가져오기(크롤링)

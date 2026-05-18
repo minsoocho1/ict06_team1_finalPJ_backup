@@ -8,6 +8,7 @@ import { CBadge, CNavLink, CSidebarNav } from '@coreui/react'
 
 export const AppSidebarNav = ({ items }) => {
   const navLink = (name, icon, badge, indent = false) => {
+    const badgeClassName = badge?.attributes?.className || 'ms-auto'
     return (
       <>
         {icon
@@ -19,7 +20,7 @@ export const AppSidebarNav = ({ items }) => {
             )}
         {name && name}
         {badge && (
-          <CBadge color={badge.color} className="ms-auto" size="sm">
+          <CBadge color={badge.color} className={badgeClassName} size="sm">
             {badge.text}
           </CBadge>
         )}

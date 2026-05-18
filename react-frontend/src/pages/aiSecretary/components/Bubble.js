@@ -1,8 +1,16 @@
-/* aiSecretary 전용 채팅 말풍선 공통화 */
-// src/pages/aiSecretary/components/Bubble.js
-
-// 활용: WriterScreen, CorrectionScreen, ChatbotScreen
-// 역할(role)에 따라 정렬, 배경색, borderRadius만 변경
+/**
+ * @FileName : Bubble.js
+ * @Description : aiSecretary 전용 채팅 말풍선 공통 컴포넌트
+ *                - 역할(role)에 따라 정렬, 배경색, borderRadius만 변경
+ *                - 활용: WriterScreen, CorrectionScreen, ChatbotScreen
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일         수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.04.29    송혜진        최초 생성
+ */
 
 import React from "react";
 import { C } from "../styles/aiSecretaryTheme";

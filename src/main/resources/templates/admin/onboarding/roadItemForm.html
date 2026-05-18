@@ -8,6 +8,8 @@
     @ 수정일자        수정자        수정내용
     @ ----------    ---------    -----------------------------------------------
     @ 2026.05.11    김다솜        최초 생성 및 로드맵-콘텐츠 매핑 기능 구현
+    @ 2026.05.12    김다솜        일정 관리에서 진입한 수정 화면의 목록 복귀 경로 유지 처리
+    @ 2026.05.14    김다솜        로드맵 아이템 시작일 및 마감일 수정 필드 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -44,8 +46,7 @@
                             roadmapId=${roadmap.roadmapId}
                           )}"
                       method="post">
-                    <input type="hidden" name="startDate" th:value="${item.startDate}">
-                    <input type="hidden" name="dueDate" th:value="${item.dueDate}">
+                    <input type="hidden" name="returnUrl" th:if="${returnUrl != null}" th:value="${returnUrl}">
 
                     <div class="card">
                         <div class="card-header">
@@ -102,14 +103,32 @@
                                 </div>
                             </div>
 
-                            <div class="alert alert-light border mb-0">
-                                일정은 아이템별 수동 관리보다 전체 로드맵 흐름이 더 중요해서, 이 화면에서는 제외했습니다.
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">시작일</label>
+                                    <input type="date"
+                                           name="startDate"
+                                           class="form-control"
+                                           th:value="${item.startDate}"
+                                           required>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <label class="form-label">마감일</label>
+                                    <input type="date"
+                                           name="dueDate"
+                                           class="form-control"
+                                           th:value="${item.dueDate}"
+                                           required>
+                                </div>
                             </div>
+
                         </div>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2 mt-3">
-                        <a th:href="@{/admin/onboarding/roadmaps/{roadmapId}/items(roadmapId=${roadmap.roadmapId})}"
+                        <a th:href="${returnUrl != null and !#strings.isEmpty(returnUrl)}
+                                ? ${returnUrl}
+                                : @{/admin/onboarding/roadmaps/{roadmapId}/items(roadmapId=${roadmap.roadmapId})}"
                            class="btn btn-outline-secondary">
                             목록으로
                         </a>

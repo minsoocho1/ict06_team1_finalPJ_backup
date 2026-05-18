@@ -8,7 +8,7 @@
  * @ 수정일         수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.28    송혜진        최초 생성/ BACKEND 연결
- * @ 2026.04.29    송혜진        로직 변경(lastMessage 기준 48시간 이후 삭제)
+ * @ 2026.05.12    송혜진        로직 변경(lastMessage 기준 48시간 이후 삭제)
  */
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -25,6 +25,7 @@ import {
   unwrapApiData,
 } from "../api/aiSecretaryApi";
 import { useUser } from "src/api/UserContext";
+import { PATH } from 'src/constants/path';
 
 // 시간 포맷
 const formatMessageTime = (value) => {
@@ -89,8 +90,8 @@ export default function ChatbotScreen() {
   const ensureUserInfo = useCallback(async () => {
     if (resolvedUserInfo) return resolvedUserInfo;
 
-    const token = localStorage.getItem("token");
-    if (!token) {
+    const accessToken = localStorage.getItem("accessToken");
+    if (!accessToken) {
       setError("로그인 정보가 없습니다. 다시 로그인해 주세요.");
       return null;
     }
@@ -99,9 +100,13 @@ export default function ChatbotScreen() {
     setError("");
 
     try {
-      const response = await axios.get("http://localhost:8081/api/user/welcome", {
+      const authorization = accessToken.startsWith("Bearer ")
+        ? accessToken
+        : `Bearer ${accessToken}`;
+
+      const response = await axios.get(PATH.AUTH.WELCOME, {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: authorization,
         },
       });
 
@@ -256,8 +261,19 @@ export default function ChatbotScreen() {
   const isInputDisabled = loadingUser || loadingInit || sending || !currentSessionId;
 
   return (
-    <div style={styles.page}>
-      <div style={{ marginBottom: 20 }}>
+    <div
+      style={{
+        ...styles.page,
+        height: "calc(100vh - 56px)",
+        boxSizing: "border-box",
+        display: "flex",
+        flexDirection: "column",
+        gap: 20,
+        minHeight: 0,
+        overflow: "hidden",
+      }}
+    >
+      <div>
         <div style={{ fontSize: 16, color: C.sub, fontWeight: 700 }}>
           AI 챗봇
         </div>
@@ -278,14 +294,17 @@ export default function ChatbotScreen() {
         style={{
           ...styles.card,
           padding: 20,
-          minHeight: 720,
+          flex: 1,
+          minHeight: 0,
           display: "flex",
           flexDirection: "column",
+          overflow: "hidden",
         }}
       >
         <div
           style={{
             flex: 1,
+            minHeight: 0,
             display: "grid",
             gap: 16,
             alignContent: "start",
@@ -350,6 +369,7 @@ export default function ChatbotScreen() {
             gap: 12,
             alignItems: "center",
             background: "#fff",
+            flexShrink: 0,
           }}
         >
           <input

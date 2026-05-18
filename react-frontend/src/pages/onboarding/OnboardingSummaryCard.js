@@ -10,6 +10,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.06    김다솜        최초 생성 및 온보딩 요약 카드 구현
  * @ 2026.05.08    김다솜        체크리스트 완료 현황 표시 추가
+ * @ 2026.05.15    김다솜        UI 조정(AI 사내 포털 기준으로 톤 맞춤)
  */
 
 import React, { useEffect, useState } from 'react';
@@ -88,7 +89,14 @@ const OnboardingSummaryCard = () => {
             </div>
 
             <button
-                className='btn btn-sm btn-primary mt-3'
+                className='btn btn-sm mt-3'
+                style={{
+                    borderRadius: '999px',
+                    border: '1px solid #2563EB',
+                    background: '#2563EB',
+                    color: '#FFFFFF',
+                    fontWeight: 700,
+                }}
                 onClick={() => navigate(PATH.ONBOARDING.DASHBOARD)}
             >
                 자세히 보기 &gt;

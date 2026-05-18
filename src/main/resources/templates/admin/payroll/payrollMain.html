@@ -33,9 +33,68 @@
             <!--begin::Container-->
             <div class="container-fluid">
                 <br>
-                <!-- begin::Row-->
-                <div class="row">
-                    <h3>급여 관리 메인</h3>
+
+                <!-- 페이지 제목 -->
+                <div class="row mb-4">
+                    <div class="col">
+                        <h3 class="fw-bold mb-1">급여 관리</h3>
+                        <p class="text-muted mb-0">
+                            급여대장 작성, 급여요약 조회, 기본급 정책 관리를 한 곳에서 관리합니다.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- 급여 메뉴 카드 -->
+                <div class="row g-3">
+
+                    <!-- 급여대장관리 -->
+                    <div class="col-12">
+                        <a th:href="@{/admin/payroll/main}"
+                           class="text-decoration-none text-dark">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="fw-bold mb-2">급여대장관리</h5>
+                                    <p class="text-muted mb-0">
+                                        사원별 월 급여대장을 작성하고 지급/공제항목, 4대보험 계산,
+                                        저장, 확정, 지급확정 처리를 관리합니다.
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+
+                    <!-- 급여요약 -->
+                    <div class="col-12">
+                        <a th:href="@{/admin/payroll/summary}"
+                           class="text-decoration-none text-dark">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="fw-bold mb-2">급여요약</h5>
+                                    <p class="text-muted mb-0">
+                                        확정 또는 지급완료된 급여 내역을 사원별, 월별로 조회하고
+                                        급여명세서 확인용 데이터를 관리합니다.
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+
+                    <!-- 기본급 관리 -->
+                    <div class="col-12">
+                        <a th:href="@{/admin/payroll/salary-policy}"
+                           class="text-decoration-none text-dark">
+                            <div class="card h-100 shadow-sm">
+                                <div class="card-body">
+                                    <h5 class="fw-bold mb-2">기본급 관리</h5>
+                                    <p class="text-muted mb-0">
+                                        부서, 직급, 급여등급 기준의 기본급 정책을 등록, 수정, 삭제하고
+                                        급여대장 기본급 산정 기준으로 사용합니다.
+                                    </p>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+
                 </div>
                 <!-- end::Row-->
             </div>

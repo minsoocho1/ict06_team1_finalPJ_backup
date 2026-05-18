@@ -39,6 +39,7 @@ __pycache__/
 *.py[cod]
 .env
 env
+db_connection.py
 
 ### DB Preferences ###
 application.properties
@@ -49,7 +50,6 @@ application-prod.properties
 hs_err_pid*
 replay_pid*
 node_modules/
-
 
 # 사원 프로필/서명 업로드 파일
 /employee/ict_06_uploads/

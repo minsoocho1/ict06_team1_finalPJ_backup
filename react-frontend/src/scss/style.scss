@@ -176,3 +176,15 @@ body {
 .checklist-action-btn.success:hover {
   background: #157347;
 }
+
+.badge.badge-ai-sidebar {
+  background-color: #dbe4ff !important;
+  color: #243b7a !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  font-size: 0.68rem;
+  font-weight: 800;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  line-height: 1.1;
+}
+

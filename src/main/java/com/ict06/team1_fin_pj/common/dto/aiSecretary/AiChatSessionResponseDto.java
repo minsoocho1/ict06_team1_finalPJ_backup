@@ -15,6 +15,7 @@ public class AiChatSessionResponseDto {
     private Integer sessionId;
     private String empNo;
     private SessionType sessionType;
+    private String documentType;
     private String title;
     private SessionStatus status;
     private LocalDateTime lastMessageAt;

@@ -397,6 +397,9 @@
                 <!-- 수정 대상 정책 ID -->
                 <input type="hidden" id="updatePolicyId" name="policyId">
 
+                <!-- 수정 전 기본급 값 비교용 -->
+                <input type="hidden" id="originalBasicSalary">
+
                 <!-- 현재 조회 상태 유지용 -->
                 <input type="hidden" name="searchPage" th:value="${searchDTO.page}">
                 <input type="hidden" name="searchSize" th:value="${searchDTO.size}">

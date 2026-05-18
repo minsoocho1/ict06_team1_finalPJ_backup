@@ -23,6 +23,12 @@ public interface DocumentRepository extends JpaRepository<DocumentEntity, Intege
     @EntityGraph(attributePaths = {"department", "createdBy", "chunks", "chunks.vector"})
     List<DocumentEntity> findAllByOrderByCreatedAtDesc();
 
+    @EntityGraph(attributePaths = {"department", "createdBy", "chunks", "chunks.vector"})
+    Optional<DocumentEntity> findFirstByTitleIgnoreCaseOrderByCreatedAtDesc(String title);
+
+    @EntityGraph(attributePaths = {"department", "createdBy", "chunks", "chunks.vector"})
+    Optional<DocumentEntity> findFirstByFilePathOrderByCreatedAtDesc(String filePath);
+
     @Override
     @EntityGraph(attributePaths = {"department", "createdBy", "chunks", "chunks.vector"})
     Optional<DocumentEntity> findById(Integer docId);

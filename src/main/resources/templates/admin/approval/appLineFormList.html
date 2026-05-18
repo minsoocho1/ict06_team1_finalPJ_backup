@@ -1,4 +1,4 @@
-<!--
+﻿<!--
  * @author : 송영은
  * description : 관리자용 전자결재 결재선 템플릿 관리
  * ========================================
@@ -39,16 +39,30 @@
                 <div class="row">
                     <h3>결재선 서식 목록</h3>
                 </div>
-                <!-- end::Row-->
-                <!--새 서식 추가 버튼 시작-->
-                <div class="row">
-                    <div class="d-flex flex-row-reverse">
-                        <button type="button" class="btn btn-success" th:onclick="|location.href='@{/admin/approval/createAppLineForm}'|">
-                            (+) 새 결재선 서식 추가
-                        </button>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <div class="input-group">
+                            <input type="text"
+                                   class="form-control"
+                                   id="searchKeyword"
+                                   placeholder="서식 번호 또는 서식명 검색">
+                            <button type="button" class="btn btn-outline-secondary" id="searchBtn">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="resetSearchBtn">
+                                초기화
+                            </button>
+                            <!--새 서식 추가 버튼 시작-->
+                            <div class="d-flex flex-row-reverse">
+                                <button type="button" class="btn btn-success" th:onclick="|location.href='@{/admin/approval/createAppLineForm}'|">
+                                    (+) 새 결재선 서식 추가
+                                </button>
+                            </div>
+                            <!--새 서식 추가 버튼 끝-->
+                        </div>
                     </div>
                 </div>
-                <!--새 서식 추가 버튼 끝-->
+                <!-- end::Row-->
                 <br>
                 <!-- begin::서식 표 시작-->
                 <table class="table table-hover align-middle">
@@ -111,7 +125,8 @@
             type: "GET",
             data: {
                 page: page,
-                size: pageSize
+                size: pageSize,
+                keyword: $('#searchKeyword').val()
             },
             success: function (data) {
 
@@ -222,6 +237,22 @@
     }
 
     // 상세 조회 페이지로 이동
+    $('#searchBtn').on('click', function () {
+        loadPage(0);
+    });
+
+    $('#resetSearchBtn').on('click', function () {
+        $('#searchKeyword').val('');
+        loadPage(0);
+    });
+
+    $('#searchKeyword').on('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            loadPage(0);
+        }
+    });
+
     function goDetail(formId) {
         location.href = `/admin/approval/appLineFormDetail/${formId}`;
     }

@@ -240,6 +240,7 @@ document.addEventListener('DOMContentLoaded', function () {
    const updateGradeId = document.getElementById('updateGradeId');
    const updateBasicSalary = document.getElementById('updateBasicSalary');
    const updateSubmitBtn = document.getElementById('updateSubmitBtn');
+   const originalBasicSalary = document.getElementById('originalBasicSalary');
    const updateCheckMessage = document.getElementById('updateCheckMessage');
    const updateSalaryOrderMessage = document.getElementById('updateSalaryOrderMessage');
 
@@ -256,6 +257,7 @@ document.addEventListener('DOMContentLoaded', function () {
        updateGradeDesc.textContent = '';
        updateGradeId.value = '';
        updateBasicSalary.value = '';
+       originalBasicSalary.value = '';
 
        updateSubmitBtn.disabled = false;
 
@@ -305,6 +307,7 @@ document.addEventListener('DOMContentLoaded', function () {
                    updateGradeDesc.textContent = data.gradeDescription || data.gradeName || '';
 
                    updateBasicSalary.value = data.basicSalary;
+                   originalBasicSalary.value = data.basicSalary;
 
                    // 처음 열 때는 기존 값이 유효한 상태이므로 수정 버튼 활성화
                    updateSubmitBtn.disabled = false;
@@ -397,5 +400,22 @@ document.addEventListener('DOMContentLoaded', function () {
    // 취소/X로 닫으면 수정 시도 값이 남지 않도록 초기화
    if (updateModalElement) {
        updateModalElement.addEventListener('hidden.bs.modal', resetUpdateModal);
+   }
+
+   const updateForm = document.getElementById('salaryPolicyUpdateForm');
+
+   if (updateForm) {
+       updateForm.addEventListener('submit', function (e) {
+
+           const originalSalary = originalBasicSalary.value;
+           const currentSalary = updateBasicSalary.value;
+
+           if (String(originalSalary) === String(currentSalary)) {
+               e.preventDefault();
+
+               showUpdateMessage('warning', '변경된 내용이 없습니다.');
+               return false;
+           }
+       });
    }
 });

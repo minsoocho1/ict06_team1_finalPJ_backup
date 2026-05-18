@@ -1,13 +1,13 @@
-<!-- 관리자용 페이지에 필요한 공통 head 파일 (협의 없이 수정 금지!)-->
+﻿<!-- 관리자 페이지 공통 head 파일 (협의 없이 수정 금지) -->
 <head th:fragment="common_header">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-    <title th:include=":: #page_title">title</title>  <!--페이지별 title의 내용을 다르게 주기 위함-->
+    <th:block th:replace="~{:: #page_title}"></th:block>  <!-- 페이지별 title 내용 주입 -->
 
-    <!-- 시작: 한글 폰트 적용-->
+    <!-- 시작: 사용자 폰트 적용 -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100..900&display=swap" rel="stylesheet">
-    <!-- 끝: 한글 폰트 적용 -->
+    <!-- 끝: 사용자 폰트 적용 -->
 
     <!-- 시작: fontawesome 적용 -->
     <script src="https://kit.fontawesome.com/b93c336804.js" crossorigin="anonymous"></script>

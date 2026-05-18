@@ -1,7 +1,7 @@
 package com.ict06.team1_fin_pj.test.repository;
 
-import com.ict06.team1_fin_pj.test.entity.QTestEntity;
 import com.ict06.team1_fin_pj.test.entity.TestEntity;
+import com.querydsl.core.types.dsl.PathBuilder;
 import com.querydsl.jpa.impl.JPAQueryFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
@@ -9,13 +9,9 @@ import org.springframework.stereotype.Repository;
 import java.util.List;
 
 /**
- * @author : 송영은$
- * description : Test 예제의 QueryDSL 구현체.
- * * QueryDSL 작성법에 따라 return문을 작성하면 됩니다.
- * ========================================
- * DATE         AUTHOR      NOTE
- * 2026-04-29   송영은     최초 생성
- **/
+ * 테스트 예제용 QueryDSL 구현체입니다.
+ * QTestEntity 생성 여부에 애플리케이션 기동이 의존하지 않도록 PathBuilder를 사용합니다.
+ */
 @Repository
 @RequiredArgsConstructor
 public class TestRepositoryImpl implements TestRepositoryCustom {
@@ -24,11 +20,12 @@ public class TestRepositoryImpl implements TestRepositoryCustom {
 
     @Override
     public List<TestEntity> selectTestList() {
+        PathBuilder<TestEntity> test =
+                new PathBuilder<>(TestEntity.class, "testEntity");
 
-        QTestEntity test = QTestEntity.testEntity;
         return queryFactory
                 .selectFrom(test)
-                .orderBy(test.formId.desc())
+                .orderBy(test.getNumber("formId", Integer.class).desc())
                 .fetch();
     }
 }

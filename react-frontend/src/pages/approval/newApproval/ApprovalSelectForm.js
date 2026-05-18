@@ -1,93 +1,215 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  CAlert,
+  CBadge,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CFormInput,
+  CPagination,
+  CPaginationItem,
+  CSpinner,
+  CTable,
+  CTableBody,
+  CTableDataCell,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
+} from '@coreui/react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 
-// CoreUI 
-import { CButton, CCard, CCardBody, CCardHeader } from '@coreui/react';
-
-// 페이지 이동
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-
-// 시연용 이미지 파일
-import refImage from 'src/assets/images/first_demo/new_approval_select_info.png'
-
-// 1차 시연용으로 화면과 sql 쿼리를 함께 보여주기 위한 스타일 구현
-import { containerStyle, stepCardStyle } from 'src/styles/js/demoPageStyle';
-
-// 코드 하이라이터 : sql 코드 보여주는 용
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; 
-import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import axiosInstance from 'src/api/axiosInstance';
 import { PATH } from 'src/constants/path';
+import { containerStyle } from 'src/styles/js/demoPageStyle';
 
-// [전자결재] 새 결재 진행 - 결재 정보 선택 페이지
+const PAGE_SIZE = 10;
+
+// 결재 서식 template JSON을 안전하게 파싱합니다.
+// 관리자가 잘못된 JSON을 저장했더라도 목록 화면 전체가 깨지지 않도록 빈 구조로 대체합니다.
+const parseTemplate = (template) => {
+  if (!template) {
+    return { fields: [], fileRequired: false };
+  }
+
+  try {
+    const parsed = JSON.parse(template);
+    return {
+      fields: Array.isArray(parsed.fields) ? parsed.fields : [],
+      fileRequired: Boolean(parsed.fileRequired),
+    };
+  } catch (error) {
+    return { fields: [], fileRequired: false, invalid: true };
+  }
+};
+
+// [전자결재] 새 결재 진행 - 결재 서식 선택 페이지
 const ApprovalSelectForm = () => {
+  const [userInfo] = useOutletContext();
+  const navigate = useNavigate();
 
-    //DefaultLayout.js의 Outlet에서 보낸 userInfo 데이터 받기
-    const [userInfo] = useOutletContext();
+  const [forms, setForms] = useState([]);
+  const [keyword, setKeyword] = useState('');
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState('');
 
-    //해당 화면의 SQL 쿼리 작성(백틱 `` 사용)
-    const sqlQuery = `
-        SELECT 
-            form_id,
-            form_name
-        FROM APP_FORM
-        ORDER BY form_name;
-    `;
+  useEffect(() => {
+    const fetchForms = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage('');
+        const response = await axiosInstance.get(PATH.API.APPROVAL.FORMS);
+        setForms(Array.isArray(response.data) ? response.data : []);
+      } catch (error) {
+        console.error('결재 서식 목록 조회 실패:', error);
+        setErrorMessage('결재 서식 목록을 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return (
-        <div style={containerStyle}>
-            <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>새로운 결재 - 서식 선택</h2>
-            </header>
+    fetchForms();
+  }, []);
 
-            <hr style={{ border: '0', height: '1px', background: '#eee', margin: '40px 0' }} />
+  const filteredForms = useMemo(() => {
+    const normalizedKeyword = keyword.trim().toLowerCase();
+    if (!normalizedKeyword) {
+      return forms;
+    }
 
-            {/* 1차 시연용 영역 */}
-            <CCard className="mb-4" style={{ height: 'calc(100vh - 120px)' }}>
-                <CCardHeader>
-                    <strong>시연 화면 및 관련 SQL쿼리</strong>
-                </CCardHeader>
-                <CCardBody className="p-0 d-flex flex-column">
-                    <div className="p-2 d-flex justify-content-end">
-                        {/* 시연용 화면 이동 버튼 */}
-                        {/* 방법2 */}
-                        {/* path에서 경로 상수 불러오기 */}
-                        {/* <Link to="/approval/new/write"> */}
-                        <Link to={PATH.APPROVAL.NEW_WRITE}>
-                            <CButton
-                                color='primary'
-                                variant='outline'
-                                style={{ fontWeight: 'bold' }}
-                                >
-                                결재 내용 작성
-                            </CButton>
-                        </Link>
-                    </div>
-
-                    {/* 레퍼런스 이미지 영역 */}
-                    <div className="text-center" style={{ backgroundColor: '#f4f4f4', borderTop: '1px solid #eee' }}>
-                        <img 
-                            src={refImage} 
-                            alt="로드맵 및 체크리스트" 
-                            style={{ width: '100%',
-                            height: 'auto',
-                            display: 'block' }} 
-                        />
-                    </div>
-
-                    {/* SQL 쿼리 영역 */}
-                    <div className='text-start mt-4'>
-                        <h5 className='mb-3' style={{ fontWeight: 'bold', color: '#4f5d73' }}>
-                            <span style={{ borderLeft: '4px solid #321fdb', paddingLeft: '10px' }}>
-                                관련 SQL 쿼리
-                            </span>
-                        </h5>
-                        <SyntaxHighlighter language='sql' style={coy}>
-                            {sqlQuery}
-                        </SyntaxHighlighter>
-                    </div>
-                </CCardBody>
-            </CCard>
-        </div>
+    return forms.filter((form) =>
+      (form.formName || '').toLowerCase().includes(normalizedKeyword)
+      || (form.lineTemplateName || '').toLowerCase().includes(normalizedKeyword)
     );
+  }, [forms, keyword]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredForms.length / PAGE_SIZE));
+  const pageForms = filteredForms.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [keyword]);
+
+  const moveToWritePage = (form) => {
+    const template = parseTemplate(form.template);
+    if (template.invalid) {
+      return;
+    }
+
+    navigate(PATH.APPROVAL.NEW_WRITE, {
+      state: {
+        selectedForm: form,
+      },
+    });
+  };
+
+  return (
+    <div style={containerStyle}>
+      <header className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 className="mb-1">새 결재 문서 작성</h2>
+          <div className="text-body-secondary">
+            {userInfo?.name ? `${userInfo.name}님, 사용할 결재 서식을 선택하세요.` : '사용할 결재 서식을 선택하세요.'}
+          </div>
+        </div>
+      </header>
+
+      <CCard className="mb-4">
+        <CCardHeader className="d-flex justify-content-between align-items-center gap-3">
+          <strong>결재 서식 선택</strong>
+          <CFormInput
+            value={keyword}
+            onChange={(event) => setKeyword(event.target.value)}
+            placeholder="서식 이름 또는 결재선 검색"
+            style={{ maxWidth: '320px' }}
+          />
+        </CCardHeader>
+        <CCardBody>
+          {errorMessage && <CAlert color="danger">{errorMessage}</CAlert>}
+
+          {loading ? (
+            <div className="py-5 text-center">
+              <CSpinner size="sm" className="me-2" />
+              결재 서식을 불러오는 중입니다.
+            </div>
+          ) : filteredForms.length === 0 ? (
+            <CAlert color="info" className="mb-0">
+              선택할 수 있는 결재 서식이 없습니다.
+            </CAlert>
+          ) : (
+            <>
+              <CTable hover responsive align="middle">
+                <CTableHead>
+                  <CTableRow>
+                    <CTableHeaderCell>서식 이름</CTableHeaderCell>
+                    <CTableHeaderCell>결재선</CTableHeaderCell>
+                  </CTableRow>
+                </CTableHead>
+                <CTableBody>
+                  {pageForms.map((form) => {
+                    const template = parseTemplate(form.template);
+
+                    return (
+                      <CTableRow
+                        key={form.formId}
+                        role="button"
+                        onClick={() => moveToWritePage(form)}
+                        className={template.invalid ? 'table-danger' : ''}
+                      >
+                        <CTableDataCell>
+                          <div className="d-flex align-items-center gap-2">
+                            <strong>{form.formName}</strong>
+                            {form.isDefault && <CBadge color="primary">기본</CBadge>}
+                            {template.invalid && <CBadge color="danger">JSON 확인 필요</CBadge>}
+                          </div>
+                          <div className="small text-body-secondary">
+                            입력 항목 {template.fields.length}개
+                            {template.fileRequired ? ' · 첨부파일 필수' : ''}
+                          </div>
+                        </CTableDataCell>
+                        <CTableDataCell>
+                          {form.lineTemplateName || '연결 안 됨'}
+                        </CTableDataCell>
+                      </CTableRow>
+                    );
+                  })}
+                </CTableBody>
+              </CTable>
+
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="text-body-secondary small">
+                  총 {filteredForms.length}개
+                </div>
+                <CPagination className="mb-0">
+                  <CPaginationItem
+                    disabled={page === 1}
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  >
+                    이전
+                  </CPaginationItem>
+                  {Array.from({ length: totalPages }, (_, index) => index + 1).map((pageNumber) => (
+                    <CPaginationItem
+                      key={pageNumber}
+                      active={pageNumber === page}
+                      onClick={() => setPage(pageNumber)}
+                    >
+                      {pageNumber}
+                    </CPaginationItem>
+                  ))}
+                  <CPaginationItem
+                    disabled={page === totalPages}
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  >
+                    다음
+                  </CPaginationItem>
+                </CPagination>
+              </div>
+            </>
+          )}
+        </CCardBody>
+      </CCard>
+    </div>
+  );
 };
 
 export default ApprovalSelectForm;

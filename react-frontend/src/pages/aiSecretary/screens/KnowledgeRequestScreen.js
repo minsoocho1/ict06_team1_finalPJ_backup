@@ -1,5 +1,14 @@
-/* AiSecretary.js 전용 지식 추가 화면 */
-// src/pages/aiSecretary/screens/KnowledgeRequestScreen.js
+/**
+ * @FileName : KnowledgeRequestScreen.js
+ * @Description : AiSecretary.js 전용 지식 추가 화면
+ * @Author : 송혜진
+ * @Date : 2026. 04. 30
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.30  송혜진       최초 생성
+ */
 
 import React, { useState } from "react";
 import Chip from "../components/Chip";

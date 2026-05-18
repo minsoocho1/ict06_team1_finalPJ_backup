@@ -1,21 +1,25 @@
 /**
  * @FileName : AdOnboardingController.java
- * @Description : 온보딩 콘텐츠, 문서(RAG), 로드맵 및 교육 일정 관리를 위한 관리자 컨트롤러
+ * @Description : 관리자 온보딩 컨트롤러 - 문서 관리(RAG), 로드맵 및 일정 관리 설정 등을 처리
  * @Author : 김다솜
  * @Date : 2026. 04. 24
  * @Modification_History
  * @
  * @ 수정일자        수정자        수정내용
  * @ ----------    ---------    -----------------------------------------------
- * @ 2026.04.24    김다솜        최초 생성 및 온보딩 기본 구조 설계
- * @ 2026.05.10    김다솜        온보딩 콘텐츠 및 문서 CRUD 화면 추가
+ * @ 2026.04.24    김다솜        최초 생성 및 온보딩 관리 기본 기능 구현
+ * @ 2026.05.10    김다솜        온보딩 로드맵 및 콘텐츠 CRUD 기능 추가
  * @ 2026.05.11    김다솜        문서 기반 RAG 처리 로직 및 로드맵 아이템 편집 기능 추가
+ * @ 2026.05.12    김다솜        일정 관리 직원 목록/상세 화면 분리, 진행현황 통계 연동, 학습항목 알림 발송 및 문서 수정 시 RAG 재처리 흐름 분리
+ * @ 2026.05.14    김다솜        문서 등록 비동기 처리 적용 및 캘린더 연동을 위한 아이템 수정 로직 위임
  */
 
 package com.ict06.team1_fin_pj.domain.onboarding.controller;
 
 import com.ict06.team1_fin_pj.common.dto.onboarding.AdminDocumentListDto;
-import com.ict06.team1_fin_pj.common.dto.onboarding.AdminDocumentRequestDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdDocumentRequestDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AiDocumentQuestionResponseDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdminOnboardingScheduleEmployeeDto;
 import com.ict06.team1_fin_pj.common.dto.onboarding.AdminOnboardingScheduleDto;
 import com.ict06.team1_fin_pj.common.dto.onboarding.AdminRoadItemRequestDto;
 import com.ict06.team1_fin_pj.common.dto.onboarding.AdminRoadmapRequestDto;
@@ -37,12 +41,16 @@ import com.ict06.team1_fin_pj.domain.onboarding.entity.OnContentEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadItemEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadProgressEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadmapEntity;
+import com.ict06.team1_fin_pj.domain.evaluation.repository.EvaluationQuestionRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.DocumentRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.OnContentRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadItemRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadProgressRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadmapRepository;
+import com.ict06.team1_fin_pj.domain.onboarding.service.DocumentProcessingAsyncService;
 import com.ict06.team1_fin_pj.domain.onboarding.service.DocumentProcessingService;
+import com.ict06.team1_fin_pj.domain.onboarding.service.DocumentQuestionAnswerService;
+import com.ict06.team1_fin_pj.domain.onboarding.service.OnboardingScheduleNotificationService;
 import com.ict06.team1_fin_pj.domain.onboarding.service.RoadmapServiceImpl;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -58,11 +66,14 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -74,6 +85,7 @@ public class AdOnboardingController {
     private final DocumentRepository documentRepository;
     private final DocumentProcessLogRepository documentProcessLogRepository;
     private final OnContentRepository onContentRepository;
+    private final EvaluationQuestionRepository evaluationQuestionRepository;
     private final RoadmapRepository roadmapRepository;
     private final RoadItemRepository roadItemRepository;
     private final RoadProgressRepository roadProgressRepository;
@@ -82,6 +94,9 @@ public class AdOnboardingController {
     private final AdPositionRepository adPositionRepository;
     private final RoadmapServiceImpl roadmapService;
     private final DocumentProcessingService documentProcessingService;
+    private final DocumentProcessingAsyncService documentProcessingAsyncService;
+    private final DocumentQuestionAnswerService documentQuestionAnswerService;
+    private final OnboardingScheduleNotificationService onboardingScheduleNotificationService;
 
     @RequestMapping("/main")
     public String onboardingMain(HttpServletRequest request, HttpServletResponse response, Model model)
@@ -94,6 +109,37 @@ public class AdOnboardingController {
     public String scheduleList(Model model) {
         System.out.println("[AdOnboardingController] - scheduleList()");
 
+        // 모든 사원의 진행 정보를 한 번에 조회하되, 아이템이 연결된 유효한 데이터만 맵핑
+        Map<Integer, RoadProgressEntity> progressByItemId = roadProgressRepository.findAll().stream()
+                .filter(progress -> progress.getItem() != null)
+                .collect(Collectors.toMap(
+                        progress -> progress.getItem().getItemId(),
+                        Function.identity(),
+                        (left, right) -> left
+                ));
+
+        List<AdminOnboardingScheduleDto> schedules = roadItemRepository.findAllByOrderByRoadmap_Employee_EmpNoAscOrderNoAsc().stream()
+                .map(item -> toScheduleDto(item, progressByItemId.get(item.getItemId())))
+                .toList();
+
+        model.addAttribute("employeeSchedules", toScheduleEmployeeDtos(schedules));
+        return "admin/onboarding/scheduleList";
+    }
+
+    @GetMapping("/schedules/{empNo}")
+    public String scheduleDetail(
+            @PathVariable String empNo,
+            Model model,
+            RedirectAttributes redirectAttributes
+    ) {
+        System.out.println("[AdOnboardingController] - scheduleDetail()");
+
+        List<RoadItemEntity> items = roadItemRepository.findByRoadmap_Employee_EmpNoOrderByOrderNoAsc(empNo);
+        if (items.isEmpty()) {
+            redirectAttributes.addFlashAttribute("errorMessage", "해당 사원의 온보딩 일정 정보가 없습니다.");
+            return "redirect:/admin/onboarding/schedules";
+        }
+
         Map<Integer, RoadProgressEntity> progressByItemId = roadProgressRepository.findAll().stream()
                 .collect(Collectors.toMap(
                         progress -> progress.getItem().getItemId(),
@@ -101,10 +147,35 @@ public class AdOnboardingController {
                         (left, right) -> left
                 ));
 
-        model.addAttribute("schedules", roadItemRepository.findAllByOrderByRoadmap_Employee_EmpNoAscOrderNoAsc().stream()
+        List<AdminOnboardingScheduleDto> schedules = items.stream()
                 .map(item -> toScheduleDto(item, progressByItemId.get(item.getItemId())))
-                .toList());
-        return "admin/onboarding/scheduleList";
+                .toList();
+
+        AdminOnboardingScheduleDto firstSchedule = schedules.get(0);
+        model.addAttribute("empNo", empNo);
+        model.addAttribute("employeeName", firstSchedule.getEmployeeName());
+        model.addAttribute("roadmapTitle", firstSchedule.getRoadmapTitle());
+        model.addAttribute("schedules", schedules);
+        model.addAttribute("items", schedules);
+        return "admin/onboarding/scheduleDetail";
+    }
+
+    @PostMapping("/schedules/{empNo}/items/{itemId}/notify")
+    public String notifyScheduleItem(
+            @PathVariable String empNo,
+            @PathVariable Integer itemId,
+            RedirectAttributes redirectAttributes
+    ) {
+        System.out.println("[AdOnboardingController] - notifyScheduleItem()");
+
+        try {
+            onboardingScheduleNotificationService.sendManualItemNotification(itemId);
+            redirectAttributes.addFlashAttribute("successMessage", "수동 알림이 발송되었습니다.");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "알림 발송 중 오류가 발생했습니다: " + e.getMessage());
+        }
+
+        return "redirect:/admin/onboarding/schedules/" + empNo;
     }
 
     @GetMapping("/documents")
@@ -117,11 +188,43 @@ public class AdOnboardingController {
         return "admin/onboarding/documentList";
     }
 
+    @GetMapping("/documents/status")
+    @ResponseBody
+    public List<AdminDocumentListDto> documentStatus() {
+        System.out.println("[AdOnboardingController] - documentStatus()");
+
+        return documentRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(this::toDocumentListDto)
+                .toList();
+    }
+
+    @PostMapping("/documents/{docId}/answer")
+    @ResponseBody
+    public Map<String, Object> answerDocumentQuestion(
+            @PathVariable Integer docId,
+            @RequestParam String question
+    ) {
+        System.out.println("[AdOnboardingController] - answerDocumentQuestion()");
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        try {
+            AiDocumentQuestionResponseDto result = documentQuestionAnswerService.answerQuestion(docId, question);
+            response.put("success", true);
+            response.put("answer", result.getAnswer());
+            response.put("usedChunkCount", result.getUsedChunkCount());
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+        }
+
+        return response;
+    }
+
     @GetMapping("/documents/new")
     public String documentForm(Model model) {
         System.out.println("[AdOnboardingController] - documentForm()");
 
-        AdminDocumentRequestDto document = new AdminDocumentRequestDto();
+        AdDocumentRequestDto document = new AdDocumentRequestDto();
         document.setCurrentStage(DocumentStage.UPLOADED);
         model.addAttribute("document", document);
         addDocumentFormOptions(model);
@@ -131,7 +234,7 @@ public class AdOnboardingController {
 
     @PostMapping("/documents")
     public String createDocument(
-            @ModelAttribute AdminDocumentRequestDto requestDto,
+            @ModelAttribute AdDocumentRequestDto requestDto,
             @AuthenticationPrincipal PrincipalDetails principal,
             RedirectAttributes redirectAttributes
     ) {
@@ -152,19 +255,15 @@ public class AdOnboardingController {
                 .createdBy(principal != null ? principal.getEmp() : null)
                 .build();
 
-        documentRepository.save(document);
-        try {
-            DocumentProcessingResultDto processingResult = documentProcessingService.processDocument(
-                    document.getDocId(),
-                    principal != null ? principal.getEmp() : null
-            );
-            applyDocumentProcessFlashMessage(redirectAttributes, "Document saved successfully.", processingResult);
-        } catch (Exception e) {
-            redirectAttributes.addFlashAttribute(
-                    "errorMessage",
-                    "Document saved successfully, but automatic processing failed. " + e.getMessage()
-            );
-        }
+        documentRepository.saveAndFlush(document);
+        documentProcessingAsyncService.processDocumentAsync(
+                document.getDocId(),
+                principal != null ? principal.getEmp() : null
+        );
+        redirectAttributes.addFlashAttribute(
+                "successMessage",
+                "Document saved successfully. Automatic processing started in the background. Refresh the page later to check updated chunks and vectors."
+        );
         return "redirect:/admin/onboarding/documents";
     }
 
@@ -194,8 +293,7 @@ public class AdOnboardingController {
     @PostMapping("/documents/{docId}/edit")
     public String updateDocument(
             @PathVariable Integer docId,
-            @ModelAttribute AdminDocumentRequestDto requestDto,
-            @AuthenticationPrincipal PrincipalDetails principal,
+            @ModelAttribute AdDocumentRequestDto requestDto,
             RedirectAttributes redirectAttributes
     ) {
         System.out.println("[AdOnboardingController] - updateDocument()");
@@ -216,18 +314,7 @@ public class AdOnboardingController {
                             document.getCurrentStage()
                     );
                     documentRepository.save(document);
-                    try {
-                        DocumentProcessingResultDto processingResult = documentProcessingService.processDocument(
-                                document.getDocId(),
-                                principal != null ? principal.getEmp() : null
-                        );
-                        applyDocumentProcessFlashMessage(redirectAttributes, "Document updated successfully.", processingResult);
-                    } catch (Exception e) {
-                        redirectAttributes.addFlashAttribute(
-                                "errorMessage",
-                                "Document updated successfully, but automatic processing failed. " + e.getMessage()
-                        );
-                    }
+                    redirectAttributes.addFlashAttribute("successMessage", "Document updated successfully. Use reprocess when RAG data needs to be refreshed.");
                     return "redirect:/admin/onboarding/documents";
                 })
                 .orElseGet(() -> {
@@ -273,18 +360,14 @@ public class AdOnboardingController {
             return "redirect:/admin/onboarding/documents";
         }
 
-        try {
-            DocumentProcessingResultDto processingResult = documentProcessingService.processDocument(
-                    docId,
-                    principal != null ? principal.getEmp() : null
-            );
-            applyDocumentProcessFlashMessage(redirectAttributes, "Document processing started.", processingResult);
-        } catch (Exception e) {
-            redirectAttributes.addFlashAttribute(
-                    "errorMessage",
-                    "Document processing failed. " + e.getMessage()
-            );
-        }
+        documentProcessingAsyncService.processDocumentAsync(
+                docId,
+                principal != null ? principal.getEmp() : null
+        );
+        redirectAttributes.addFlashAttribute(
+                "successMessage",
+                "Document reprocessing started. Refresh the page later to check updated chunks and vectors."
+        );
         return "redirect:/admin/onboarding/documents";
     }
 
@@ -516,9 +599,14 @@ public class AdOnboardingController {
 
         return roadmapRepository.findById(roadmapId)
                 .map(roadmap -> {
-                    RoadmapEntity regeneratedRoadmap = roadmapService.resetAndRegenerateRoadmap(roadmapId);
-                    redirectAttributes.addFlashAttribute("successMessage", "Roadmap was reset and regenerated from the latest content list.");
-                    return "redirect:/admin/onboarding/roadmaps/" + regeneratedRoadmap.getRoadmapId() + "/items";
+                    try {
+                        RoadmapEntity regeneratedRoadmap = roadmapService.resetAndRegenerateRoadmap(roadmapId);
+                        redirectAttributes.addFlashAttribute("successMessage", "Roadmap was reset and regenerated from the latest content list.");
+                        return "redirect:/admin/onboarding/roadmaps/" + regeneratedRoadmap.getRoadmapId() + "/items";
+                    } catch (IllegalStateException e) {
+                        redirectAttributes.addFlashAttribute("errorMessage", e.getMessage());
+                        return "redirect:/admin/onboarding/roadmaps";
+                    }
                 })
                 .orElseGet(() -> {
                     redirectAttributes.addFlashAttribute("errorMessage", "Roadmap was not found.");
@@ -616,6 +704,7 @@ public class AdOnboardingController {
     public String editRoadItemForm(
             @PathVariable Integer roadmapId,
             @PathVariable Integer itemId,
+            @RequestParam(required = false) String returnUrl,
             Model model,
             RedirectAttributes redirectAttributes
     ) {
@@ -640,6 +729,7 @@ public class AdOnboardingController {
         model.addAttribute("categories", getContentCategories());
         model.addAttribute("defaultOrderNo", item.getOrderNo());
         model.addAttribute("isEdit", true);
+        model.addAttribute("returnUrl", normalizeReturnUrl(returnUrl));
 
         return "admin/onboarding/roadItemForm";
     }
@@ -649,6 +739,7 @@ public class AdOnboardingController {
             @PathVariable Integer roadmapId,
             @PathVariable Integer itemId,
             @ModelAttribute AdminRoadItemRequestDto requestDto,
+            @RequestParam(required = false) String returnUrl,
             RedirectAttributes redirectAttributes
     ) {
         System.out.println("[AdOnboardingController] - updateRoadItem()");
@@ -668,22 +759,13 @@ public class AdOnboardingController {
 
         if (hasInvalidSchedule(requestDto)) {
             redirectAttributes.addFlashAttribute("errorMessage", "Due date cannot be earlier than the start date.");
-            return "redirect:/admin/onboarding/roadmaps/" + roadmapId + "/items/" + itemId + "/edit";
+            return "redirect:/admin/onboarding/roadmaps/" + roadmapId + "/items/" + itemId + "/edit" + buildReturnUrlQuery(returnUrl);
         }
 
-        item.updateRoadItem(
-                content,
-                requestDto.getItemTitle(),
-                item.getRecommendationReason(),
-                requestDto.getCategoryName(),
-                requestDto.getOrderNo(),
-                requestDto.getStartDate(),
-                requestDto.getDueDate()
-        );
-        roadItemRepository.save(item);
+        roadmapService.updateRoadItem(itemId, requestDto);
         redirectAttributes.addFlashAttribute("successMessage", "Roadmap item updated successfully.");
 
-        return "redirect:/admin/onboarding/roadmaps/" + roadmapId + "/items";
+        return "redirect:" + resolveRoadItemReturnUrl(returnUrl, roadmapId);
     }
 
     @PostMapping("/roadmaps/{roadmapId}/items/{itemId}/delete")
@@ -702,7 +784,8 @@ public class AdOnboardingController {
         }
 
         try {
-            roadItemRepository.delete(item);
+            // 레포지토리 직접 삭제 대신 서비스를 통해 연관 캘린더 일정까지 삭제
+            roadmapService.deleteRoadItem(itemId);
             redirectAttributes.addFlashAttribute("successMessage", "Roadmap item deleted successfully.");
         } catch (DataIntegrityViolationException e) {
             redirectAttributes.addFlashAttribute("errorMessage", "Roadmap item is still referenced by progress data and cannot be deleted.");
@@ -886,6 +969,13 @@ public class AdOnboardingController {
         int vectorCount = document.getChunks() == null ? 0 : (int) document.getChunks().stream()
                 .filter(chunk -> chunk.getVector() != null)
                 .count();
+        Optional<OnContentEntity> linkedContent = findLinkedContent(document);
+        int generatedQuizCount = linkedContent
+                .map(content -> (int) evaluationQuestionRepository.findByContent_ContentId(content.getContentId()).stream()
+                        .filter(question -> question.getExplanation() != null)
+                        .filter(question -> question.getExplanation().startsWith("[AI자동생성]"))
+                        .count())
+                .orElse(0);
         String lastErrorMessage = documentProcessLogRepository
                 .findTopByDocument_DocIdAndErrorMessageIsNotNullOrderByJobIdDesc(document.getDocId())
                 .map(log -> log.getErrorMessage())
@@ -896,19 +986,37 @@ public class AdOnboardingController {
                 .title(document.getTitle())
                 .filePath(document.getFilePath())
                 .summaryPreview(document.getSummaryPreview())
-                .departmentName(document.getDepartment() != null ? document.getDepartment().getDeptName() : "Common")
+                .departmentName(document.getDepartment() != null ? document.getDepartment().getDeptName() : "공통")
                 .accessLevel(document.getAccessLevel())
                 .currentStage(document.getCurrentStage())
                 .chunkCount(chunkCount)
                 .vectorCount(vectorCount)
+                .linkedContentId(linkedContent.map(OnContentEntity::getContentId).orElse(null))
+                .generatedQuizCount(generatedQuizCount)
+                .quizGenerated(generatedQuizCount > 0)
                 .createdByName(document.getCreatedBy() != null ? document.getCreatedBy().getName() : "-")
                 .lastErrorMessage(lastErrorMessage)
                 .updatedAt(document.getUpdatedAt())
                 .build();
     }
 
-    private AdminDocumentRequestDto toDocumentRequestDto(DocumentEntity document) {
-        AdminDocumentRequestDto dto = new AdminDocumentRequestDto();
+    private Optional<OnContentEntity> findLinkedContent(DocumentEntity document) {
+        if (document.getFilePath() != null && !document.getFilePath().isBlank()) {
+            Optional<OnContentEntity> byPath = onContentRepository.findFirstByPath(document.getFilePath());
+            if (byPath.isPresent()) {
+                return byPath;
+            }
+        }
+
+        if (document.getTitle() != null && !document.getTitle().isBlank()) {
+            return onContentRepository.findFirstByTitleIgnoreCase(document.getTitle());
+        }
+
+        return Optional.empty();
+    }
+
+    private AdDocumentRequestDto toDocumentRequestDto(DocumentEntity document) {
+        AdDocumentRequestDto dto = new AdDocumentRequestDto();
         dto.setTitle(document.getTitle());
         dto.setFilePath(document.getFilePath());
         dto.setDeptId(document.getDepartment() != null ? document.getDepartment().getDeptId() : null);
@@ -950,6 +1058,72 @@ public class AdOnboardingController {
         return requestDto.getStartDate() != null
                 && requestDto.getDueDate() != null
                 && requestDto.getDueDate().isBefore(requestDto.getStartDate());
+    }
+
+    private String normalizeReturnUrl(String returnUrl) {
+        if (returnUrl == null || returnUrl.isBlank()) {
+            return null;
+        }
+
+        if (returnUrl.startsWith("/admin/onboarding/")) {
+            return returnUrl;
+        }
+
+        return null;
+    }
+
+    private String resolveRoadItemReturnUrl(String returnUrl, Integer roadmapId) {
+        String normalizedReturnUrl = normalizeReturnUrl(returnUrl);
+        if (normalizedReturnUrl != null) {
+            return normalizedReturnUrl;
+        }
+
+        return "/admin/onboarding/roadmaps/" + roadmapId + "/items";
+    }
+
+    private String buildReturnUrlQuery(String returnUrl) {
+        String normalizedReturnUrl = normalizeReturnUrl(returnUrl);
+        if (normalizedReturnUrl == null) {
+            return "";
+        }
+
+        return "?returnUrl=" + normalizedReturnUrl;
+    }
+
+    private List<AdminOnboardingScheduleEmployeeDto> toScheduleEmployeeDtos(List<AdminOnboardingScheduleDto> schedules) {
+        Map<String, List<AdminOnboardingScheduleDto>> schedulesByEmployee = schedules.stream()
+                .collect(Collectors.groupingBy(
+                        AdminOnboardingScheduleDto::getEmpNo,
+                        LinkedHashMap::new,
+                        Collectors.toList()
+                ));
+
+        return schedulesByEmployee.entrySet().stream()
+                .map(entry -> {
+                    List<AdminOnboardingScheduleDto> employeeSchedules = entry.getValue();
+                    AdminOnboardingScheduleDto firstSchedule = employeeSchedules.get(0);
+                    int totalCount = employeeSchedules.size();
+                    int completedCount = (int) employeeSchedules.stream()
+                            .filter(schedule -> "COMPLETED".equals(schedule.getStatus()))
+                            .count();
+                    int inProgressCount = (int) employeeSchedules.stream()
+                            .filter(schedule -> "IN_PROGRESS".equals(schedule.getStatus()))
+                            .count();
+                    int notStartedCount = totalCount - completedCount - inProgressCount;
+                    int progressRate = totalCount > 0 ? Math.round((completedCount * 100.0f) / totalCount) : 0;
+
+                    return AdminOnboardingScheduleEmployeeDto.builder()
+                            .empNo(firstSchedule.getEmpNo())
+                            .employeeName(firstSchedule.getEmployeeName())
+                            .roadmapTitle(firstSchedule.getRoadmapTitle())
+                            .totalCount(totalCount)
+                            .completedCount(completedCount)
+                            .inProgressCount(inProgressCount)
+                            .notStartedCount(notStartedCount)
+                            .progressRate(progressRate)
+                            .build();
+                })
+                .toList();
     }
 
     private AdminOnboardingScheduleDto toScheduleDto(RoadItemEntity item, RoadProgressEntity progress) {

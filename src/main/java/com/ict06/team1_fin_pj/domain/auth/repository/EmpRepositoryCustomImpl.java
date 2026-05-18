@@ -10,6 +10,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.22    김다솜        최초 생성/fetchOne()을 이용한 상세 조회 구현
  * @ 2026.04.23    김다솜        QueryDSL 기반 사원 정보 조회 구현
+ * @ 2026.05.12    김다솜        마이페이지 부서 표시를 위해 로그인 사용자 조회 시 부서 정보를 fetch join 처리
  */
 
 package com.ict06.team1_fin_pj.domain.auth.repository;
@@ -34,6 +35,7 @@ public class EmpRepositoryCustomImpl implements EmpRepositoryCustom {
         return Optional.ofNullable(
                 queryFactory
                         .selectFrom(empEntity)
+                        .leftJoin(empEntity.department).fetchJoin()
                         .where(empEntity.empNo.eq(empNo))
                         .fetchOne()
         );

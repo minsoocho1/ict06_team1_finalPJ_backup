@@ -1,118 +1,247 @@
 /**
  * @FileName : createTemplate.js
- * @Description : 동적으로 전자결재 서식의 필드를 추가하는 코드입니다. 전자결재 수정에서도 addField() 메서드 사용 중
+ * @Description : 관리자 전자결재 서식 생성/수정 화면에서 동적 입력 필드를 관리합니다.
+ *                저장되는 template JSON은 직원용 React 화면과 승인 후 후처리 로직에서 함께 사용됩니다.
  * @Author : 송영은
  * @Date : 2026. 04. 29
  * @Modification_History
  * @
  * @ 수정일         수정자        수정내용
- * @ ----------    ---------    -------------------------------
+ * @ ----------    ---------    -----------------------------------------------
  * @ 2026.04.29    송영은       최초 생성
  * @ 2026.05.04    송영은       서식 수정 오류 해결
-*/
+ * @ 2026.05.14    송영은       셀렉트 박스 필드 및 옵션 입력 기능 추가
+ */
 
 let fields = [];
 
-// 1. 필드 동적 추가 로직
-// function addField(type, label = '⭐항목 명을 작성해주세요', placeholder = '') {
-function addField(type, label = '', placeholder = '') {
-    const container = document.getElementById('dynamicFields');
-    const fieldId = 'field_' + Date.now();
-    const fieldNameId = fieldId + '_name';
+/**
+ * 관리자가 입력한 항목명/설명/옵션이 HTML로 렌더링될 때 태그로 해석되지 않도록 이스케이프합니다.
+ */
+function escapeHtml(value) {
+    return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
 
-    const now = new Date().toTimeString().slice(0, 5);// 현재 시각
-    const today = new Date().toISOString().slice(0, 10);// 현재 날짜
+/**
+ * 금액 필드는 화면에서는 원화 표기, JSON에는 숫자만 저장하기 위해 포맷을 분리합니다.
+ */
+function formatKrwAmount(value) {
+    const digits = String(value ?? '').replace(/[^\d]/g, '');
+    if (!digits) return '';
+    return Number(digits).toLocaleString('ko-KR') + ' 원';
+}
 
-    // class에 field-label 있어야 editForm.html의 서식 수정 로직 정상 작동 
-    let fieldName = `
-        <input type="text"
-            class="form-control border-0 shadow-none field-label"
-            placeholder="⭐항목 명을 작성해주세요"
-            id="${fieldNameId}"
-            required
-            value="${label}">
+function unformatKrwAmount(value) {
+    return String(value ?? '').replace(/[^\d]/g, '');
+}
+
+/**
+ * 셀렉트 박스 옵션은 관리자가 줄바꿈 또는 쉼표로 입력할 수 있게 합니다.
+ */
+function parseSelectOptions(value) {
+    return String(value ?? '')
+        .split(/\r?\n|,/)
+        .map(option => option.trim())
+        .filter(option => option.length > 0);
+}
+
+function getDefaultOptions(type, options) {
+    if (Array.isArray(options) && options.length > 0) {
+        return options;
+    }
+
+    return type === 'select' ? ['옵션1', '옵션2'] : [];
+}
+
+/**
+ * 필드 타입에 따라 오른쪽 입력 영역에 표시할 미리보기 입력 요소를 생성합니다.
+ */
+function renderInputHtml(type, placeholder, options) {
+    const now = new Date().toTimeString().slice(0, 5);
+    const today = new Date().toISOString().slice(0, 10);
+
+    if (type === 'text') {
+        return `<input type="text" class="form-control field-placeholder" placeholder="${escapeHtml(placeholder)}">`;
+    }
+    if (type === 'number') {
+        return `<input type="number" class="form-control field-placeholder" placeholder="${escapeHtml(placeholder || '0')}">`;
+    }
+    if (type === 'date') {
+        return `<input type="date" class="form-control field-placeholder" value="${today}">`;
+    }
+    if (type === 'time') {
+        return `<input type="time" class="form-control field-placeholder" value="${now}">`;
+    }
+    if (type === 'amount') {
+        return `<input type="text" class="form-control field-placeholder amount-input" inputmode="numeric" placeholder="0 원" value="${formatKrwAmount(placeholder)}">`;
+    }
+    if (type === 'select') {
+        const safeOptions = getDefaultOptions(type, options);
+        const optionHtml = safeOptions
+            .map(option => `<option>${escapeHtml(option)}</option>`)
+            .join('');
+
+        return `
+            <select class="form-select mb-2 field-select-preview">
+                ${optionHtml}
+            </select>
+            <textarea class="form-control form-control-sm field-options"
+                rows="3"
+                placeholder="옵션을 줄바꿈 또는 쉼표로 입력하세요.">${escapeHtml(safeOptions.join('\n'))}</textarea>
+            <div class="form-text">예: 정상근무, 재택근무, 외근</div>
         `;
+    }
 
-    // class에 field-placeholder 있어야 editForm.html의 서식 수정 로직 정상 작동 
-    let inputHtml = '';
-    if(type === 'text') inputHtml += `<input type="text" class="form-control field-placeholder" placeholder="${placeholder}">`;
-    if(type === 'number') inputHtml += `<input type="number" class="form-control field-placeholder" placeholder="0">`;
-    if(type === 'date') inputHtml += `<input type="date" class="form-control field-placeholder" value="${today}">`; // 기본값: 오늘
-    if(type === 'time') inputHtml += `<input type="time" class="form-control field-placeholder" value="${now}">`; // 기본값: 현재 시각
-    if(type === 'amount') inputHtml += `<input type="number" class="form-control field-placeholder" placeholder="0">`;
+    return '';
+}
 
-    // class에 field-item 있어야 editForm.html의 서식 수정 로직 정상 작동 
+/**
+ * 새 필드를 화면에 추가합니다.
+ * savedId는 기존 서식 수정 시 DB에 저장된 필드 id를 유지하기 위한 값입니다.
+ */
+function addField(type, label = '', placeholder = '', description = '', options = [], savedId = null) {
+    const container = document.getElementById('dynamicFields');
+    const fieldId = savedId || 'field_' + Date.now() + '_' + Math.floor(Math.random() * 1000);
+    const fieldNameId = fieldId + '_name';
+    const safeOptions = getDefaultOptions(type, options);
+
     const fieldHtml = `
-        <div class="input-group mb-3 border-0 p-2 position-relative gap-3 field-item" 
-         id="${fieldId}"
-         data-id="${fieldId}"
-         data-type="${type}">
-            ${fieldName}
-            ${inputHtml}
-            <button type="button" class="btn btn-sm btn-danger  top-0 end-0" onclick="removeField('${fieldId}')">X</button>
+        <div class="row align-items-start py-3 border-bottom field-item"
+            id="${fieldId}"
+            data-id="${fieldId}"
+            data-type="${type}">
+            <div class="col-md-4">
+                <input type="text"
+                    class="form-control border-0 shadow-none field-label"
+                    placeholder="항목명을 입력하세요"
+                    id="${fieldNameId}"
+                    required
+                    value="${escapeHtml(label)}">
+                <input type="text"
+                    class="form-control form-control-sm border-0 shadow-none text-muted field-description"
+                    placeholder="입력 안내 문구"
+                    value="${escapeHtml(description)}">
+            </div>
+            <div class="col-md-7">
+                ${renderInputHtml(type, placeholder, safeOptions)}
+            </div>
+            <div class="col-md-1 text-end">
+                <button type="button" class="btn btn-sm btn-outline-danger" onclick="removeField('${fieldId}')">X</button>
+            </div>
         </div>
     `;
+
     container.insertAdjacentHTML('beforeend', fieldHtml);
 
-    // DB에 저장할 최종 서식 배열에 저장
     fields.push({
         id: fieldId,
         nameId: fieldNameId,
         type: type,
         placeholder: placeholder,
+        description: description,
+        options: safeOptions,
         required: false
     });
-    console.log(fields)
 }
 
-// 2. 삭제 함수 추가
 function removeField(fieldId) {
-    // 1. 화면에서 제거
-    document.getElementById(fieldId).remove();
-
-    // 2. 배열에서 제거
-    fields = fields.filter(f => f.id !== fieldId);
-    console.log(fields)
+    document.getElementById(fieldId)?.remove();
+    fields = fields.filter(field => field.id !== fieldId);
 }
 
-// 3. submit 버튼 누르면 DB에 저장할 최종 json 도출 후 컨트롤러에 전달
-$('#formEditor').on('submit', function (e) {
-    e.preventDefault(); // 🔥 기본 submit 막기
-
-    // 서식 제목, 첨부파일 필수 여부 설정 가져오기
-    let formData = {
-        title: $('#formTitle').val(),
+/**
+ * 화면에 배치된 필드 DOM을 읽어 DB에 저장할 template JSON 구조로 변환합니다.
+ */
+function collectTemplateData(titleSelector = '#formTitle', fileRequiredSelector = '#isFileRequired') {
+    const formData = {
+        title: $(titleSelector).val(),
         fields: [],
-        fileRequired: $('#isFileRequired').val() === 'yes'
+        fileRequired: $(fileRequiredSelector).val() === 'yes'
     };
 
-    // 동적으로 추가된 인풋 태그 정보 json화
-    for(let field of fields){
-        formData.fields.push({
-            id: field.id,                       // input 태그 id
-            type: field.type,                   // input 태그 type
-            label: $(`#${field.nameId}`).val(), // input 태그와 연결될 label의 필드명
-            placeholder: field.placeholder      // input 태그 placeholder
-        });
-    }
+    $('#dynamicFields .field-item').each(function () {
+        const $field = $(this);
+        const type = $field.data('type');
+        const input = $field.find('.field-placeholder');
+        const options = type === 'select'
+            ? parseSelectOptions($field.find('.field-options').val())
+            : [];
 
-    // Ajax 방식으로 보내기
+        formData.fields.push({
+            id: $field.data('id'),
+            type: type,
+            label: $field.find('.field-label').val(),
+            placeholder: type === 'amount'
+                ? unformatKrwAmount(input.val())
+                : input.attr('placeholder') || '',
+            description: $field.find('.field-description').val(),
+            options: options
+        });
+    });
+
+    return formData;
+}
+
+/**
+ * 수정 화면에서 기존 template JSON을 다시 동적 필드 UI로 복원합니다.
+ */
+function loadTemplate(template) {
+    $('#formTitle').val(template.title);
+    fields = [];
+    $('#dynamicFields').empty();
+
+    (template.fields || []).forEach(field => {
+        addField(
+            field.type,
+            field.label,
+            field.placeholder,
+            field.description,
+            field.options,
+            field.id
+        );
+    });
+
+    $('#isFileRequired').val(template.fileRequired ? 'yes' : 'no');
+}
+
+$(document).on('input', '.amount-input', function () {
+    this.value = formatKrwAmount(this.value);
+});
+
+$(document).on('input', '.field-options', function () {
+    const $field = $(this).closest('.field-item');
+    const options = parseSelectOptions($(this).val());
+    const optionHtml = options
+        .map(option => `<option>${escapeHtml(option)}</option>`)
+        .join('');
+
+    $field.find('.field-select-preview').html(optionHtml);
+});
+
+$('#formEditor').on('submit', function (e) {
+    e.preventDefault();
+
+    const formData = collectTemplateData();
+
     $.ajax({
         url: '/admin/approval/createAppForm/action',
         type: 'POST',
         contentType: 'application/json; charset=UTF-8',
         data: JSON.stringify({
             formName: formData.title,
-            template: JSON.stringify(formData) // DB에는 문자열로 저장
+            template: JSON.stringify(formData)
         }),
-
-        success: function (res) {
-            console.log('저장 성공:', res);
+        success: function () {
             alert('저장되었습니다.');
-            window.location.href = "/admin/approval/appFormList"; // DB 저장 성공 시 서식 목록으로 돌아가기
+            window.location.href = '/admin/approval/appFormList';
         },
         error: function (err) {
-            console.error('에러:', err);
+            console.error('서식 저장 실패:', err);
             alert('오류가 발생했습니다.');
         }
     });

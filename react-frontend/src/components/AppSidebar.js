@@ -9,6 +9,7 @@ import {
 } from '@coreui/react';
 
 import { AppSidebarNav } from './AppSidebarNav'; 
+import { setSidebarState } from '../store/store';
 
 import AppLogo from './AppLogo'; // 새로 생성한 AppLogo 컴포넌트 임포트
 
@@ -29,16 +30,16 @@ const AppSidebar = () => {
       unfoldable={unfoldable}
       visible={sidebarShow}
       onVisibleChange={(visible) => {
-        dispatch({ type: 'set', sidebarShow: visible });
+        dispatch(setSidebarState({ sidebarShow: visible }));
       }}
     >
       <div className="sidebar-header border-bottom">
-        <CSidebarBrand className="d-none d-md-flex">
+        <CSidebarBrand as="div" className="d-none d-md-flex">
           {/* AppLogo 컴포넌트를 사용하여 로고를 표시합니다. */}
           {/* 사이드바가 접히거나(sidebarShow가 false) unfoldable 상태일 때 collapsed prop을 true로 전달하여 텍스트를 숨깁니다. */}
           <AppLogo collapsed={!sidebarShow || unfoldable} />
         </CSidebarBrand>
-        <CSidebarToggler className="d-none d-lg-flex" onClick={() => dispatch({ type: 'set', sidebarUnfoldable: !unfoldable })} />
+        <CSidebarToggler className="d-none d-lg-flex" onClick={() => dispatch(setSidebarState({ sidebarUnfoldable: !unfoldable }))} />
       </div>
       <CSidebarNav>
         <SimpleBar><AppSidebarNav items={navigation} /></SimpleBar>

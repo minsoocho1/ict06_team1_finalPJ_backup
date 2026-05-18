@@ -1,17 +1,18 @@
 <!--
     @FileName : quizGeneratorForm.html
-    @Description : AI를 활용한 콘텐츠 기반 퀴즈 초안 생성 및 저장 화면
+    @Description : AI 기반 퀴즈 초안 생성 및 저장 화면
     @Author : 김다솜
-    @Date : 2026. 05. 11
+    @Date : 2026. 05. 13
     @Modification_History
     @
-    @ 수정일자        수정자        수정내용
+    @ 수정일자        수정자         수정내용
     @ ----------    ---------    -----------------------------------------------
-    @ 2026.05.11    김다솜        최초 생성 및 AI API 연동 결과 프리뷰/저장 기능 구현
+    @ 2026.05.11    김다솜         초기 생성 및 AI 문제 초안 미리보기/저장 화면 구성
+    @ 2026.05.13    김다솜         객관식/단답형 혼합 초안 미리보기 UI 확장
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
+<head th:insert="~{/admin/common/head.html :: common_header}">
     <meta charset="UTF-8">
     <title id="page_title">AI 퀴즈 자동 생성</title>
 </head>
@@ -26,7 +27,7 @@
                 <div class="row mb-3">
                     <div class="col">
                         <h3>AI 퀴즈 자동 생성</h3>
-                        <p class="text-muted mb-0">콘텐츠 1건을 기준으로 객관식 문제 초안을 생성하고 검토 후 저장합니다.</p>
+                        <p class="text-muted mb-0">콘텐츠 1건을 기준으로 객관식과 단답형 문제 초안을 생성하고 검토 후 저장합니다.</p>
                     </div>
                 </div>
 
@@ -91,38 +92,61 @@
                             <table class="table table-bordered align-middle">
                                 <thead>
                                 <tr>
+                                    <th style="min-width: 120px;">유형</th>
                                     <th style="min-width: 280px;">문제</th>
-                                    <th style="min-width: 320px;">보기</th>
-                                    <th style="min-width: 140px;">정답</th>
-                                    <th style="min-width: 220px;">해설</th>
+                                    <th style="min-width: 320px;">보기 / 모범답안</th>
+                                    <th style="min-width: 200px;">정답 / 키워드</th>
+                                    <th style="min-width: 220px;">해설 / 루브릭</th>
                                 </tr>
                                 </thead>
                                 <tbody>
                                 <tr th:each="question, stat : ${generatedQuestions}">
                                     <td>
+                                        <span class="badge text-bg-primary"
+                                              th:text="${question.questionType == 'SHORT_ANSWER' ? '단답형' : question.questionType == 'ESSAY' ? '서술형' : '객관식'}">객관식</span>
+                                    </td>
+                                    <td>
                                         <strong th:text="|Q${stat.index + 1}.|"></strong>
                                         <div th:text="${question.questionText}"></div>
                                     </td>
                                     <td>
-                                        <div th:text="|1. ${question.option1}|"></div>
-                                        <div th:text="|2. ${question.option2}|"></div>
-                                        <div th:text="|3. ${question.option3}|"></div>
-                                        <div th:text="|4. ${question.option4}|"></div>
+                                        <div th:if="${question.questionType == 'MULTIPLE_CHOICE'}">
+                                            <div th:text="|1. ${question.option1}|"></div>
+                                            <div th:text="|2. ${question.option2}|"></div>
+                                            <div th:text="|3. ${question.option3}|"></div>
+                                            <div th:text="|4. ${question.option4}|"></div>
+                                        </div>
+                                        <div th:if="${question.questionType != 'MULTIPLE_CHOICE'}">
+                                            <strong>모범답안</strong>
+                                            <div th:text="${question.sampleAnswer != null ? question.sampleAnswer : '-'}"></div>
+                                        </div>
                                     </td>
                                     <td>
-                                        <span th:if="${question.answerNo == 1}" th:text="|1. ${question.option1}|"></span>
-                                        <span th:if="${question.answerNo == 2}" th:text="|2. ${question.option2}|"></span>
-                                        <span th:if="${question.answerNo == 3}" th:text="|3. ${question.option3}|"></span>
-                                        <span th:if="${question.answerNo == 4}" th:text="|4. ${question.option4}|"></span>
+                                        <div th:if="${question.questionType == 'MULTIPLE_CHOICE'}">
+                                            <span th:if="${question.answerNo == 1}" th:text="|1. ${question.option1}|"></span>
+                                            <span th:if="${question.answerNo == 2}" th:text="|2. ${question.option2}|"></span>
+                                            <span th:if="${question.answerNo == 3}" th:text="|3. ${question.option3}|"></span>
+                                            <span th:if="${question.answerNo == 4}" th:text="|4. ${question.option4}|"></span>
+                                        </div>
+                                        <div th:if="${question.questionType != 'MULTIPLE_CHOICE'}">
+                                            <strong>핵심 키워드</strong>
+                                            <div th:text="${question.keywordAnswer != null ? #strings.listJoin(question.keywordAnswer, ', ') : '-'}"></div>
+                                        </div>
                                     </td>
-                                    <td th:text="${question.explanation}"></td>
+                                    <td>
+                                        <div class="mb-2" th:text="${question.explanation}"></div>
+                                        <div th:if="${question.questionType != 'MULTIPLE_CHOICE'}" class="text-muted small">
+                                            <strong>채점 기준:</strong>
+                                            <span th:text="${question.rubric != null ? question.rubric : '-'}"></span>
+                                        </div>
+                                    </td>
                                 </tr>
                                 </tbody>
                             </table>
                         </div>
 
                         <p class="text-muted mb-0">
-                            저장하면 객관식 문제로 바로 등록됩니다. 필요하면 저장 전에 다시 생성해서 다른 초안을 비교할 수 있습니다.
+                            저장하면 평가 문제 목록에 바로 반영됩니다. 필요하면 다시 생성해서 다른 초안과 비교할 수 있습니다.
                         </p>
                     </div>
                 </div>

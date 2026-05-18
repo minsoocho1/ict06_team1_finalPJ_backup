@@ -3,14 +3,13 @@ package com.ict06.team1_fin_pj.domain.aiSecretary.controller;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.*;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatMessageEntity;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatSessionEntity;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.MessageRole;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.SessionType;
+import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiChatMessageRepository;
 import com.ict06.team1_fin_pj.domain.aiSecretary.response.ApiResponse;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantDraftRequestDto;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantDraftResponseDto;
-import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiAssistantDraftService;
-import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiChatbotService;
-import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiCorrectionService;
-import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiSecretaryService;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.*;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -33,6 +32,12 @@ public class AiSecretaryController {
 
     @Autowired
     private AiAssistantDraftService aiAssistantDraftService;
+
+    @Autowired
+    private AiTemplateRequestService aiTemplateRequestService;
+
+    @Autowired
+    private AiChatMessageRepository aiChatMessageRepository;
 
     // 챗봇 최근 세션 조회 또는 생성
     // POST /api/ai-secretary/chatbot/session?empNo=20209999
@@ -69,6 +74,7 @@ public class AiSecretaryController {
                         .sessionId(session.getSessionId())
                         .empNo(session.getEmployee().getEmpNo())
                         .sessionType(session.getSessionType())
+                        .documentType(resolveDocumentType(session.getSessionId()))
                         .title(session.getTitle())
                         .status(session.getStatus())
                         .lastMessageAt(session.getLastMessageAt())
@@ -189,4 +195,57 @@ public class AiSecretaryController {
 
         return ApiResponse.ok("AI 문서 수정 성공", response);
     }
+
+    // AI 템플릿 생성
+    @PostMapping("/assistant/template")
+    public ApiResponse<AssistantTemplateResponseDto> createAssistantTemplate(
+            @Valid @RequestBody AssistantTemplateRequestDto requestDto
+    ) {
+        AssistantTemplateResponseDto response =
+                aiAssistantDraftService.createTemplate(requestDto);
+
+        return ApiResponse.ok("AI 템플릿 생성 성공", response);
+    }
+
+    // AI 생성 템플릿을 추천 템플릿 목록 추가 요청
+    @PostMapping("/template-request")
+    public ApiResponse<TemplateRequestResponseDto> createTemplateRequest(
+            @Valid @RequestBody TemplateRequestCreateRequestDto requestDto
+    ) {
+        TemplateRequestResponseDto responseDto =
+                aiTemplateRequestService.createRequest(requestDto);
+
+        return ApiResponse.ok("추천 템플릿 추가 요청이 접수되었습니다.", responseDto);
+    }
+
+    // 추천 템플릿 추가 요청 목록 조회
+    @GetMapping("/template-request/my")
+    public ApiResponse<List<TemplateRequestResponseDto>> getMyTemplateRequests(
+            @RequestParam String empNo
+    ){
+        List<TemplateRequestResponseDto> responseDto =
+                aiTemplateRequestService.getMyRequests(empNo);
+
+        return ApiResponse.ok("추천 템플릿 추가 요청 목록 조회 성공", responseDto);
+    }
+
+    private String resolveDocumentType(Integer sessionId) {
+        return aiChatMessageRepository
+                .findTopBySessionSessionIdAndRoleOrderBySeqNoAsc(sessionId, MessageRole.USER)
+                .map(AiChatMessageEntity::getContent)
+                .map(this::parseDocumentTypeFromUserMessage)
+                .orElse("REPORT");
+    }
+
+    private String parseDocumentTypeFromUserMessage(String content) {
+        if (content == null) return "REPORT";
+
+        String upper = content.toUpperCase();
+
+        if (upper.contains("TEMPLATE") || upper.contains("템플릿")) return "TEMPLATE";
+        if (upper.contains("MINUTES")) return "MINUTES";
+        if (upper.contains("APPROVAL")) return "APPROVAL";
+        return "REPORT";
+    }
+
 }

@@ -1,19 +1,20 @@
 <!--
     @FileName : questionList.html
-    @Description : 관리자 온보딩 평가 문제 목록 조회 및 필터링 화면
+    @Description : 관리자 평가 문제 목록 조회 및 수정/삭제 화면
     @Author : 김다솜
-    @Date : 2026. 05. 11
+    @Date : 2026. 05. 13
     @Modification_History
     @
     @ 수정일자        수정자        수정내용
     @ ----------    ---------    -----------------------------------------------
-    @ 2026.05.11    김다솜        최초 생성 및 카테고리/유형별 필터 기능 구현
+    @ 2026.05.11    김다솜        최초 생성 및 카테고리/유형 필터 기능 구성
+    @ 2026.05.13    김다솜        AI 자동생성 출처 표시 및 문제 수정/삭제 버튼 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
+<head th:replace="~{/admin/common/head.html :: common_header}">
     <meta charset="UTF-8">
-    <title id="page_title">Evaluation Questions</title>
+    <title id="page_title">평가 문제 목록</title>
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
 <div class="app-wrapper">
@@ -26,7 +27,7 @@
                 <div class="row mb-3 align-items-start">
                     <div class="col">
                         <h3>평가 문제 목록</h3>
-                        <p class="text-muted mb-0">카테고리별로 저장된 평가 문제를 확인합니다.</p>
+                        <p class="text-muted mb-0">카테고리별 등록 문제와 AI 자동생성 여부를 확인하고 직접 수정할 수 있습니다.</p>
                     </div>
                     <div class="col-auto">
                         <div class="d-flex gap-2 flex-nowrap">
@@ -42,7 +43,7 @@
                 <div class="card mb-3">
                     <div class="card-body">
                         <div class="row g-2">
-                            <div class="col-md-5">
+                            <div class="col-md-4">
                                 <input type="text" class="form-control" id="questionSearchInput" placeholder="문제, 카테고리, 콘텐츠명 검색">
                             </div>
                             <div class="col-md-3">
@@ -56,6 +57,11 @@
                                 </select>
                             </div>
                             <div class="col-md-2">
+                                <select class="form-select" id="questionSourceFilter">
+                                    <option value="">전체 출처</option>
+                                </select>
+                            </div>
+                            <div class="col-md-1">
                                 <button type="button" class="btn btn-outline-secondary w-100" id="questionFilterReset">초기화</button>
                             </div>
                         </div>
@@ -71,10 +77,12 @@
                                     <th style="min-width: 70px;">ID</th>
                                     <th style="min-width: 110px;">카테고리</th>
                                     <th style="min-width: 110px;">유형</th>
+                                    <th style="min-width: 120px;">출처</th>
                                     <th style="min-width: 280px;">문제</th>
                                     <th style="min-width: 220px;">콘텐츠</th>
                                     <th style="min-width: 90px;">배점</th>
-                                    <th style="min-width: 160px;">정답</th>
+                                    <th style="min-width: 180px;">정답</th>
+                                    <th style="min-width: 150px;">관리</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -82,6 +90,12 @@
                                     <td th:text="${question.questionId}">1</td>
                                     <td class="question-category" th:text="${question.categoryName}">개발</td>
                                     <td class="question-type" th:text="${question.questionType.label}">객관식</td>
+                                    <td class="question-source">
+                                        <span class="badge text-bg-primary"
+                                              th:if="${question.explanation != null and (#strings.startsWith(question.explanation, '[AI자동생성]') or #strings.startsWith(question.explanation, '[AI?먮룞?앹꽦]'))}">AI 자동생성</span>
+                                        <span class="badge text-bg-secondary"
+                                              th:if="${question.explanation == null or !(#strings.startsWith(question.explanation, '[AI자동생성]') or #strings.startsWith(question.explanation, '[AI?먮룞?앹꽦]'))}">직접등록/시드</span>
+                                    </td>
                                     <td th:text="${question.questionText}">문제 내용</td>
                                     <td class="question-content" th:text="${question.content != null ? question.content.title : '-'}">콘텐츠명</td>
                                     <td th:text="${question.score}">10</td>
@@ -90,11 +104,23 @@
                                         <span th:if="${question.questionType.name() == 'MULTIPLE_CHOICE' and question.answerNo == 2}" th:text="|2. ${question.option2}|"></span>
                                         <span th:if="${question.questionType.name() == 'MULTIPLE_CHOICE' and question.answerNo == 3}" th:text="|3. ${question.option3}|"></span>
                                         <span th:if="${question.questionType.name() == 'MULTIPLE_CHOICE' and question.answerNo == 4}" th:text="|4. ${question.option4}|"></span>
-                                        <span th:if="${question.questionType.name() != 'MULTIPLE_CHOICE'}" th:text="${question.sampleAnswer != null ? question.sampleAnswer : '-'}"></span>
+                                        <span th:if="${question.questionType.name() != 'MULTIPLE_CHOICE'}"
+                                              th:text="${question.sampleAnswer != null ? question.sampleAnswer : '-'}"></span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-nowrap gap-1">
+                                            <a class="btn btn-sm btn-outline-primary"
+                                               th:href="@{/admin/evaluation/questions/{questionId}/edit(questionId=${question.questionId})}">수정</a>
+                                            <form th:action="@{/admin/evaluation/questions/{questionId}/delete(questionId=${question.questionId})}"
+                                                  method="post"
+                                                  onsubmit="return confirm('이 평가 문제를 삭제하시겠습니까?');">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">삭제</button>
+                                            </form>
+                                        </div>
                                     </td>
                                 </tr>
                                 <tr th:if="${#lists.isEmpty(questions)}">
-                                    <td colspan="7" class="text-center text-muted">등록된 평가 문제가 없습니다.</td>
+                                    <td colspan="9" class="text-center text-muted">등록된 평가 문제가 없습니다.</td>
                                 </tr>
                                 </tbody>
                             </table>
@@ -114,35 +140,42 @@
         const searchInput = document.getElementById('questionSearchInput');
         const categoryFilter = document.getElementById('questionCategoryFilter');
         const typeFilter = document.getElementById('questionTypeFilter');
+        const sourceFilter = document.getElementById('questionSourceFilter');
         const resetButton = document.getElementById('questionFilterReset');
 
         const categories = [...new Set(rows.map((row) => row.querySelector('.question-category')?.innerText.trim()).filter(Boolean))];
         const types = [...new Set(rows.map((row) => row.querySelector('.question-type')?.innerText.trim()).filter(Boolean))];
+        const sources = [...new Set(rows.map((row) => row.querySelector('.question-source')?.innerText.trim()).filter(Boolean))];
 
         categoryFilter.innerHTML = '<option value="">전체 카테고리</option>' +
             categories.map((category) => `<option value="${category}">${category}</option>`).join('');
         typeFilter.innerHTML = '<option value="">전체 유형</option>' +
             types.map((type) => `<option value="${type}">${type}</option>`).join('');
+        sourceFilter.innerHTML = '<option value="">전체 출처</option>' +
+            sources.map((source) => `<option value="${source}">${source}</option>`).join('');
 
         const applyFilters = () => {
             const searchValue = searchInput.value.trim().toLowerCase();
             const categoryValue = categoryFilter.value;
             const typeValue = typeFilter.value;
+            const sourceValue = sourceFilter.value;
 
             rows.forEach((row) => {
                 const rowText = row.innerText.toLowerCase();
                 const rowCategory = row.querySelector('.question-category')?.innerText.trim() || '';
                 const rowType = row.querySelector('.question-type')?.innerText.trim() || '';
+                const rowSource = row.querySelector('.question-source')?.innerText.trim() || '';
 
                 const matchesSearch = !searchValue || rowText.includes(searchValue);
                 const matchesCategory = !categoryValue || rowCategory === categoryValue;
                 const matchesType = !typeValue || rowType === typeValue;
+                const matchesSource = !sourceValue || rowSource === sourceValue;
 
-                row.style.display = matchesSearch && matchesCategory && matchesType ? '' : 'none';
+                row.style.display = matchesSearch && matchesCategory && matchesType && matchesSource ? '' : 'none';
             });
         };
 
-        [searchInput, categoryFilter, typeFilter].forEach((element) => {
+        [searchInput, categoryFilter, typeFilter, sourceFilter].forEach((element) => {
             element.addEventListener('input', applyFilters);
             element.addEventListener('change', applyFilters);
         });
@@ -151,6 +184,7 @@
             searchInput.value = '';
             categoryFilter.value = '';
             typeFilter.value = '';
+            sourceFilter.value = '';
             applyFilters();
         });
     });

@@ -1,18 +1,20 @@
 <!--
     @FileName : documentList.html
-    @Description : 문서 등록 현황 및 청크/벡터 처리 상태 모니터링 목록 화면
+    @Description : 관리자 문서 및 RAG 관리 목록 화면
     @Author : 김다솜
     @Date : 2026. 05. 11
     @Modification_History
     @
-    @ 수정일자        수정자        수정내용
+    @ 수정일자        수정자         수정내용
     @ ----------    ---------    -----------------------------------------------
-    @ 2026.05.10    김다솜        최초 생성 및 데이터 테이블 UI 구현
-    @ 2026.05.11    김다솜        목록 필터링/정렬 기능 및 재처리 요청 기능 추가
+    @ 2026.05.10    김다솜        최초 생성 및 문서 목록 테이블 UI 구성
+    @ 2026.05.11    김다솜        목록 필터/정렬 및 재처리 요청 기능 추가
+    @ 2026.05.13    김다솜        최종 처리 시각, 퀴즈 자동생성 상태, 백그라운드 처리 완료 안내 모달 추가
+    @ 2026.05.14    김다솜        문서 기반 AI 질문응답 모달 추가 및 인코딩 정리
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
+<head th:replace="~{/admin/common/head.html :: common_header}">
     <meta charset="UTF-8">
     <title id="page_title">문서/RAG 관리</title>
 </head>
@@ -26,8 +28,8 @@
             <div class="container-fluid">
                 <div class="row mb-3">
                     <div class="col">
-                        <h3>문서 및 RAG 데이터 관리</h3>
-                        <p class="text-muted mb-0">문서 등록 현황과 청크, 벡터 반영 상태를 확인합니다.</p>
+                        <h3>문서 및 RAG 관리</h3>
+                        <p class="text-muted mb-0">문서 등록 현황과 청크/벡터 처리 상태, 연결된 퀴즈 생성 여부를 확인합니다.</p>
                     </div>
                     <div class="col text-end">
                         <a th:href="@{/admin/onboarding/documents/new}" class="btn btn-primary">문서 등록</a>
@@ -40,10 +42,11 @@
                 <div class="card mb-3">
                     <div class="card-body">
                         <div class="row g-2">
-                            <div class="col-md-5">
-                                <input type="text" class="form-control" id="documentSearchInput" placeholder="문서명, 부서, 등록자, 경로 검색">
+                            <div class="col-md-4">
+                                <input type="text" class="form-control" id="documentSearchInput"
+                                       placeholder="문서명, 대상 부서, 등록 경로 검색">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <select class="form-select" id="documentAccessFilter">
                                     <option value="">전체 권한</option>
                                 </select>
@@ -51,6 +54,14 @@
                             <div class="col-md-2">
                                 <select class="form-select" id="documentStageFilter">
                                     <option value="">전체 단계</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-select" id="documentQuizFilter">
+                                    <option value="">퀴즈 상태 전체</option>
+                                    <option value="generated">AI 자동생성 완료</option>
+                                    <option value="pending">연결됨 / 생성 전</option>
+                                    <option value="none">연결 없음</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -73,52 +84,74 @@
                             <tr>
                                 <th class="text-nowrap" style="min-width: 60px;">ID</th>
                                 <th style="min-width: 220px;">문서명</th>
-                                <th class="text-nowrap" style="min-width: 120px;">대상 부서</th>
+                                <th class="text-nowrap" style="min-width: 110px;">대상 부서</th>
                                 <th class="text-nowrap" style="min-width: 90px;">권한</th>
                                 <th class="text-nowrap" style="min-width: 120px;">처리 단계</th>
                                 <th class="text-nowrap" style="min-width: 80px;">청크</th>
                                 <th class="text-nowrap" style="min-width: 80px;">벡터</th>
+                                <th class="text-nowrap" style="min-width: 140px;">퀴즈 자동생성</th>
+                                <th class="text-nowrap" style="min-width: 150px;">최종 처리 시각</th>
                                 <th class="text-nowrap" style="min-width: 120px;">등록자</th>
                                 <th style="min-width: 260px;">경로</th>
-                                <th style="min-width: 280px;">요약/미리보기</th>
+                                <th style="min-width: 280px;">요약 미리보기</th>
                                 <th style="min-width: 240px;">최근 실패 사유</th>
-                                <th class="text-nowrap" style="min-width: 190px;">관리</th>
+                                <th class="text-nowrap" style="min-width: 260px;">관리</th>
                             </tr>
                             </thead>
                             <tbody>
-                            <tr th:each="document : ${documents}" class="document-row">
+                            <tr th:each="document : ${documents}"
+                                class="document-row"
+                                th:attr="data-doc-id=${document.docId},
+                                         data-title=${document.title},
+                                         data-department=${document.departmentName},
+                                         data-path=${document.filePath},
+                                         data-access=${document.accessLevel},
+                                         data-stage=${document.currentStage},
+                                         data-quiz-status=${document.linkedContentId == null ? 'none' : (document.quizGenerated ? 'generated' : 'pending')}">
                                 <td th:text="${document.docId}"></td>
-                                <td th:text="${document.title}" class="document-title"></td>
-                                <td th:text="${document.departmentName}" class="document-department text-nowrap"></td>
+                                <td class="document-title" th:text="${document.title}"></td>
+                                <td class="document-department text-nowrap" th:text="${document.departmentName}"></td>
                                 <td class="document-access">
                                     <span class="badge text-bg-light border" th:text="${document.accessLevel}"></span>
                                 </td>
                                 <td class="document-stage">
-                                    <span class="badge text-bg-info" th:text="${document.currentStage}"></span>
+                                    <span class="badge"
+                                          th:classappend="${document.currentStage.name() == 'PUBLISHED'} ? ' text-bg-success' :
+                                                          (${document.currentStage.name() == 'CHUNK_FAILED' or document.currentStage.name() == 'EMBED_FAILED'} ? ' text-bg-danger' :
+                                                          (${document.currentStage.name() == 'UPLOADED'} ? ' text-bg-secondary' : ' text-bg-info'))"
+                                          th:text="${document.currentStage}"></span>
                                 </td>
-                                <td th:text="${document.chunkCount}" class="text-nowrap"></td>
-                                <td th:text="${document.vectorCount}" class="text-nowrap"></td>
-                                <td th:text="${document.createdByName}" class="document-created-by text-nowrap"></td>
-                                <td class="text-muted small document-path"
-                                    style="max-width: 320px; word-break: break-all;"
-                                    th:title="${document.filePath}"
-                                    th:text="${document.filePath}"></td>
-                                <td class="small text-muted"
-                                    style="max-width: 320px; white-space: normal;"
+                                <td class="document-chunk-count text-nowrap" th:text="${document.chunkCount}"></td>
+                                <td class="document-vector-count text-nowrap" th:text="${document.vectorCount}"></td>
+                                <td class="document-quiz-status text-nowrap">
+                                    <span th:if="${document.linkedContentId == null}" class="badge text-bg-light border">연결 없음</span>
+                                    <span th:if="${document.linkedContentId != null and document.quizGenerated}" class="badge text-bg-success"
+                                          th:text="${document.generatedQuizCount + '문항 생성'}"></span>
+                                    <span th:if="${document.linkedContentId != null and !document.quizGenerated}" class="badge text-bg-warning">생성 전</span>
+                                </td>
+                                <td class="document-updated-at text-nowrap"
+                                    th:text="${document.updatedAt != null ? #temporals.format(document.updatedAt, 'yyyy-MM-dd HH:mm:ss') : '-'}"></td>
+                                <td class="document-created-by text-nowrap" th:text="${document.createdByName}"></td>
+                                <td class="text-muted small document-path" style="max-width: 320px; word-break: break-all;"
+                                    th:title="${document.filePath}" th:text="${document.filePath}"></td>
+                                <td class="small text-muted document-summary" style="max-width: 320px; white-space: normal;"
                                     th:title="${document.summaryPreview}"
                                     th:text="${document.summaryPreview != null && !#strings.isEmpty(document.summaryPreview) ? document.summaryPreview : '-'}"></td>
-                                <td class="small text-muted"
-                                    style="max-width: 260px; white-space: normal;"
+                                <td class="small text-muted document-last-error" style="max-width: 260px; white-space: normal;"
                                     th:title="${document.lastErrorMessage}"
                                     th:text="${document.lastErrorMessage != null && !#strings.isEmpty(document.lastErrorMessage) ? document.lastErrorMessage : '-'}"></td>
                                 <td>
                                     <div class="d-flex flex-nowrap gap-1">
                                         <a class="btn btn-sm btn-outline-primary"
                                            th:href="@{/admin/onboarding/documents/{id}/edit(id=${document.docId})}">수정</a>
-                                        <form th:action="@{/admin/onboarding/documents/{id}/process(id=${document.docId})}"
-                                              method="post">
+                                        <form th:action="@{/admin/onboarding/documents/{id}/process(id=${document.docId})}" method="post">
                                             <button type="submit" class="btn btn-sm btn-outline-success">재처리</button>
                                         </form>
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-dark document-question-button"
+                                                th:attr="data-doc-id=${document.docId},data-doc-title=${document.title}">
+                                            AI 문의
+                                        </button>
                                         <form th:action="@{/admin/onboarding/documents/{id}/delete(id=${document.docId})}"
                                               method="post"
                                               onsubmit="return confirm('이 문서를 삭제하시겠습니까?');">
@@ -128,7 +161,7 @@
                                 </td>
                             </tr>
                             <tr th:if="${#lists.isEmpty(documents)}">
-                                <td colspan="12" class="text-center text-muted">등록된 문서가 없습니다.</td>
+                                <td colspan="14" class="text-center text-muted">등록된 문서가 없습니다.</td>
                             </tr>
                             </tbody>
                         </table>
@@ -138,89 +171,337 @@
         </div>
     </main>
 
+    <div class="modal fade" id="documentProcessModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">문서 처리 안내</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+                </div>
+                <div class="modal-body" id="documentProcessModalBody">문서 처리 상태가 갱신되었습니다.</div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">확인</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="documentQuestionModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">문서 기반 AI 문의</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-2">
+                        <div class="small text-muted">대상 문서</div>
+                        <div id="documentQuestionTitle" class="fw-semibold">-</div>
+                    </div>
+                    <div class="mb-3">
+                        <label for="documentQuestionInput" class="form-label">질문</label>
+                        <textarea id="documentQuestionInput" class="form-control" rows="4"
+                                  placeholder="예: 이 문서에서 강조하는 핵심 절차는 무엇인가요?"></textarea>
+                    </div>
+                    <div class="alert alert-danger d-none" id="documentQuestionError"></div>
+                    <div class="border rounded p-3 bg-body-tertiary d-none" id="documentQuestionAnswerWrap">
+                        <div class="small text-muted mb-2" id="documentQuestionMeta"></div>
+                        <div id="documentQuestionAnswer" style="white-space: pre-wrap;"></div>
+                    </div>
+                    <div class="mt-3 d-none" id="documentQuestionChunksWrap">
+                        <div class="small text-muted mb-2">참고 청크 미리보기</div>
+                        <div class="accordion" id="documentQuestionChunks"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">닫기</button>
+                    <button type="button" class="btn btn-primary" id="documentQuestionSubmit">AI 답변 생성</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <th:block th:replace="~{/admin/common/footer}"></th:block>
 </div>
 <th:block th:replace="~{/admin/common/commonJs}"></th:block>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const rows = Array.from(document.querySelectorAll('#documentTable tbody .document-row'));
+        const tableBody = document.querySelector('#documentTable tbody');
+        const rows = () => Array.from(document.querySelectorAll('#documentTable tbody .document-row'));
         const searchInput = document.getElementById('documentSearchInput');
         const accessFilter = document.getElementById('documentAccessFilter');
         const stageFilter = document.getElementById('documentStageFilter');
+        const quizFilter = document.getElementById('documentQuizFilter');
         const sortOrder = document.getElementById('documentSortOrder');
         const resetButton = document.getElementById('documentFilterReset');
-        const tbody = document.querySelector('#documentTable tbody');
+        const successAlertText = (document.querySelector('.alert-success')?.innerText || '').toLowerCase();
+        const processingTriggered = successAlertText.includes('processing started') || successAlertText.includes('reprocessing started');
+        const statusUrl = '/admin/onboarding/documents/status';
+        const answerUrlPrefix = '/admin/onboarding/documents';
+        const completionNotified = new Set();
+
+        const processModal = new bootstrap.Modal(document.getElementById('documentProcessModal'));
+        const processModalBody = document.getElementById('documentProcessModalBody');
+        const questionModal = new bootstrap.Modal(document.getElementById('documentQuestionModal'));
+        const questionTitle = document.getElementById('documentQuestionTitle');
+        const questionInput = document.getElementById('documentQuestionInput');
+        const questionSubmit = document.getElementById('documentQuestionSubmit');
+        const questionError = document.getElementById('documentQuestionError');
+        const questionAnswerWrap = document.getElementById('documentQuestionAnswerWrap');
+        const questionAnswer = document.getElementById('documentQuestionAnswer');
+        const questionMeta = document.getElementById('documentQuestionMeta');
+        const questionChunksWrap = document.getElementById('documentQuestionChunksWrap');
+        const questionChunks = document.getElementById('documentQuestionChunks');
+        let activeQuestionDocId = null;
+
+        const stageBadgeClass = (stage) => {
+            if (stage === 'PUBLISHED') return 'badge text-bg-success';
+            if (stage === 'CHUNK_FAILED' || stage === 'EMBED_FAILED') return 'badge text-bg-danger';
+            if (stage === 'UPLOADED') return 'badge text-bg-secondary';
+            return 'badge text-bg-info';
+        };
+
+        const formatDateTime = (value) => {
+            if (!value) return '-';
+            if (Array.isArray(value) && value.length >= 6) {
+                const [year, month, day, hour, minute, second] = value;
+                const pad = (number) => String(number).padStart(2, '0');
+                return `${year}-${pad(month)}-${pad(day)} ${pad(hour)}:${pad(minute)}:${pad(second)}`;
+            }
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return String(value).replace('T', ' ').slice(0, 19);
+            const pad = (number) => String(number).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        };
+
+        const buildQuizStatusHtml = (doc) => {
+            if (!doc.linkedContentId) return '<span class="badge text-bg-light border">연결 없음</span>';
+            if (doc.quizGenerated) return `<span class="badge text-bg-success">${doc.generatedQuizCount || 0}문항 생성</span>`;
+            return '<span class="badge text-bg-warning">생성 전</span>';
+        };
 
         const fillOptions = (selector, values, placeholder) => {
             selector.innerHTML = `<option value="">${placeholder}</option>` +
                 [...new Set(values.filter(Boolean))].map((value) => `<option value="${value}">${value}</option>`).join('');
         };
 
-        fillOptions(accessFilter, rows.map((row) => row.querySelector('.document-access')?.innerText.trim()), '전체 권한');
-        fillOptions(stageFilter, rows.map((row) => row.querySelector('.document-stage')?.innerText.trim()), '전체 단계');
-
-        const sortRows = () => {
-            const sortValue = sortOrder.value;
-            const sortedRows = [...rows].sort((a, b) => {
-                if (sortValue === 'id-asc' || sortValue === 'id-desc') {
-                    const aId = Number(a.children[0]?.innerText.trim() || 0);
-                    const bId = Number(b.children[0]?.innerText.trim() || 0);
-                    return sortValue === 'id-asc' ? aId - bId : bId - aId;
-                }
-
-                if (sortValue === 'title-asc') {
-                    return (a.querySelector('.document-title')?.innerText || '').localeCompare(
-                        b.querySelector('.document-title')?.innerText || '',
-                        'ko'
-                    );
-                }
-
-                if (sortValue === 'chunk-desc') {
-                    const aChunk = Number(a.children[5]?.innerText.trim() || 0);
-                    const bChunk = Number(b.children[5]?.innerText.trim() || 0);
-                    return bChunk - aChunk;
-                }
-
-                return 0;
+        const bindQuestionButtons = () => {
+            document.querySelectorAll('.document-question-button').forEach((button) => {
+                button.addEventListener('click', () => {
+                    activeQuestionDocId = button.dataset.docId;
+                    questionTitle.textContent = button.dataset.docTitle || '-';
+                    questionInput.value = '';
+                    questionError.classList.add('d-none');
+                    questionError.textContent = '';
+                    questionAnswerWrap.classList.add('d-none');
+                    questionAnswer.textContent = '';
+                    questionMeta.textContent = '';
+                    questionChunksWrap.classList.add('d-none');
+                    questionChunks.innerHTML = '';
+                    questionModal.show();
+                });
             });
-
-            sortedRows.forEach((row) => tbody.appendChild(row));
         };
 
         const applyFilters = () => {
-            const searchValue = searchInput.value.trim().toLowerCase();
-            const accessValue = accessFilter.value;
-            const stageValue = stageFilter.value;
+            const keyword = (searchInput.value || '').trim().toLowerCase();
+            const access = accessFilter.value;
+            const stage = stageFilter.value;
+            const quiz = quizFilter.value;
 
-            rows.forEach((row) => {
-                const rowText = row.innerText.toLowerCase();
-                const rowAccess = row.querySelector('.document-access')?.innerText.trim() || '';
-                const rowStage = row.querySelector('.document-stage')?.innerText.trim() || '';
-
-                const matchesSearch = !searchValue || rowText.includes(searchValue);
-                const matchesAccess = !accessValue || rowAccess === accessValue;
-                const matchesStage = !stageValue || rowStage === stageValue;
-
-                row.style.display = matchesSearch && matchesAccess && matchesStage ? '' : 'none';
+            rows().forEach((row) => {
+                const matchesKeyword = !keyword || [row.dataset.title, row.dataset.department, row.dataset.path]
+                    .filter(Boolean)
+                    .some((value) => value.toLowerCase().includes(keyword));
+                const matchesAccess = !access || row.dataset.access === access;
+                const matchesStage = !stage || row.dataset.stage === stage;
+                const matchesQuiz = !quiz || row.dataset.quizStatus === quiz;
+                row.style.display = matchesKeyword && matchesAccess && matchesStage && matchesQuiz ? '' : 'none';
             });
         };
 
-        [searchInput, accessFilter, stageFilter].forEach((element) => {
-            element.addEventListener('input', applyFilters);
-            element.addEventListener('change', applyFilters);
-        });
-        sortOrder.addEventListener('change', sortRows);
+        const sortRows = () => {
+            const visibleRows = rows();
+            const mode = sortOrder.value;
+            visibleRows.sort((a, b) => {
+                if (mode === 'id-asc') return Number(a.dataset.docId) - Number(b.dataset.docId);
+                if (mode === 'title-asc') return (a.dataset.title || '').localeCompare(b.dataset.title || '', 'ko');
+                if (mode === 'chunk-desc') {
+                    return Number(b.querySelector('.document-chunk-count')?.textContent || 0) -
+                        Number(a.querySelector('.document-chunk-count')?.textContent || 0);
+                }
+                return Number(b.dataset.docId) - Number(a.dataset.docId);
+            });
+            visibleRows.forEach((row) => tableBody.appendChild(row));
+        };
 
-        resetButton.addEventListener('click', function () {
-            searchInput.value = '';
-            accessFilter.value = '';
-            stageFilter.value = '';
-            sortOrder.value = 'id-desc';
-            sortRows();
-            applyFilters();
+        const refreshOptions = () => {
+            fillOptions(accessFilter, rows().map((row) => row.dataset.access), '전체 권한');
+            fillOptions(stageFilter, rows().map((row) => row.dataset.stage), '전체 단계');
+        };
+
+        const attachFilterEvents = () => {
+            [searchInput, accessFilter, stageFilter, quizFilter].forEach((element) => {
+                element.addEventListener('input', applyFilters);
+                element.addEventListener('change', applyFilters);
+            });
+            sortOrder.addEventListener('change', () => {
+                sortRows();
+                applyFilters();
+            });
+            resetButton.addEventListener('click', () => {
+                searchInput.value = '';
+                accessFilter.value = '';
+                stageFilter.value = '';
+                quizFilter.value = '';
+                sortOrder.value = 'id-desc';
+                sortRows();
+                applyFilters();
+            });
+        };
+
+        const notifyCompletion = (doc) => {
+            if (!doc || !doc.docId || completionNotified.has(doc.docId)) return;
+            completionNotified.add(doc.docId);
+
+            if (doc.currentStage === 'PUBLISHED') {
+                processModalBody.textContent = `${doc.title} 문서 처리가 완료되었습니다. 청크 ${doc.chunkCount || 0}개, 벡터 ${doc.vectorCount || 0}개가 반영되었습니다.`;
+            } else {
+                processModalBody.textContent = `${doc.title} 문서 처리 중 오류가 발생했습니다. ${doc.lastErrorMessage || '실패 사유를 확인해 주세요.'}`;
+            }
+            processModal.show();
+        };
+
+        const updateRow = (doc) => {
+            const row = document.querySelector(`.document-row[data-doc-id="${doc.docId}"]`);
+            if (!row) return;
+
+            row.dataset.title = doc.title || '';
+            row.dataset.department = doc.departmentName || '';
+            row.dataset.path = doc.filePath || '';
+            row.dataset.access = doc.accessLevel || '';
+            row.dataset.stage = doc.currentStage || '';
+            row.dataset.quizStatus = !doc.linkedContentId ? 'none' : (doc.quizGenerated ? 'generated' : 'pending');
+
+            row.querySelector('.document-title').textContent = doc.title || '-';
+            row.querySelector('.document-department').textContent = doc.departmentName || '-';
+            row.querySelector('.document-access').innerHTML = `<span class="badge text-bg-light border">${doc.accessLevel || '-'}</span>`;
+            row.querySelector('.document-stage').innerHTML = `<span class="${stageBadgeClass(doc.currentStage)}">${doc.currentStage || '-'}</span>`;
+            row.querySelector('.document-chunk-count').textContent = doc.chunkCount ?? 0;
+            row.querySelector('.document-vector-count').textContent = doc.vectorCount ?? 0;
+            row.querySelector('.document-quiz-status').innerHTML = buildQuizStatusHtml(doc);
+            row.querySelector('.document-updated-at').textContent = formatDateTime(doc.updatedAt);
+            row.querySelector('.document-created-by').textContent = doc.createdByName || '-';
+            row.querySelector('.document-path').textContent = doc.filePath || '-';
+            row.querySelector('.document-path').title = doc.filePath || '';
+            row.querySelector('.document-summary').textContent = doc.summaryPreview || '-';
+            row.querySelector('.document-summary').title = doc.summaryPreview || '';
+            row.querySelector('.document-last-error').textContent = doc.lastErrorMessage || '-';
+            row.querySelector('.document-last-error').title = doc.lastErrorMessage || '';
+
+            if (processingTriggered && ['PUBLISHED', 'CHUNK_FAILED', 'EMBED_FAILED'].includes(doc.currentStage)) {
+                notifyCompletion(doc);
+            }
+        };
+
+        const pollStatuses = async () => {
+            try {
+                const response = await fetch(statusUrl);
+                if (!response.ok) return;
+                const documents = await response.json();
+                documents.forEach(updateRow);
+                refreshOptions();
+                sortRows();
+                applyFilters();
+            } catch (error) {
+                console.error(error);
+            }
+        };
+
+        questionSubmit.addEventListener('click', async () => {
+            const question = questionInput.value.trim();
+            if (!activeQuestionDocId || !question) {
+                questionError.textContent = '질문 내용을 입력해 주세요.';
+                questionError.classList.remove('d-none');
+                return;
+            }
+
+            questionSubmit.disabled = true;
+            questionSubmit.textContent = '생성 중...';
+            questionError.classList.add('d-none');
+            questionAnswerWrap.classList.add('d-none');
+            questionChunksWrap.classList.add('d-none');
+            questionChunks.innerHTML = '';
+
+            try {
+                const body = new URLSearchParams();
+                body.append('question', question);
+
+                const response = await fetch(`${answerUrlPrefix}/${activeQuestionDocId}/answer`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+                    body
+                });
+
+                const result = await response.json();
+                if (!response.ok || !result.success) {
+                    throw new Error(result.message || '문서 답변 생성 중 오류가 발생했습니다.');
+                }
+
+                questionMeta.textContent = `참고 청크 ${result.usedChunkCount ?? 0}개 기준 답변`;
+                questionAnswer.textContent = result.answer || '';
+                questionAnswerWrap.classList.remove('d-none');
+
+                const usedChunks = Array.isArray(result.usedChunks) ? result.usedChunks : [];
+                if (usedChunks.length > 0) {
+                    questionChunks.innerHTML = usedChunks.map((chunk, index) => `
+                        <div class="accordion-item">
+                            <h2 class="accordion-header" id="documentChunkHeading${index}">
+                                <button class="accordion-button ${index === 0 ? '' : 'collapsed'}" type="button"
+                                        data-bs-toggle="collapse"
+                                        data-bs-target="#documentChunkCollapse${index}"
+                                        aria-expanded="${index === 0 ? 'true' : 'false'}"
+                                        aria-controls="documentChunkCollapse${index}">
+                                    참고 청크 ${index + 1}
+                                </button>
+                            </h2>
+                            <div id="documentChunkCollapse${index}"
+                                 class="accordion-collapse collapse ${index === 0 ? 'show' : ''}"
+                                 aria-labelledby="documentChunkHeading${index}"
+                                 data-bs-parent="#documentQuestionChunks">
+                                <div class="accordion-body" style="white-space: pre-wrap;">${escapeHtml(chunk)}</div>
+                            </div>
+                        </div>
+                    `).join('');
+                    questionChunksWrap.classList.remove('d-none');
+                }
+            } catch (error) {
+                questionError.textContent = error.message || '문서 답변 생성 중 오류가 발생했습니다.';
+                questionError.classList.remove('d-none');
+            } finally {
+                questionSubmit.disabled = false;
+                questionSubmit.textContent = 'AI 답변 생성';
+            }
         });
 
+        const escapeHtml = (value) => {
+            return String(value ?? '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        };
+
+        refreshOptions();
         sortRows();
+        applyFilters();
+        attachFilterEvents();
+        bindQuestionButtons();
+
+        if (processingTriggered) {
+            setInterval(pollStatuses, 4000);
+        }
     });
 </script>
 </body>

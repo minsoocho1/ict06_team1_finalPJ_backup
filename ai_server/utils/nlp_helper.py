@@ -1,16 +1,16 @@
-"""
-@FileName : nlp_helper.py
-@Description : SBERT 기반 문장 의미 유사도(Semantic Similarity) 측정 엔진
-               - Sentence-Transformers를 활용한 한국어 답변 임베딩 및 비교
-               - 코사인 유사도(Cosine Similarity)를 이용한 주관식 자동 채점 기초 로직
-@Author : 김다솜
-@Date : 2026. 05. 06
-@Modification_History
-@
-@ 수정일         수정자        수정내용
-@ ----------    ---------    -------------------------------
-@ 2026.05.06    김다솜        최초 생성 및 SBERT 모델 로딩 구현
-"""
+#
+# @FileName : nlp_helper.py
+# @Description : SBERT 기반 문장 의미 유사도(Semantic Similarity) 측정 엔진
+#                - Sentence-Transformers를 활용한 한국어 답변 임베딩 및 비교
+#                - 코사인 유사도(Cosine Similarity)를 이용한 주관식 자동 채점 기초 로직
+# @Author : 김다솜
+# @Date : 2026. 05. 06
+# @Modification_History
+# @
+# @ 수정일         수정자        수정내용
+# @ ----------    ---------    -------------------------------
+# @ 2026.05.06    김다솜        최초 생성 및 SBERT 모델 로딩 구현
+#
 
 from sentence_transformers import SentenceTransformer, util
 import torch

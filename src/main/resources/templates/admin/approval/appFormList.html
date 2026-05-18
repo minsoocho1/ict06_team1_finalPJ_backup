@@ -1,4 +1,4 @@
-<!--
+﻿<!--
  * @author : 송영은
  * description : 관리자용 - 전자결재 서식 관리 메인 페이지 (모든 전자 결재 서식 조회 + 추가/수정/삭제 버튼 제공)
  * ========================================
@@ -38,17 +38,43 @@
                 <div class="row">
                     <h3>전자 결재 서식 관리 메인</h3>
                 </div>
-                <!-- end::Row-->
-                <!--새 서식 추가 버튼 시작-->
-                <div class="row">
-                    <div class="d-flex flex-row-reverse">
-                        <button type="button" class="btn btn-success" th:onclick="|location.href='@{/admin/approval/createAppForm}'|">
-                            (+) 새 서식 추가
-                        </button>
+                <div class="row mt-2">
+                    <div class="col-md-12">
+                        <!-- 검색바 시작 -->
+                        <div class="input-group">
+                            <input type="text"
+                                   class="form-control"
+                                   id="searchKeyword"
+                                   placeholder="서식 번호 또는 서식명 검색">
+                            <button type="button" class="btn btn-outline-secondary" id="searchBtn">
+                                <i class="fa-solid fa-magnifying-glass"></i>
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="resetSearchBtn">
+                                초기화
+                            </button>
+                            <!--새 서식 추가 버튼 시작-->
+                            <div class="d-flex flex-row-reverse">
+                                <button type="button" class="btn btn-success" th:onclick="|location.href='@{/admin/approval/createAppForm}'|">
+                                    (+) 새 서식 추가
+                                </button>
+                            </div>
+                            <!--새 서식 추가 버튼 끝-->
+                        </div>
+                        <!-- 검색바 끝 -->
                     </div>
                 </div>
-                <!--새 서식 추가 버튼 끝-->
+                <!-- end::Row-->
+                <!-- 일괄 관리 버튼 그룹 시작 -->
                 <br>
+                <div class="d-flex gap-2 mb-2">
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="bulkLineTemplateBtn">
+                        결재선 일괄 설정
+                    </button>
+                    <button type="button" class="btn btn-danger btn-sm" id="bulkDeleteBtn">
+                        일괄 삭제
+                    </button>
+                </div>
+                <!-- 일괄 관리 버튼 그룹 끝 -->
                 <!-- begin::서식 표 시작-->
                 <div class="row">
                     <table class="table table-hover align-middle">
@@ -94,10 +120,14 @@
                             </div>
                             <div class="modal-body">
                                 <div class="row">
-
                                     <!-- 좌측 목록 시작 -->
+                                    <br>
                                     <div class="col-4 border-end">
-                                        <div id="lineTemplateList"></div>
+                                        <div id="lineTemplateList" class="list-group overflow-auto" style="max-height: 320px;"></div>
+                                        <div class="mt-3">
+                                            <div class="fw-bold small mb-2">결재선 서식 적용될 결재 서식</div>
+                                            <div id="selectedFormList" class="border rounded p-2 bg-light overflow-auto small" style="max-height: 140px;"></div>
+                                        </div>
                                     </div>
                                     <!-- 좌측 목록 끝 -->
                                     <!-- 우측 상세 시작-->
@@ -146,6 +176,8 @@
 <script src="/js/approval/deleteAppForm.js"></script> <!-- 서식 삭제 함수 -->
 <script>
     let currentFormId = null;
+    let selectedFormMap = new Map();
+    let modalFormTargets = [];
     let selectedTemplateId = null; // modal reopen 시 현재 선택 유지
 
     // [Ajax + 렌더링 js]
@@ -154,6 +186,7 @@
 
     // 최초 로딩
     $(document).ready(function () {
+        $('table thead th').first().html('<input type="checkbox" class="form-check-input" id="selectAllForms">');
         loadPage(0);
     });
 
@@ -164,7 +197,8 @@
             type: "GET",
             data: {
                 page: page,
-                size: pageSize
+                size: pageSize,
+                keyword: $('#searchKeyword').val()
             },
             success: function (data) {
                 renderTable(data.content);
@@ -188,16 +222,30 @@
                 <tr class="app-form-row"
                     data-form-id="${item.formId}"
                     style="cursor:pointer;">
-                    <td><input type="checkbox" class="form-check-input" onclick="event.stopPropagation()"></td>
+                    <td>
+                        <input type="checkbox"
+                            class="form-check-input app-form-check"
+                            data-form-id="${item.formId}"
+                            data-form-name="${item.formName}"
+                            data-is-default="${item.isDefault === true}"
+                            ${selectedFormMap.has(Number(item.formId)) ? 'checked' : ''}
+                            onclick="event.stopPropagation()">
+                    </td>
                     <td>${item.formId}</td>
                     <td>${item.formName}</td>
                     <td>${createdAt ?? ''}</td>
                     <td>
-                        <button class="btn btn-primary btn-sm"
-                            onclick="event.stopPropagation();goEdit(${item.formId})">
-                            수정
-                        </button>
-                        <button type="button" class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteAppForm(${item.formId})">삭제</button>
+                        ${
+                            item.isDefault
+                            ? '<span class="badge bg-secondary">기본 서식</span>'
+                            : `
+                                <button class="btn btn-primary btn-sm"
+                                    onclick="event.stopPropagation();goEdit(${item.formId})">
+                                    수정
+                                </button>
+                                <button type="button" class="btn btn-danger btn-sm" onclick="event.stopPropagation();deleteAppForm(${item.formId})">삭제</button>
+                            `
+                        }
                         <button
                             type="button"
                             class="btn btn-sm btn-outline-primary open-line-modal"
@@ -229,6 +277,127 @@
     }
 
     // 행 클릭 시 상세 페이지로 이동
+    function getSelectedForms() {
+        return Array.from(selectedFormMap.values());
+    }
+
+    function updateSelectedFormMap(checkbox) {
+        const formId = Number($(checkbox).data('form-id'));
+        if (checkbox.checked) {
+            selectedFormMap.set(formId, {
+                formId: formId,
+                formName: $(checkbox).data('form-name'),
+                isDefault: $(checkbox).data('is-default') === true || $(checkbox).data('is-default') === 'true'
+            });
+        } else {
+            selectedFormMap.delete(formId);
+        }
+    }
+
+    function renderSelectedFormList() {
+        const targets = modalFormTargets.length > 0 ? modalFormTargets : getSelectedForms();
+        if (targets.length === 0) {
+            $('#selectedFormList').html('<span class="text-muted">선택된 결재 서식이 없습니다.</span>');
+            return;
+        }
+
+        $('#selectedFormList').html(
+            targets.map(item => `<span class="badge bg-secondary me-1 mb-1">${item.formName}</span>`).join('')
+        );
+    }
+
+    $(document).on('change', '.app-form-check', function () {
+        updateSelectedFormMap(this);
+    });
+
+    $(document).on('change', '#selectAllForms', function () {
+        $('.app-form-check').each(function () {
+            this.checked = $('#selectAllForms').prop('checked');
+            updateSelectedFormMap(this);
+        });
+    });
+
+    $('#bulkDeleteBtn').on('click', function () {
+        const selectedForms = getSelectedForms();
+        const deletableForms = selectedForms.filter(item => !item.isDefault);
+
+        if (selectedForms.length === 0) {
+            alert('삭제할 결재 서식을 선택해주세요.');
+            return;
+        }
+
+        if (deletableForms.length !== selectedForms.length) {
+            alert('기본 결재 서식은 삭제할 수 없어 제외됩니다.');
+        }
+
+        if (deletableForms.length === 0) {
+            return;
+        }
+
+        if (!confirm(`${deletableForms.length}개 결재 서식을 삭제하시겠습니까?`)) {
+            return;
+        }
+
+        $.ajax({
+            url: '/admin/approval/deleteAppForms',
+            type: 'DELETE',
+            contentType: 'application/json; charset=UTF-8',
+            data: JSON.stringify({
+                formIds: deletableForms.map(item => item.formId)
+            }),
+            success: function () {
+                alert('삭제되었습니다.');
+                selectedFormMap.clear();
+                loadPage(currentPage);
+            },
+            error: function () {
+                alert('삭제 실패');
+            }
+        });
+    });
+
+    $('#bulkLineTemplateBtn').on('click', function () {
+        const selectedForms = getSelectedForms();
+
+        if (selectedForms.length === 0) {
+            alert('결재선을 설정할 결재 서식을 선택해주세요.');
+            return;
+        }
+
+        currentFormId = null;
+        selectedTemplateId = null;
+        modalFormTargets = selectedForms;
+
+        loadLineTemplates();
+        renderSelectedFormList();
+
+        const modal =
+            new bootstrap.Modal(
+                document.getElementById('lineTemplateModal')
+            );
+
+        modal.show();
+    });
+
+    $('#searchBtn').on('click', function () {
+        selectedFormMap.clear();
+        loadPage(0);
+    });
+
+    $('#resetSearchBtn').on('click', function () {
+        $('#searchKeyword').val('');
+        selectedFormMap.clear();
+        loadPage(0);
+    });
+
+    $('#searchKeyword').on('keydown', function (e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            selectedFormMap.clear();
+            loadPage(0);
+        }
+    });
+
     $(document).on(
         'click',
         '.app-form-row',
@@ -297,7 +466,17 @@
 
             function(data){
 
-                let html = '';
+                let html = `
+                    <label class="list-group-item">
+                        <input
+                            type="radio"
+                            name="lineTemplate"
+                            value=""
+                            class="form-check-input me-2"
+                            ${!selectedTemplateId ? 'checked' : ''}>
+                        선택 안 함
+                    </label>
+                `;
 
                 data.forEach(item => {
 
@@ -336,6 +515,8 @@
                     $(
                         `input[name="lineTemplate"][value="${selectedTemplateId}"]`
                     ).trigger('change');
+                } else {
+                    renderNoLineTemplatePreview();
                 }
             }
         );
@@ -353,8 +534,13 @@
 
             currentFormId = $(this).data('form-id'); // 
             selectedTemplateId = $(this).data('line-template-id'); // 선택된 결재선 서식 id 
+            modalFormTargets = [{
+                formId: Number(currentFormId),
+                formName: $(this).closest('tr').find('td').eq(2).text()
+            }];
 
             loadLineTemplates();
+            renderSelectedFormList();
 
             const modal =
                 new bootstrap.Modal(
@@ -427,7 +613,7 @@
                 }
 
                 html += `
-                    <span class="badge bg-primary me-1 mb-1">
+                    <span class="badge ${step.stepOrder === 0 ? 'bg-secondary' : 'bg-primary'} me-1 mb-1">
 
                         ${label}
 
@@ -444,12 +630,27 @@
         $('#lineTemplatePreview').html(html);
     }
 
+    // 결재선 서식을 연결하지 않는 상태를 미리보기 영역에 표시
+    function renderNoLineTemplatePreview(){
+        $('#lineTemplatePreview').html(`
+            <div class="text-muted">
+                연결된 결재선 서식이 없습니다.
+            </div>
+        `);
+    }
+
     // 결재선 서식 선택 변경 이벤트
     $(document).on(
         'change',
         'input[name="lineTemplate"]',
         function(){
             const templateId = $(this).val();
+
+            if(!templateId){
+                renderNoLineTemplatePreview();
+                return;
+            }
+
             $.get(
                 `/admin/approval/appLineFormDetailData/${templateId}`,
 
@@ -469,8 +670,29 @@
                 $('input[name="lineTemplate"]:checked')
                     .val();
 
-            if(!templateId){
-                alert('결재선을 선택하세요.');
+            const isBulkMode =
+                currentFormId === null
+                && modalFormTargets.length > 0;
+
+            if (isBulkMode) {
+                $.ajax({
+                    url: '/admin/approval/appForms/lineTemplate',
+                    type: 'PUT',
+                    contentType: 'application/json; charset=UTF-8',
+                    data: JSON.stringify({
+                        formIds: modalFormTargets.map(item => item.formId),
+                        templateId: templateId
+                    }),
+                    success: function(){
+                        alert('결재선 일괄 설정 저장 완료');
+                        $('#lineTemplateModal').modal('hide');
+                        selectedFormMap.clear();
+                        location.reload();
+                    },
+                    error: function(){
+                        alert('결재선 일괄 설정 실패');
+                    }
+                });
                 return;
             }
 
@@ -483,7 +705,7 @@
                 },
 
                 success: function(){
-                    alert('결재선 적용 완료');
+                    alert('결재선 설정 저장 완료');
                     $('#lineTemplateModal').modal('hide');
                     location.reload();
                 }

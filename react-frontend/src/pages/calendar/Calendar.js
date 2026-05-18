@@ -1,3 +1,17 @@
+/**
+ * @FileName : Calendar.js
+ * @Description : 사원용 캘린더 화면
+ *                - 개인/부서/전사 일정 조회 및 관리
+ * @Author : 정준하
+ * @Date : 2026. 05. 01
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.01    정준하        최초 생성 및 FullCalendar 기본 기능 구현
+ * @ 2026.05.14    김다솜        온보딩 카테고리 일정 전용 스타일(onboardingCalendarStyle) 적용
+ */
+
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 // CoreUI 
@@ -14,6 +28,9 @@ import CalendarDetail from './CalendarDetail';
 
 import { request } from 'src/helpers/axios_helper';
 import { useOutletContext } from 'react-router-dom';
+
+// 온보딩 일정 전용 스타일 임포트
+import { onboardingCalendarStyle } from 'src/styles/js/onboarding/onboardingCalendarStyle';
 
 // 풀캘린더
 import FullCalendar from '@fullcalendar/react';
@@ -108,6 +125,18 @@ const Calendar = () => {
     // 일정 입력 실시간 반영 노출
     // 등록 전 입력 중인 제목/시간을 캘린더에 임시로 보여줌
     const [draftEvent, setDraftEvent] = useState(null);
+
+    // 온보딩 전용 스타일(onboardingCalendarStyle.js)을 document head에 동적으로 주입
+    useEffect(() => {
+        const styleTag = document.createElement('style');
+        styleTag.innerHTML = onboardingCalendarStyle.css;
+        document.head.appendChild(styleTag);
+
+        // 컴포넌트 언마운트 시 스타일 제거
+        return () => {
+            document.head.removeChild(styleTag);
+        };
+    }, []);
 
     // 캘린더 일정 클릭 처리
     // 기존 일정은 페이지 이동 대신 읽기 전용 상세 팝업으로 열림.
@@ -214,10 +243,13 @@ const Calendar = () => {
         end: endTime,
         allDay: schedule.isAllDay,
 
-        // 개인 종일 일정은 기본 점 일정이 아니라 바 형태로 보여주기 위해 별도 클래스 처리.
+        // 개인 종일 일정 스타일과 온보딩 일정 스타일을 함께 적용한다.
         classNames: [
             schedule.isAllDay && (schedule.type || 'PERSONAL') === 'PERSONAL'
                 ? 'calendar-event-all-day-personal'
+                : '',
+            schedule.category === 'ONBOARDING'
+                ? onboardingCalendarStyle.eventClass
                 : '',
         ].filter(Boolean),
 

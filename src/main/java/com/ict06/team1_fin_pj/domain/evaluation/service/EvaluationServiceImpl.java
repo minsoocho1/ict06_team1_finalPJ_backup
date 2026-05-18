@@ -28,6 +28,8 @@ import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuestionType;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizQuestionEntity;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizResultEntity;
+import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizGenerationRuleEntity;
+import com.ict06.team1_fin_pj.domain.evaluation.repository.QuizGenerationRuleRepository;
 import com.ict06.team1_fin_pj.domain.evaluation.repository.EvaluationQuestionRepository;
 import com.ict06.team1_fin_pj.domain.evaluation.repository.EvaluationResultRepository;
 import com.ict06.team1_fin_pj.domain.notification.service.NotificationServiceImpl;
@@ -58,6 +60,7 @@ public class EvaluationServiceImpl {
     private final EmpRepository empRepository;
     private final RestTemplate restTemplate;
     private final NotificationServiceImpl notificationService;
+    private final QuizGenerationRuleRepository quizGenerationRuleRepository;
 
     //학습 카테고리별 퀴즈 문항 조회
     public List<EvaluationQuestionResponse> getQuizQuestionsByCategory(String categoryName) {
@@ -81,6 +84,14 @@ public class EvaluationServiceImpl {
                         .build()
                 )
                 .toList();
+    }
+
+    // 카테고리별 합격 기준 점수 가져오기 (기본값 80)
+    private int getPassScore(String categoryName) {
+        return quizGenerationRuleRepository
+                .findFirstByCategoryNameAndIsActiveTrueOrderByRuleIdDesc(categoryName)
+                .map(rule -> rule.getPassScore() != null ? rule.getPassScore() : 80)
+                .orElse(80);
     }
 
     // 채점 및 결과 저장
@@ -111,7 +122,8 @@ public class EvaluationServiceImpl {
                             : 0)
                     .sum();
 
-            boolean previouslyPassed = previousMaxScore > 0 && previousTotalScore >= (previousMaxScore * 0.8);
+            int passScore = getPassScore(request.getCategoryName());
+            boolean previouslyPassed = previousMaxScore > 0 && previousTotalScore >= (previousMaxScore * (passScore / 100.0));
 
             if (previouslyPassed) {
                 throw new RuntimeException("이미 제출한 평가입니다.");
@@ -241,7 +253,8 @@ public class EvaluationServiceImpl {
 
         }
 
-        boolean passed = totalScore >= (maxScore * 0.8);
+        int passScore = getPassScore(request.getCategoryName());
+        boolean passed = totalScore >= (maxScore * (passScore / 100.0));
         sendQuizSubmitNotification(request.getEmpNo(), request.getCategoryName(), totalScore, maxScore, passed);
 
         return EvaluationSubmitResponse.builder()
@@ -303,7 +316,8 @@ public class EvaluationServiceImpl {
                             .sum();
 
                     // 3-3. 통과 여부 판단(80점 기준)
-                    boolean passed = maxScore > 0 && totalScore >= maxScore * 0.8;
+                    int passScore = getPassScore(category);
+                    boolean passed = maxScore > 0 && totalScore >= maxScore * (passScore / 100.0);
 
                     // 3-4. 결과 DTO 생성
                     return EvaluationCategoryResultResponse.builder()
@@ -371,7 +385,8 @@ public class EvaluationServiceImpl {
                         : 0)
                 .sum();
 
-        boolean passed = maxScore > 0 && totalScore >= maxScore * 0.8;
+        int passScore = getPassScore(categoryName);
+        boolean passed = maxScore > 0 && totalScore >= maxScore * (passScore / 100.0);
 
         // 3. 최종 DTO 생성 및 반환
         return EvaluationDetailResponse.builder()
@@ -404,4 +419,3 @@ public class EvaluationServiceImpl {
         return answerNo + ". " + optionText;
     }
 }
-

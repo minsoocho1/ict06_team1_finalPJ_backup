@@ -1,22 +1,26 @@
-/**
- * @author : 송영은
- * description : 샘플 페이지 전용 엔티티
- *  * 실제로 필요한 기능이 아니라 리액트를 이용한 MVC 패턴 구현 이해를 위한 예제 코드입니다.
- *  그렇지만 실제로 사용할 APP_FORM 테이블과 연결된 entity이니 주의해주세요!
- * ========================================
- * DATE      AUTHOR      NOTE
- * 26.04.29  송영은       최초 생성
- **/
-
 package com.ict06.team1_fin_pj.test.entity;
 
 import com.ict06.team1_fin_pj.common.dto.BaseTimeEntity;
-import jakarta.persistence.*;
+import com.ict06.team1_fin_pj.domain.approval.entity.AppLineTemplateEntity;
+import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
+import jakarta.persistence.ForeignKey;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+/**
+ * 전자결재 샘플 화면용 엔티티입니다.
+ * 실제 운영 코드는 AppFormEntity를 사용하고, 이 클래스는 MVC/QueryDSL 예제 확인용으로만 사용합니다.
+ */
 @Entity
 @Table(name = "APP_FORM")
 @Getter
@@ -35,4 +39,15 @@ public class TestEntity extends BaseTimeEntity {
 
     @Column(columnDefinition = "TEXT")
     private String template;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(
+            name = "line_template_id",
+            foreignKey = @ForeignKey(name = "fk_app_form_line_template")
+    )
+    private AppLineTemplateEntity lineTemplate;
+
+    @Builder.Default
+    @Column(name = "is_default", nullable = false)
+    private Boolean isDefault = false;
 }

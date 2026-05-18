@@ -93,9 +93,10 @@ public class AdApprovalController {
     @GetMapping("/getAppForms")
     @ResponseBody
     public Page<AppFormListDto> getAppForms(@RequestParam(defaultValue = "0") int page,
-                                            @RequestParam(defaultValue = "10") int size) {
+                                            @RequestParam(defaultValue = "10") int size,
+                                            @RequestParam(required = false) String keyword) {
         System.out.println("[AdApprovalController] - getAppForms()");
-        return service.getAppFormsWithPaging(page, size);
+        return service.getAppFormsWithPaging(page, size, keyword);
     }
 
     // 서식 1건 상세 보기
@@ -123,10 +124,41 @@ public class AdApprovalController {
     @ResponseBody
     public ResponseEntity<?> applyLineTemplate(
             @PathVariable Integer formId,
-            @RequestParam Integer templateId
+            @RequestParam(required = false) String templateId
     ) {
         System.out.println("[AdApprovalController] - applyLineTemplate()");
-        service.applyLineTemplate(formId,templateId);
+
+        // templateId가 비어 있으면 결재 서식과 결재선 서식의 연결을 해제합니다.
+        // 관리자가 모달에서 "선택 안 함"을 고른 경우 이 경로를 사용합니다.
+        Integer parsedTemplateId =
+                templateId == null || templateId.isBlank()
+                        ? null
+                        : Integer.valueOf(templateId);
+
+        service.applyLineTemplate(formId, parsedTemplateId);
+        return ResponseEntity.ok().build();
+    }
+
+    // 여러 결재 서식에 같은 결재선 서식을 일괄 적용하거나 연결을 해제합니다.
+    @PutMapping("/appForms/lineTemplate")
+    @ResponseBody
+    public ResponseEntity<?> applyLineTemplateToForms(
+            @RequestBody Map<String, Object> body
+    ) {
+        System.out.println("[AdApprovalController] - applyLineTemplateToForms()");
+
+        List<Integer> formIds = ((List<?>) body.get("formIds"))
+                .stream()
+                .map(value -> Integer.valueOf(value.toString()))
+                .toList();
+
+        Object templateIdValue = body.get("templateId");
+        Integer templateId =
+                templateIdValue == null || templateIdValue.toString().isBlank()
+                        ? null
+                        : Integer.valueOf(templateIdValue.toString());
+
+        service.applyLineTemplateToForms(formIds, templateId);
         return ResponseEntity.ok().build();
     }
 
@@ -136,6 +168,20 @@ public class AdApprovalController {
     public ResponseEntity<?> deleteAppForm(@PathVariable int formId) {
         System.out.println("[AdApprovalController] - deleteAppForm()");
         service.deleteAppForm(formId);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/deleteAppForms")
+    @ResponseBody
+    public ResponseEntity<?> deleteAppForms(@RequestBody Map<String, Object> body) {
+        System.out.println("[AdApprovalController] - deleteAppForms()");
+
+        List<Integer> formIds = ((List<?>) body.get("formIds"))
+                .stream()
+                .map(value -> Integer.valueOf(value.toString()))
+                .toList();
+
+        service.deleteAppForms(formIds);
         return ResponseEntity.ok().build();
     }
 
@@ -234,11 +280,12 @@ public class AdApprovalController {
     @ResponseBody
     public Page<AppLineFormListDto> getAppLineForms(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword
     ) {
         System.out.println("[AdApprovalController] - getAppLineForms()");
 
-        return service.getAppLineFormsWithPaging(page, size);
+        return service.getAppLineFormsWithPaging(page, size, keyword);
     }
 
     // 전자 결재선 서식 1건 상세 조회
@@ -248,6 +295,7 @@ public class AdApprovalController {
             Model model
     ) {
         System.out.println("[AdApprovalController] - appLineFormDetail()");
+        model.addAttribute("activeTab", "appLineForm"); // 서브 헤더의 어떤 탭(appForm, appLineForm) 활성화 시킬 지 전달
         model.addAttribute(
                 "detail",
                 service.selectAppLineForm(id)
@@ -278,6 +326,7 @@ public class AdApprovalController {
             Model model
     ) {
         System.out.println("[AdApprovalController] - editAppLineForm()");
+        model.addAttribute("activeTab", "appLineForm"); // 서브 헤더의 어떤 탭(appForm, appLineForm) 활성화 시킬 지 전달
 
         model.addAttribute(
                 "templateId",

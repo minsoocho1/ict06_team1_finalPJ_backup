@@ -18,7 +18,7 @@
 
 import os
 import json
-import requests
+from groq import Groq
 from fastapi import APIRouter
 from database import (
     fetch_employee_info,
@@ -67,9 +67,8 @@ mock_roadmap = [
 
 @router.get("/roadmap/{emp_no}")
 def get_roadmap(emp_no: str):
-    # GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
     GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-    print(f"🔑 GROQ KEY: {GROQ_API_KEY[:10] if GROQ_API_KEY else 'NONE'}")
+    client = Groq(api_key=GROQ_API_KEY)
 
     try:
         # 1. 사원 정보 조회
@@ -125,73 +124,38 @@ def get_roadmap(emp_no: str):
    - 심화교육
    - AI 활용 교육
 
-반드시 아래 JSON 형식으로만 출력해. 다른 텍스트 없이 JSON만:
-[
-{{"category_name": "필수이수교육", "items": [{{"item_title": "강의제목", "content_id": 1}}]}},
-{{"category_name": "직무교육 (백엔드)", "items": [{{"item_title": "강의제목", "content_id": 2}}]}},
-{{"category_name": "직무교육 (프론트엔드)", "items": [{{"item_title": "강의제목", "content_id": 3}}]}},
-{{"category_name": "심화교육", "items": [{{"item_title": "강의제목", "content_id": 4}}]}},
-{{"category_name": "AI 활용 교육", "items": [{{"item_title": "강의제목", "content_id": 5}}]}}
-]
+반드시 아래 키를 가진 JSON 객체 형식으로만 출력해. 다른 텍스트 없이 JSON만:
+{
+  "recommended_roadmap": [
+    {"category_name": "필수이수교육", "items": [{"item_title": "강의제목", "content_id": 1}]},
+    {"category_name": "직무교육 (백엔드)", "items": [{"item_title": "강의제목", "content_id": 2}]},
+    {"category_name": "직무교육 (프론트엔드)", "items": [{"item_title": "강의제목", "content_id": 3}]},
+    {"category_name": "심화교육", "items": [{"item_title": "강의제목", "content_id": 4}]},
+    {"category_name": "AI 활용 교육", "items": [{"item_title": "강의제목", "content_id": 5}]}
+  ]
+}
 """
 
-        # 5. groq API 호출 설정
-        target_model = "llama-3.3-70b-versatile"
-        url = "https://api.groq.com/openai/v1/chat/completions"
-        
-        # # 5. Gemini API 호출 설정
-        # target_model = "gemini-2.0-flash"
-        # url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={GEMINI_API_KEY}"
-        
-        # # 요청 데이터 - Gemini 형식
-        # payload = {
-        #     "contents": [{"parts": [{"text": prompt_text}]}],
-        #     # JSON 응답 강제
-        #     "generationConfig": {
-        #         "response_mime_type": "application/json",
-        #         "temperature": 0.2
-        #     }  
-        # }
-        
-        # 요청 데이터 - Groq 형식
-        payload = {
-            "model": target_model,
-            "messages": [
+        # API 호출
+        print(f"\n ===== AI 요청 시작(사번: {emp_no}) =====")
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "당신은 온보딩 로드맵 설계 전문가입니다. 반드시 'recommended_roadmap' 키를 가진 JSON 객체 형식으로 답변하세요."
+                },
                 {
                     "role": "user",
                     "content": prompt_text
                 }
             ],
-            "temperature": 0.2
-        }
-        
-        headers = {
-            "Authorization": f"Bearer {GROQ_API_KEY}",
-            "Content-Type": "application/json"
-        }
+            temperature=0.2,
+            response_format={"type": "json_object"}
+        )
 
-        # API 호출
-        print(f"\n ===== AI 요청 시작(사번: {emp_no}) =====")
-        # response = requests.post(url, json=payload, timeout=10)
-        response = requests.post(url, json=payload, headers=headers, timeout=30)
-        print(f"STATUS: {response.status_code}")
-        print(f"RESPONSE: {response.text}")
-
-        if response.status_code == 429:
-            raise Exception("AI_QUOTA_LIMIT")
-            
-        result = response.json()
-        
-        if "choices" not in result:
-            raise Exception("groq: API_LIMIT_REACHED")
-        # if "candidates" not in result:
-        #     raise Exception("Gemini: API_LIMIT_REACHED")
-        
-        # # 6. Gemini AI 응답 파싱
-        # ai_text = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-        
-        # 6. groq AI 응답 파싱
-        ai_text = result["choices"][0]["message"]["content"].strip()
+        # 6. AI 응답 파싱
+        ai_text = response.choices[0].message.content.strip()
         
         if ai_text.startswith("```"):
             ai_text = ai_text.split("```")[1]
@@ -199,8 +163,14 @@ def get_roadmap(emp_no: str):
                 ai_text = ai_text[4:]
         ai_text = ai_text.strip()
         
-        roadmap_items = json.loads(ai_text)
-        print(f"AI 응답 원문: {ai_text}")
+        # JSON 객체에서 리스트 추출
+        result_json = json.loads(ai_text)
+        if isinstance(result_json, dict) and "recommended_roadmap" in result_json:
+            roadmap_items = result_json["recommended_roadmap"]
+        else:
+            roadmap_items = result_json # fallback
+        
+        print(f"🤖 AI 생성 로드맵 (항목 수: {len(roadmap_items)}개 카테고리)")
             
         # 7. DB에 최종 저장 및 결과 반환
         save_success = save_ai_roadmap(

@@ -1,7 +1,15 @@
-/* aiSecretary > WriterScreen 화면 전용 문서 본문 섹션 */
-// src/pages/aiSecretary/components/Section.js
-
-// 문서 본문 섹션 : 1. 개요 / 2. 주요 내용 / 4. 후속 계획
+/**
+ * @FileName : Section.js
+ * @Description : aiSecretary 전용 WriterScreen 화면 전용 문서 본문 섹션 컴포넌트
+ *                - 문서 본문 섹션 : 1. 개요 / 2. 주요 내용 / 4. 후속 계획
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일         수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.04.29    송혜진        최초 생성
+ */
 
 import React from "react";
 

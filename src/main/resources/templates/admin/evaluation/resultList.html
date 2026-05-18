@@ -1,11 +1,574 @@
 <!--
     @FileName : resultList.html
-    @Description : 관리자 전체 직원 평가 현황 조회 화면
+    @Description : 관리자 평가 결과 통계 및 이해도 시각화 화면
     @Author : 김다솜
-    @Date : 2026. 05. 11
+    @Date : 2026. 05. 14
     @Modification_History
     @
     @ 수정일자        수정자       수정내용
     @ ----------    ---------    -------------------------------
-    @ 2026.05.11    김다솜        최초 생성
+    @ 2026.05.14    김다솜        최초 생성
+    @ 2026.05.15    김다솜        평가 결과 통계 시각화 구현
 -->
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{/admin/common/head.html :: common_header}">
+    <meta charset="UTF-8">
+    <title id="page_title">평가 결과 통계</title>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<div class="app-wrapper">
+    <th:block th:replace="~{/admin/common/header}"></th:block>
+    <th:block th:replace="~{/admin/common/sidebar}"></th:block>
+
+    <main class="app-main">
+        <div class="app-content">
+            <div class="container-fluid p-4" style="max-width: 1260px; margin: 0 auto;">
+                <div class="row mb-3">
+                    <div class="col">
+                        <h3>평가 결과 통계</h3>
+                        <p class="text-muted mb-0">제출 현황, 평균 이해도, 가중 평균, 카테고리별 기준점 비교를 확인합니다.</p>
+                    </div>
+                    <div class="col text-end d-flex justify-content-end align-items-start gap-2">
+                        <button type="button" class="btn btn-success" onclick="downloadCsv()">
+                            CSV 내보내기
+                        </button>
+                        <a th:href="@{/admin/evaluation/main}" class="btn btn-outline-secondary">평가 메인</a>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">평가 제출 건수</div>
+                                <div class="fs-3 fw-semibold" th:text="${analytics.submissionCount}">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">참여 인원</div>
+                                <div class="fs-3 fw-semibold" th:text="${analytics.participantCount}">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">평균 이해도 점수</div>
+                                <div class="fs-3 fw-semibold" th:text="${#numbers.formatDecimal(analytics.averageScoreRate, 1, 1) + '%'}">0.0%</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">가중 평균 이해도</div>
+                                <div class="fs-3 fw-semibold" th:text="${#numbers.formatDecimal(analytics.weightedAverageScoreRate, 1, 1) + '%'}">0.0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-12">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="row align-items-center">
+                                    <!-- 좌측: 레이더 차트 -->
+                                    <div class="col-lg-8">
+                                        <h5 class="card-title mb-3">종합 역량 맵 (이해도 vs 기준점)</h5>
+                                        <div style="position: relative; height: 400px;">
+                                            <canvas id="categoryScoreChart"></canvas>
+                                        </div>
+                                    </div>
+                                    <!-- 우측: AI 분석 코멘트 -->
+                                    <div class="col-lg-4 border-start py-2">
+                                        <div class="d-flex align-items-center mb-3">
+                                            <span class="badge bg-primary-subtle text-primary me-2"><i class="bi bi-robot"></i></span>
+                                            <h5 class="mb-0">AI 분석 코멘트</h5>
+                                        </div>
+                                        <div id="aiAnalysisComment" class="p-3 bg-light rounded-3" style="min-height: 280px; line-height: 1.7; font-size: 0.95rem;">
+                                            <div class="d-flex flex-column align-items-center justify-content-center h-100 py-5">
+                                                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                                    <span class="visually-hidden">Loading...</span>
+                                                </div>
+                                                <div class="text-muted fw-medium">AI가 데이터를 심층 분석하고 있습니다...</div>
+                                            </div>
+                                        </div>
+                                        <div class="mt-3 small text-muted text-end">
+                                            * 카테고리별 목표 격차 기반 자동 분석
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body table-responsive">
+                        <h5 class="card-title mb-3">카테고리별 기준 비교</h5>
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                            <tr>
+                                <th>카테고리</th>
+                                <th>기준 점수(%)</th>
+                                <th>문항 수</th>
+                                <th>만점</th>
+                                <th>합격 기준</th>
+                                <th>가중치</th>
+                                <th>평균 점수</th>
+                                <th>격차</th>
+                                <th style="width: 80px;">관리</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="stat : ${analytics.categoryStats}">
+                                <td th:text="${stat.categoryName}">개발</td>
+                                <td>
+                                    <span class="badge bg-secondary" th:text="${stat.passScore + '%'}">80%</span>
+                                </td>
+                                <td th:text="${stat.questionCount}">5</td>
+                                <td th:text="${stat.totalScore + '점'}">50점</td>
+                                <td th:text="${stat.passScore + '% (' + stat.requiredScore + '점)'}">80% (40점)</td>
+                                <td th:text="${stat.weightPercent + '%'}">100%</td>
+                                <td th:text="${#numbers.formatDecimal(stat.averageScoreRate, 1, 1) + '%'}">82.5%</td>
+                                <td>
+                                    <span th:classappend="${stat.scoreGap >= 0} ? 'text-success fw-semibold' : 'text-danger fw-semibold'"
+                                          th:text="${#numbers.formatDecimal(stat.scoreGap, 1, 1) + '%'}">+2.5%</span>
+                                </td>
+                                <td>
+                                    <button class="btn btn-sm btn-outline-primary"
+                                            th:onclick="openEditModal([[${stat.categoryName}]], [[${stat.passScore}]], [[${stat.weightPercent}]])">
+                                        수정
+                                    </button>
+                                </td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(analytics.categoryStats)}">
+                                <td colspan="9" class="text-center text-muted">집계된 카테고리 통계가 없습니다.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-5">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">전체 통과 분포</h5>
+                                <div style="position: relative; height: 340px;">
+                                    <canvas id="categoryPassChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">문항별 이해도 하위 구간</h5>
+                                <div style="position: relative; height: 360px;">
+                                    <canvas id="questionWeaknessChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm">
+                    <div class="card-body table-responsive">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="card-title mb-0">직원별 평가 성과</h5>
+                            <span class="text-muted small">현재 저장된 최신 카테고리별 평가 결과 기준</span>
+                        </div>
+                        <table class="table table-hover align-middle mb-0">
+                            <thead>
+                            <tr>
+                                <th style="min-width: 90px;">사번</th>
+                                <th style="min-width: 120px;">이름</th>
+                                <th style="min-width: 120px;">부서</th>
+                                <th style="min-width: 90px;">평가 수</th>
+                                <th style="min-width: 90px;">통과 수</th>
+                                <th style="min-width: 130px;">평균 점수</th>
+                                <th style="min-width: 150px;">최근 제출 시각</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="employee : ${analytics.employeeStats}">
+                                <td th:text="${employee.empNo}">20260001</td>
+                                <td th:text="${employee.employeeName}">홍길동</td>
+                                <td th:text="${employee.departmentName}">인사팀</td>
+                                <td th:text="${employee.evaluationCount}">3</td>
+                                <td th:text="${employee.passCount}">2</td>
+                                <td th:text="${#numbers.formatDecimal(employee.averageScoreRate, 1, 1) + '%'}">80.0%</td>
+                                <td th:text="${employee.latestSubmittedAt != null ? #temporals.format(employee.latestSubmittedAt, 'yyyy-MM-dd HH:mm') : '-'}">2026-05-14 09:00</td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(analytics.employeeStats)}">
+                                <td colspan="7" class="text-center text-muted">집계된 평가 결과가 없습니다.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <th:block th:replace="~{/admin/common/footer}"></th:block>
+</div>
+
+<!-- 기준 수정 모달 -->
+<div class="modal fade" id="criteriaModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">평가 기준 수정</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="criteriaForm">
+                    <input type="hidden" id="editCategoryName">
+                    <div class="mb-3">
+                        <label class="form-label">카테고리</label>
+                        <input type="text" id="displayCategoryName" class="form-control bg-light" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">합격 기준 점수 (%)</label>
+                        <input type="number" id="editPassScore" class="form-control" min="0" max="100" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">가중치 (%)</label>
+                        <input type="number" id="editWeight" class="form-control" min="0" max="300" required>
+                        <div class="form-text">가중치 100%가 기본(1.0)입니다.</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                <button type="button" class="btn btn-primary" onclick="updateCriteria()">저장하기</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<th:block th:replace="~{/admin/common/commonJs}"></th:block>
+
+<!-- Chart.js 라이브러리 추가 (UMD 버전으로 전역 Chart 객체 보장) -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.js"></script>
+
+<script th:inline="javascript">
+    let criteriaModal;
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // 모달 초기화 안전 처리
+        const modalEl = document.getElementById('criteriaModal');
+        if (modalEl && typeof bootstrap !== 'undefined') {
+            criteriaModal = new bootstrap.Modal(modalEl);
+        } else {
+            console.warn("Bootstrap library or Modal element missing.");
+        }
+
+        // Chart.js 로드 확인 로그
+        if (typeof Chart === 'undefined') {
+            console.error("Critical: Chart.js library failed to load. Please check your internet connection or CDN link.");
+            return;
+        }
+
+        const categoryStats = /*[[${analytics.categoryStats}]]*/ [];
+        const questionStats = /*[[${analytics.questionStats}]]*/ [];
+        const analytics = /*[[${analytics}]]*/ {};
+
+        const categoryLabels = categoryStats.map((item) => `${item.categoryName} (${item.submissionCount}건)`);
+        const categoryAverageScores = categoryStats.map((item) => item.averageScoreRate);
+        const categoryPassScores = categoryStats.map((item) => item.passScore);
+
+        const totalPassCount = Math.round(analytics.submissionCount * (analytics.passRate / 100));
+        const totalFailCount = analytics.submissionCount - totalPassCount;
+
+        // 방사형 차트 배경 색상 영역(Color Zones) 플러그인 정의
+        const radarBackgroundZones = {
+            id: 'radarBackgroundZones',
+            beforeDraw: (chart) => {
+                const { ctx, scales: { r } } = chart;
+                if (!r || !r.drawingArea) return;
+                const centerX = r.xCenter;
+                const centerY = r.yCenter;
+                const outerRadius = r.drawingArea;
+
+                // 수준별 색상 영역 정의 (뒤에서부터 그리기 위해 큰 값부터 설정)
+                const zones = [
+                    { limit: 100, color: 'rgba(46, 184, 92, 0.07)' }, // 탁월 (80-100)
+                    { limit: 80, color: 'rgba(249, 177, 21, 0.07)' },  // 우수 (60-80)
+                    { limit: 60, color: 'rgba(206, 210, 216, 0.15)' }  // 보통 (0-60)
+                ];
+
+                ctx.save();
+                zones.forEach(zone => {
+                    ctx.beginPath();
+                    ctx.fillStyle = zone.color;
+                    const radius = (zone.limit / 100) * outerRadius;
+                    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
+                    ctx.fill();
+                });
+                ctx.restore();
+            }
+        };
+
+        const questionLabels = questionStats.map((item) => {
+            const text = item.questionText || '';
+            return text.length > 22 ? text.slice(0, 22) + '...' : text;
+        });
+        const questionAverageScores = questionStats.map((item) => item.averageScoreRate);
+
+        new Chart(document.getElementById('categoryScoreChart'), {
+            type: 'radar',
+            plugins: [radarBackgroundZones], // 커스텀 배경 플러그인 추가
+            data: {
+                labels: categoryLabels,
+                datasets: [
+                    {
+                        label: '평균 점수(%)',
+                        data: categoryAverageScores,
+                        backgroundColor: 'rgba(50, 31, 219, 0.15)',
+                        borderColor: 'rgba(50, 31, 219, 0.8)',
+                        pointBackgroundColor: 'rgba(50, 31, 219, 1)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: '#321fdb',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.1, // 부드러운 곡선 효과
+                        pointRadius: 4
+                    },
+                    {
+                        label: '합격 기준(%)',
+                        data: categoryPassScores,
+                        backgroundColor: 'transparent',
+                        borderColor: '#ced2d8',
+                        borderWidth: 1,
+                        borderDash: [5, 5],
+                        pointRadius: 0,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: {
+                        angleLines: {
+                            display: true,
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        },
+                        grid: {
+                            circular: true // 다각형이 아닌 원형 그리드를 사용하여 방사형 느낌 강조
+                        },
+                        suggestedMin: 0,
+                        suggestedMax: 100,
+                        ticks: {
+                            stepSize: 20,
+                            callback: (value) => value + '%',
+                            backdropColor: 'transparent', // 숫자 배경 투명화
+                            font: { size: 10 }
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => ` ${context.dataset.label}: ${context.raw}%`
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 10,
+                        bottom: 30, // 하단선 겹침 방지를 위한 여백 추가
+                        left: 10,
+                        right: 10
+                    }
+                }
+            }
+        });
+
+        new Chart(document.getElementById('categoryPassChart'), {
+            type: 'doughnut',
+            data: {
+                labels: ['통과', '미통과'],
+                datasets: [{
+                    data: [totalPassCount, totalFailCount],
+                    backgroundColor: ['#2eb85c', '#e55353'],
+                    hoverOffset: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            padding: 20,
+                            usePointStyle: true,
+                            font: { size: 12 }
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => ` ${context.label}: ${context.raw}건 (${Math.round(context.raw / analytics.submissionCount * 100)}%)`
+                        }
+                    }
+                },
+                layout: {
+                    padding: {
+                        top: 10,
+                        bottom: 40,
+                        left: 10,
+                        right: 10
+                    }
+                }
+            }
+        });
+
+        new Chart(document.getElementById('questionWeaknessChart'), {
+            type: 'bar',
+            data: {
+                labels: questionLabels,
+                datasets: [{
+                    label: '평균 점수(%)',
+                    data: questionAverageScores,
+                    backgroundColor: '#f59e0b',
+                    borderRadius: 6
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        max: 100,
+                        ticks: {
+                            callback: (value) => value + '%'
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {display: false}
+                }
+            }
+        });
+
+        // AI 분석 코멘트 업데이트 함수 호출
+        updateAiComment(categoryStats, analytics);
+    });
+
+    function updateAiComment(categoryStats, analytics) {
+        const commentEl = document.getElementById('aiAnalysisComment');
+        if (!categoryStats || categoryStats.length === 0) {
+            commentEl.innerHTML = `<p class="text-muted text-center py-5">분석할 평가 데이터가 충분하지 않습니다.</p>`;
+            return;
+        }
+
+        const statsSummary = {
+            averageScore: analytics.averageScoreRate,
+            passRate: analytics.passRate,
+            categories: categoryStats.map(c => ({ name: c.categoryName, gap: c.scoreGap, avg: c.averageScoreRate }))
+        };
+
+        fetch('/admin/evaluation/ai-analysis', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(statsSummary)
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data && data.analysis) {
+                commentEl.innerHTML = `<div class="ai-text">${data.analysis}</div>`;
+            } else {
+                throw new Error("Invalid response");
+            }
+        })
+        .catch(err => {
+            console.error("AI 분석 연동 실패:", err);
+            commentEl.innerHTML = `<p class="text-muted">실시간 AI 분석을 불러오지 못했습니다.</p>`;
+        });
+    }
+
+    function downloadCsv() {
+        const stats = /*[[${analytics.employeeStats}]]*/ [];
+        if (!stats || stats.length === 0) {
+            alert("내보낼 데이터가 없습니다.");
+            return;
+        }
+
+        // CSV 헤더 설정
+        const headers = ["사번", "이름", "부서", "평가 수", "통과 수", "평균 점수", "최근 제출 시각"];
+        
+        // 데이터 행 구성
+        const rows = stats.map(emp => [
+            emp.empNo,
+            `"${emp.employeeName}"`,
+            `"${emp.departmentName}"`,
+            emp.evaluationCount,
+            emp.passCount,
+            `${emp.averageScoreRate}%`,
+            emp.latestSubmittedAt ? emp.latestSubmittedAt.replace('T', ' ').slice(0, 16) : '-'
+        ]);
+
+        let csvContent = "\uFEFF" + headers.join(",") + "\n";
+        rows.forEach(row => { csvContent += row.join(",") + "\n"; });
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = `evaluation_report_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.click();
+    }
+
+    function openEditModal(name, passScore, weight) {
+        document.getElementById('editCategoryName').value = name;
+        document.getElementById('displayCategoryName').value = name;
+        document.getElementById('editPassScore').value = passScore;
+        document.getElementById('editWeight').value = weight;
+        criteriaModal.show();
+    }
+
+    function updateCriteria() {
+        const categoryName = document.getElementById('editCategoryName').value;
+        const passScore = document.getElementById('editPassScore').value;
+        const weightPercent = document.getElementById('editWeight').value;
+        const weight = weightPercent / 100.0;
+
+        const formData = new URLSearchParams();
+        formData.append('categoryName', categoryName);
+        formData.append('passScore', passScore);
+        formData.append('weight', weight);
+
+        fetch('/admin/evaluation/criteria', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData
+        })
+        .then(res => res.json())
+        .then(data => {
+            if(data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('수정 실패: ' + data.message);
+            }
+        })
+        .catch(err => alert('오류가 발생했습니다.'));
+    }
+</script>
+</body>
+</html>

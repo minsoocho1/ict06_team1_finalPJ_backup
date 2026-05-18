@@ -1,64 +1,47 @@
 <!--
-[생성된 서식 테스트]
-생성된 서식이 정상적으로 보이는 지 확인하기 위한 페이지입니다.
+ * @author : 송영은
+ * description : 관리자용 전자결재 - 결재 서식 상세 조회 페이지
+ * ========================================
+ * DATE         AUTHOR      NOTE
+ * 2026-05-01   송영은       최초 생성
+ * 2026-05-14   송영은       셀렉트 박스 필드 및 테이블형 미리보기 레이아웃 추가
 -->
 <!doctype html>
-<html xmlns:th="http://www.thymleaf.org">
-<!--begin::Head-->
+<html xmlns:th="http://www.thymeleaf.org">
 <head th:include="/admin/common/head.html :: common_header">
-    <title id="page_title">전자 결재 서식 상세</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
+    <title id="page_title">전자결재 서식 상세</title>
 </head>
-<!--end::Head-->
-<!--begin::Body-->
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
-<!--begin::App Wrapper-->
 <div class="app-wrapper">
-    <!-- 헤더 시작 -->
     <th:block th:replace="~{/admin/common/header}"></th:block>
-    <!-- 헤더 끝 -->
-
-    <!-- 사이드바 시작-->
     <th:block th:replace="~{/admin/common/sidebar}"></th:block>
-    <!-- 사이드바 끝-->
 
-    <!-- 메인 콘텐츠 시작 -->
     <main class="app-main">
-        <!--전자결재용 서브 헤더 시작-->
         <th:block th:replace="~{/admin/approval/appFormNav}"></th:block>
-        <!--전자결재용 서브 헤더 끝-->
-        <!--begin::App Content-->
+
         <div class="app-content">
-            <!--begin::Container-->
             <div class="container-fluid">
                 <br>
-                <!-- begin::Row-->
                 <div class="row">
-                    <h3>전자 결재 서식 상세</h3>
+                    <h3>전자결재 서식 상세</h3>
                 </div>
-                <!-- end::Row-->
-                <!-- begin::Row-->
+
                 <div class="row">
-                    <!-- 서식 정보 표 시작 -->
                     <table class="table">
                         <tr>
-                            <th>서식 번호</th>
+                            <th style="width: 180px;">서식 번호</th>
                             <td th:text="${form.formId}"></td>
                         </tr>
                         <tr>
-                            <th>서식 명</th>
+                            <th>서식명</th>
                             <td th:text="${form.formName}"></td>
                         </tr>
                         <tr>
                             <th>서식 미리보기</th>
                             <td>
-                                <!--<pre th:text="${form.template}"></pre>-->  <!-- 생성된 서식 미리보기 -->
-                                <!-- <iframe style="width:100%; height:600px;"
-                                        th:attr="srcdoc=${form.template}">
-                                </iframe> -->
                                 <div id="formContainer"></div>
                                 <script th:inline="javascript">
-                                    // renderForm함수 정의 이후 스크립트 실행
-                                    document.addEventListener("DOMContentLoaded", function () {
+                                    document.addEventListener('DOMContentLoaded', function () {
                                         const template = JSON.parse(/*[[${form.template}]]*/ '{}');
                                         renderForm(template);
                                     });
@@ -66,84 +49,110 @@
                             </td>
                         </tr>
                     </table>
-                    <!-- 서식 정보 표 끝 -->
                 </div>
-                <!-- end::Row-->
-                <!-- 목록, 수정, 삭제 버튼 바 시작 -->
+
                 <div class="d-flex justify-content-end gap-2">
                     <a th:href="@{/admin/approval/appFormList}" class="btn btn-secondary">목록</a>
-
                     <a th:href="@{/admin/approval/editAppForm/{formId}(formId=${form.formId})}"
-                       class="btn btn-primary">
+                       class="btn btn-primary"
+                       th:unless="${form.isDefault}">
                         수정
                     </a>
-                    <button type="button" class="btn btn-danger btn-sm" th:onclick="|deleteAppForm(${form.formId})|">삭제</button> <!-- 타임리프에서 js 함수 쓰는 방법 -->
+                    <button type="button"
+                            class="btn btn-danger btn-sm"
+                            th:unless="${form.isDefault}"
+                            th:onclick="|deleteAppForm(${form.formId})|">
+                        삭제
+                    </button>
                 </div>
-                <!-- 목록, 수정, 삭제 버튼 바 끝 -->
             </div>
-            <!--end::Container-->
         </div>
-        <!--end::App Content-->
     </main>
-    <!-- 메인 콘텐츠 끝 -->
-    <!-- 푸터 시작 -->
+
     <th:block th:replace="~{/admin/common/footer}"></th:block>
-    <!-- 푸터 끝 -->
 </div>
-<!--end::App Wrapper-->
-<!--스크립트 시작-->
-<th:block th:replace="~{/admin/common/commonJs}"></th:block> <!-- 공통 사용 스크립트 불러오기-->
-<!-- 각 페이지 별로 필요한 스크립트 작성 혹은 임포트 -->
-<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script> <!-- jQuery -->
-<script src="/js/approval/deleteAppForm.js"></script> <!-- 서식 삭제 함수 -->
+
+<th:block th:replace="~{/admin/common/commonJs}"></th:block>
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+<script src="/js/approval/deleteAppForm.js"></script>
 <script>
-    // DB에 저장된 json 타입 서식을 HTML로 렌더링
+    function escapeHtml(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    /**
+     * 저장된 template JSON을 읽어 관리자 상세 화면용 미리보기 HTML로 렌더링합니다.
+     */
     function renderForm(templateJson) {
-        let html = '';
-
-        const now = new Date().toTimeString().slice(0, 5);// 현재 시각
-        const today = new Date().toISOString().slice(0, 10);// 현재 날짜
-
-        // 서식 제목 가져오기
-        html += `
+        let html = `
             <div class="text-center mb-4">
-                <h3>${templateJson.title}</h3>
+                <h3>${escapeHtml(templateJson.title)}</h3>
             </div>
+            <div class="border-top">
         `;
 
-        // input 태그 유형 따라 가져오기 
-        templateJson.fields.forEach(field => {
-            html += `<div class="input-group mb-3 border-0 p-2 position-relative gap-3 align-items-center">`;
-            html += `<label class="mb-0">${field.label}</label>`;
+        const now = new Date().toTimeString().slice(0, 5);
+        const today = new Date().toISOString().slice(0, 10);
 
-            if(field.type === 'text'){
-                html += `<input type="text" class="form-control" placeholder="${field.placeholder}">`;
+        (templateJson.fields || []).forEach(field => {
+            html += `
+                <div class="row align-items-center py-3 border-bottom">
+                    <div class="col-md-4">
+                        <label class="mb-0 fw-semibold">${escapeHtml(field.label)}</label>
+                        ${field.description ? `<div class="small text-muted">${escapeHtml(field.description)}</div>` : ''}
+                    </div>
+                    <div class="col-md-8">
+            `;
+
+            if (field.type === 'text') {
+                html += `<input type="text" class="form-control" placeholder="${escapeHtml(field.placeholder)}">`;
             }
-            if(field.type === 'date'){
+            if (field.type === 'date') {
                 html += `<input type="date" class="form-control" value="${today}">`;
             }
-            if(field.type === 'number'){
-                html += `<input type="number" class="form-control placeholder="${field.placeholder}">`;
-            } 
-            if(field.type === 'time'){
+            if (field.type === 'number') {
+                html += `<input type="number" class="form-control" placeholder="${escapeHtml(field.placeholder || '0')}">`;
+            }
+            if (field.type === 'time') {
                 html += `<input type="time" class="form-control" value="${now}">`;
             }
-            if(field.type === 'amount'){
-                html += `<input type="number" class="form-control" placeholder="${field.placeholder}">`;
+            if (field.type === 'amount') {
+                const amount = String(field.placeholder || '').replace(/[^\d]/g, '');
+                const formattedAmount = amount ? Number(amount).toLocaleString('ko-KR') + ' 원' : '';
+                html += `<input type="text" class="form-control" inputmode="numeric" placeholder="0 원" value="${formattedAmount}">`;
+            }
+            if (field.type === 'select') {
+                const options = Array.isArray(field.options) ? field.options : [];
+                const optionHtml = options
+                    .map(option => `<option>${escapeHtml(option)}</option>`)
+                    .join('');
+                html += `<select class="form-select">${optionHtml}</select>`;
             }
 
-            html += `</div>`;
+            html += `
+                    </div>
+                </div>
+            `;
         });
 
-        // 첨부파일 사용 필수 시 가져오기 
-        if(templateJson.fileRequired){
-            html += `<input type="file" class="form-control">`;
+        html += '</div>';
+
+        if (templateJson.fileRequired) {
+            html += `
+                <div class="row align-items-center py-3">
+                    <div class="col-md-4 fw-semibold">첨부파일</div>
+                    <div class="col-md-8"><input type="file" class="form-control"></div>
+                </div>
+            `;
         }
 
         $('#formContainer').html(html);
     }
 </script>
-<!--스크립트 끝-->
 </body>
-<!--end::Body-->
 </html>

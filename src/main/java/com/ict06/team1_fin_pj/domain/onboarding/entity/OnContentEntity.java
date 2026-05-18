@@ -25,7 +25,6 @@ import org.hibernate.type.SqlTypes;
 
 import java.util.Collection;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 
 @Entity

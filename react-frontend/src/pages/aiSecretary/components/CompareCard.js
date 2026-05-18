@@ -1,7 +1,15 @@
-/* aiSecretary > 문장 다듬기 화면 전용 원문/ 교정 결과 카드 */
-// src/pages/aiSecretary/components/CompareCard.js
-
-// title, body, accent 여부만 props로 받아 재사용 가능하게 분리함.
+/**
+ * @FileName : CompareCard.js
+ * @Description : aiSecretary 전용 문장 다듬기 화면 전용 원문/ 교정 결과 카드 컴포넌트
+ *                - title, body, accent 여부만 props로 받아 재사용 가능하게 분리
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일         수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.04.29    송혜진        최초 생성
+ */
 
 import React from "react";
 import { C } from "../styles/aiSecretaryTheme";

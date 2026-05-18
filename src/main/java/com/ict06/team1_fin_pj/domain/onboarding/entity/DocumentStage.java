@@ -10,5 +10,5 @@ public enum DocumentStage {
     EMBEDDING,
     EMBED_FAILED,
     APPROVAL_PENDING,
-    REFLECTED
+    PUBLISHED
 }

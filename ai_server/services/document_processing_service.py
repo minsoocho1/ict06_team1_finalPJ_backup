@@ -1,24 +1,50 @@
+#
+#  @FileName : document_processing_service.py
+#  @Description : 문서 본문 추출/청크 분할/벡터 생성 서비스 모듈
+#  @Author : 김다솜
+#  @Date : 2026. 05. 12
+#  @Modification_History
+#  @
+#  @ 수정일자        수정자          수정내용
+#  @ ----------    ---------    -------------------------------
+#  @ 2026.05.12    김다솜        문서 자동 처리 파이프라인 구현, 원격 문서 요청 timeout/User-Agent 보강 및 상단 주석 보강
+#
+
 import hashlib
 import html
 import json
 import math
+import os
 import re
 from io import BytesIO
 from urllib.parse import parse_qs, urlparse
 
 import pdfplumber
 import requests
+from groq import Groq
 from pypdf import PdfReader
 
-from services.ollama_client import summarize_document, suggest_section_title
+from services.ollama_client import summarize_document
 from schemas.document_schema import (
     DocumentChunkResponse,
     DocumentProcessRequest,
     DocumentProcessResponse,
+    DocumentQuestionRequest,
+    DocumentQuestionResponse,
 )
 
 MAX_CHUNK_CHARS = 900
 EMBED_DIMENSION = 256
+REMOTE_CONNECT_TIMEOUT = 10
+REMOTE_READ_TIMEOUT = 90
+REMOTE_REQUEST_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/pdf,text/plain,application/json,*/*",
+}
 
 
 def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
@@ -35,7 +61,7 @@ def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
     if not chunks:
         raise ValueError("청크를 생성할 수 없습니다.")
 
-    preview_text = build_preview_text(cleaned_text)
+    preview_text = build_preview_text(req.title, cleaned_text)
     response_chunks: list[DocumentChunkResponse] = []
     for index, chunk_text in enumerate(chunks, start=1):
         token_count = estimate_token_count(chunk_text)
@@ -62,6 +88,280 @@ def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
     )
 
 
+def answer_document_question(req: DocumentQuestionRequest) -> DocumentQuestionResponse:
+    question = (req.question or "").strip()
+    if not question:
+        raise ValueError("질문 내용을 입력해 주세요.")
+
+    context_chunks = [normalize_text(chunk).strip() for chunk in req.chunks if chunk and chunk.strip()]
+    summary_text = normalize_text((req.summaryPreview or "").strip()) if (req.summaryPreview or "").strip() else ""
+
+    if not context_chunks and not summary_text:
+        raise ValueError("문서 요약 또는 청크가 없어 답변을 생성할 수 없습니다.")
+
+    context_text = "\n\n".join(
+        f"[참고 청크 {index}]\n{chunk[:1200]}"
+        for index, chunk in enumerate(context_chunks[:5], start=1)
+    )
+    reference_links = build_reference_links(req.title, question)
+
+    answer = generate_document_answer(req.title, question, summary_text, context_text, reference_links)
+    return DocumentQuestionResponse(
+        answer=clean_answer_text(answer),
+        usedChunkCount=min(len(context_chunks), 5),
+    )
+
+def generate_document_answer(
+    title: str,
+    question: str,
+    summary_text: str,
+    context_text: str,
+    reference_links: list[tuple[str, str]],
+) -> str:
+    reference_block = format_reference_links(reference_links)
+    prompt = f"""
+You are an onboarding document study assistant.
+Use the document summary and reference chunks below as the primary evidence.
+When the document evidence is thin, you may add only the official external reference URLs provided below.
+Do not invent missing details. Focus on procedures, principles, cautions, and practical checkpoints.
+Always answer in Korean.
+
+Answer rules:
+1. Answer the user's actual question first. Avoid broad textbook explanations unless they directly help answer the question.
+2. If the question asks about procedures, order, important points, or cautions, answer with 2-4 bullet points.
+3. If the question asks about a concept, give one short core sentence first, then add brief supporting details.
+4. Even if the document is overview-heavy, reorganize the available evidence into practical points instead of repeating the source wording.
+5. Only if evidence is truly thin, briefly say that the document provides limited procedural detail, then add official external references if available.
+6. Add one final line starting with '실무 포인트:' when useful.
+7. If you use external references, add a final section titled '추가 참고 URL' with bullet links.
+
+[Document Title]
+{title}
+
+[Document Summary]
+{summary_text or "None"}
+
+[Reference Chunks]
+{context_text or "None"}
+
+[Official External References]
+{reference_block or "None"}
+
+[Question]
+{question}
+"""
+
+    try:
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You answer onboarding document questions. Use document evidence only and respond in Korean with a structured, practical answer.",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.2,
+        )
+
+        answer = (response.choices[0].message.content or "").strip()
+        if answer:
+            refined = rewrite_document_answer(
+                title=title,
+                question=question,
+                draft_answer=answer,
+                reference_links=reference_links,
+            )
+            return refined or answer
+    except Exception:
+        pass
+
+    return build_document_answer_fallback(title, question, summary_text, context_text, reference_links)
+
+def rewrite_document_answer(
+    title: str,
+    question: str,
+    draft_answer: str,
+    reference_links: list[tuple[str, str]],
+) -> str:
+    reference_block = format_reference_links(reference_links)
+    prompt = f"""
+You are improving an onboarding study assistant answer.
+Rewrite the draft into a more practical and less generic Korean answer.
+
+Rewrite rules:
+1. Preserve only points that are actually useful for answering the user's question.
+2. Reduce broad textbook wording and repeated source-like wording.
+3. Prefer concise practical bullets for procedures, cautions, and key points.
+4. Keep unsupported claims out.
+5. If the draft still lacks enough evidence, you may keep that limitation brief and add the official references below.
+6. If external references are used, append them under '추가 참고 URL'.
+
+[Document Title]
+{title}
+
+[Question]
+{question}
+
+[Draft Answer]
+{draft_answer}
+
+[Official External References]
+{reference_block or "None"}
+"""
+
+    try:
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "Rewrite answers into concise, practical Korean. Avoid generic filler and unsupported claims.",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.15,
+        )
+        return (response.choices[0].message.content or "").strip()
+    except Exception:
+        if looks_too_generic_answer(draft_answer) and reference_links:
+            return append_reference_links(draft_answer, reference_links)
+        return draft_answer
+
+
+def build_document_answer_fallback(
+    title: str,
+    question: str,
+    summary_text: str,
+    context_text: str,
+    reference_links: list[tuple[str, str]],
+) -> str:
+    summary = summary_text.strip() if summary_text else ""
+    sentences = split_summary_sentences(context_text)
+    relevant_sentences = select_relevant_sentences(question, sentences)
+
+    if not summary and not relevant_sentences:
+        base = "현재 문서에서 질문과 직접 연결되는 근거를 충분히 찾지 못했습니다. 문서를 다시 재처리하거나 질문을 조금 더 구체적으로 입력해 주세요."
+        return append_reference_links(base, reference_links)
+
+    intro = f"{title} 문서를 기준으로 보면 다음 내용을 우선 확인하는 것이 좋습니다."
+    points = relevant_sentences[:4]
+    if not points and summary:
+        points = split_summary_sentences(summary)[:3]
+
+    bullet_lines = [f"- {trim_summary_clause(point)}" for point in points if point.strip()]
+    if summary and not bullet_lines:
+        bullet_lines.append(f"- {trim_summary_clause(summary)}")
+
+    closing = None
+    lowered_question = question.lower()
+    if any(keyword in lowered_question for keyword in ["절차", "순서", "단계", "흐름", "과정", "주의", "핵심", "포인트"]):
+        closing = "실무 포인트: 예외 처리 기준, 로그 기록 방식, 사용자 응답 메시지 일관성을 함께 확인하는 것이 좋습니다."
+
+    result_parts = [intro]
+    if bullet_lines:
+        result_parts.append("\n".join(bullet_lines))
+    if closing:
+        result_parts.append(closing)
+    return append_reference_links("\n\n".join(result_parts), reference_links)
+
+
+def build_reference_links(title: str, question: str) -> list[tuple[str, str]]:
+    source = f"{title} {question}".lower()
+
+    if "spring" in source:
+        return [
+            ("Spring Framework 예외 처리", "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html"),
+            ("Spring Boot 오류 처리", "https://docs.spring.io/spring-boot/reference/web/servlet.html#web.servlet.spring-mvc.error-handling"),
+        ]
+    if "react" in source:
+        return [
+            ("React 상태 관리", "https://react.dev/learn/managing-state"),
+            ("React 상태 공유", "https://react.dev/learn/sharing-state-between-components"),
+        ]
+    if "aws" in source:
+        return [
+            ("AWS 개요", "https://docs.aws.amazon.com/whitepapers/latest/aws-overview/introduction.html"),
+            ("AWS 문서 메인", "https://docs.aws.amazon.com/"),
+        ]
+    if "접근성" in source or "a11y" in source or "accessibility" in source:
+        return [
+            ("MDN 접근성 가이드", "https://developer.mozilla.org/ko/docs/Learn/Accessibility"),
+            ("W3C 접근성 소개", "https://www.w3.org/WAI/fundamentals/accessibility-intro/"),
+        ]
+    if "보안" in source or "security" in source:
+        return [
+            ("KISA 보호나라", "https://www.boho.or.kr/"),
+            ("OWASP Cheat Sheet", "https://cheatsheetseries.owasp.org/"),
+        ]
+    if "figma" in source or "design" in source or "디자인" in source:
+        return [
+            ("Figma Help Center", "https://help.figma.com/"),
+            ("W3C Design Systems", "https://design-system.w3.org/"),
+        ]
+    return []
+
+
+def format_reference_links(reference_links: list[tuple[str, str]]) -> str:
+    if not reference_links:
+        return ""
+    return "\n".join(f"- {label}: {url}" for label, url in reference_links)
+
+
+def append_reference_links(answer: str, reference_links: list[tuple[str, str]]) -> str:
+    if not reference_links:
+        return answer
+    if "추가 참고 URL" in answer:
+        return answer
+    return answer + "\n\n추가 참고 URL\n" + format_reference_links(reference_links)
+
+
+def looks_too_generic_answer(answer: str) -> bool:
+    normalized = re.sub(r"\s+", "", answer)
+    generic_patterns = [
+        "문서는.*다룹니다",
+        "중요합니다",
+        "도움을줍니다",
+        "유지하는것입니다",
+        "개선하는데중요합니다",
+    ]
+    return any(re.search(pattern, normalized) for pattern in generic_patterns)
+
+
+def clean_answer_text(answer: str) -> str:
+    cleaned = answer or ""
+    cleaned = cleaned.replace("\uf9ce", "")
+    cleaned = re.sub(r"[\uf900-\ufaff]+", "", cleaned)
+    cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
+    cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+    cleaned = re.sub(r"\s+([,.!?])", r"\1", cleaned)
+    cleaned = re.sub(r"([가-힣A-Za-z0-9])\s*([·•])\s*", r"\1 \2 ", cleaned)
+    return cleaned.strip()
+
+def select_relevant_sentences(question: str, sentences: list[str]) -> list[str]:
+    question_terms = extract_summary_tokens(question)
+    if not question_terms:
+        return sentences[:2]
+
+    scored = []
+    for sentence in sentences:
+        normalized = sentence.lower()
+        score = sum(1 for term in question_terms if term in normalized)
+        if score > 0:
+            scored.append((score, sentence))
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [sentence for _, sentence in scored[:3]]
+
+
 def extract_text(file_path: str) -> tuple[str, str]:
     if file_path.startswith(("http://", "https://")):
         return extract_remote_text(file_path)
@@ -75,7 +375,18 @@ def extract_text(file_path: str) -> tuple[str, str]:
 
 def extract_remote_text(file_path: str) -> tuple[str, str]:
     request_url = normalize_drive_url(file_path)
-    response = requests.get(request_url, timeout=30)
+    try:
+        response = requests.get(
+            request_url,
+            headers=REMOTE_REQUEST_HEADERS,
+            timeout=(REMOTE_CONNECT_TIMEOUT, REMOTE_READ_TIMEOUT),
+        )
+    except requests.Timeout as exc:
+        raise TimeoutError(
+            f"원격 문서 응답 시간이 {REMOTE_READ_TIMEOUT}초를 초과했습니다. "
+            "해당 URL을 브라우저에서 열어 접근 가능한지 확인하거나 파일을 로컬/드라이브 문서로 등록해 주세요."
+        ) from exc
+
     response.raise_for_status()
 
     content_type = response.headers.get("content-type", "").lower()
@@ -250,30 +561,145 @@ def extract_section_title(text: str) -> str | None:
     return first_line[:120] if first_line else None
 
 
-def build_preview_text(text: str) -> str:
+def build_preview_text(title: str, text: str) -> str:
     try:
-        summary = summarize_document(text)
+        summary = summarize_document(title, text)
         if summary:
-            return summary
+            normalized_summary = normalize_summary_text(summary)
+            if normalized_summary and not looks_like_leading_copy(normalized_summary, text):
+                return normalized_summary
     except Exception:
         pass
+
+    extracted_summary = build_extractive_summary(title, text)
+    if extracted_summary:
+        return extracted_summary
 
     return text[:300]
 
 
 def build_section_title(document_title: str, chunk_no: int, text: str) -> str | None:
-    try:
-        title = suggest_section_title(text)
-        if title and is_readable_title(title):
-            return title[:120]
-    except Exception:
-        pass
-
     extracted_title = extract_section_title(text)
     if extracted_title and is_readable_title(extracted_title):
         return extracted_title[:120]
 
     return f"{document_title} - Chunk {chunk_no}"
+
+
+def build_extractive_summary(title: str, text: str) -> str | None:
+    sentences = split_summary_sentences(text)
+    if not sentences:
+        return None
+
+    title_tokens = set(extract_summary_tokens(title))
+    text_tokens = extract_summary_tokens(text[:4000])
+    token_weights: dict[str, int] = {}
+    for token in text_tokens:
+        token_weights[token] = token_weights.get(token, 0) + 1
+
+    scored_sentences: list[tuple[float, int, str]] = []
+    for index, sentence in enumerate(sentences[:20]):
+        score = score_summary_sentence(sentence, title_tokens, token_weights)
+        if score > 0:
+            scored_sentences.append((score, index, sentence))
+
+    if not scored_sentences:
+        return None
+
+    selected = sorted(
+        sorted(scored_sentences, key=lambda item: item[0], reverse=True)[:2],
+        key=lambda item: item[1],
+    )
+    sentences = [sentence for _, _, sentence in selected]
+    if not sentences:
+        return None
+
+    if len(sentences) == 1:
+        summary = f"{title} 문서는 {trim_summary_clause(sentences[0])}"
+        return normalize_summary_text(summary)
+
+    summary = (
+        f"{title} 문서는 {trim_summary_clause(sentences[0])} "
+        f"{trim_summary_clause(sentences[1])}"
+    )
+    return normalize_summary_text(summary)
+
+
+def split_summary_sentences(text: str) -> list[str]:
+    normalized = re.sub(r"\s+", " ", text)
+    parts = re.split(r"(?<=[.!?。다요])\s+", normalized)
+    results: list[str] = []
+    for part in parts:
+        sentence = part.strip()
+        if len(sentence) < 20:
+            continue
+        if is_navigation_like_sentence(sentence):
+            continue
+        results.append(sentence[:180])
+    return results
+
+
+def extract_summary_tokens(text: str) -> list[str]:
+    tokens = re.findall(r"[A-Za-z가-힣0-9]{2,}", text.lower())
+    stopwords = {
+        "the", "and", "for", "with", "that", "this", "from", "into", "http", "https",
+        "docs", "main", "menu", "skip", "content", "home", "guide", "page",
+        "문서", "내용", "관련", "대한", "위한", "에서", "으로", "하는", "하기", "있습니다",
+    }
+    return [token for token in tokens if token not in stopwords]
+
+
+def score_summary_sentence(sentence: str, title_tokens: set[str], token_weights: dict[str, int]) -> float:
+    sentence_tokens = extract_summary_tokens(sentence)
+    if not sentence_tokens:
+        return 0.0
+
+    unique_tokens = set(sentence_tokens)
+    title_bonus = sum(3 for token in unique_tokens if token in title_tokens)
+    frequency_score = sum(min(token_weights.get(token, 0), 4) for token in unique_tokens)
+    length_penalty = 0.0 if len(sentence) <= 150 else 1.5
+    return float(title_bonus + frequency_score - length_penalty)
+
+
+def normalize_summary_text(text: str) -> str:
+    summary = re.sub(r"\s+", " ", text).strip()
+    summary = re.sub(r"^(skip to .*? )", "", summary, flags=re.IGNORECASE)
+    summary = re.sub(r"(skip to .*?$)", "", summary, flags=re.IGNORECASE)
+    return summary[:240].strip()
+
+
+def trim_summary_clause(sentence: str) -> str:
+    trimmed = sentence.strip()
+    trimmed = re.sub(r"^(이 문서는|본 문서는|문서는)\s*", "", trimmed)
+    trimmed = re.sub(r"\s+", " ", trimmed)
+    return trimmed[:120].rstrip(" ,")
+
+
+def looks_like_leading_copy(summary: str, text: str) -> bool:
+    original = re.sub(r"\s+", " ", text).strip()
+    if not original:
+        return False
+
+    leading = original[:400]
+    if summary in leading:
+        return True
+
+    summary_tokens = extract_summary_tokens(summary)
+    leading_tokens = extract_summary_tokens(leading)
+    if not summary_tokens or not leading_tokens:
+        return False
+
+    overlap = sum(1 for token in summary_tokens if token in leading_tokens)
+    return overlap / max(1, len(summary_tokens)) > 0.85
+
+
+def is_navigation_like_sentence(sentence: str) -> bool:
+    lowered = sentence.lower()
+    markers = [
+        "skip to main", "skip to search", "main content", "breadcrumb",
+        "navigation", "menu", "sign in", "log in", "home /", "search",
+    ]
+    return any(marker in lowered for marker in markers)
 
 
 def is_readable_title(text: str) -> bool:

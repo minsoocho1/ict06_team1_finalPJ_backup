@@ -1,89 +1,351 @@
 <!--
  * @FileName : home.html
- * @Description : 관리자 홈 화면
- *                - 관리자 로그인 성공 후 진입하는 기본 대시보드
- *                - 사용자 관리, 온보딩 관리, 평가 관리, 결재 관리 메뉴 제공
- *                - 각 관리 메뉴는 추후 기능 구현 시 연결 예정
+ * @Description : 관리자 홈 대시보드 화면
+ *                - KPI 카드, 차트, 최근 시스템 활동 표시
+ *                - FastAPI AI 서버에서 전달받은 통계 데이터 시각화
  * @Author : 김다솜
  * @Date : 2026. 05. 01
  * @Modification_History
  * @
- * @ 수정일         수정자        수정내용
+ * @ 수정일자         수정자        수정내용
  * @ ----------    ---------    -------------------------------
- * @ 2026.05.01    김다솜        최초 생성 및 관리자 홈 기본 화면 구성/관리자 홈 스타일 코드 분리
+ * @ 2026.05.01    김다솜         최초 생성 및 관리자 홈 기본 화면 구성
+ * @ 2026.05.12    김다솜         관리자 대시보드 배지/레이아웃 정리 및 실제 최근 시스템 활동 연동
+ * @ 2026.05.13    김다솜         완료율/퀴즈 점수 차트 행 재배치 및 팀별/본부별 토글 UI 추가
  -->
-
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
-    <title id="page_title">관리자 페이지</title>
-
-    <!-- CSS 연결 -->
+<head th:insert="~{/admin/common/head.html :: common_header}">
+    <title id="page_title">COREWORK Admin Dashboard</title>
     <link rel="stylesheet" th:href="@{css/admin/home.css}">
 </head>
-<!--begin::Body-->
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
-<!--begin::App Wrapper-->
 <div class="app-wrapper">
-    <!-- 헤더 시작 -->
     <th:block th:replace="~{/admin/common/header}"></th:block>
-    <!-- 헤더 끝 -->
-
-    <!-- 사이드바 시작-->
     <th:block th:replace="~{/admin/common/sidebar}"></th:block>
-    <!-- 사이드바 끝-->
 
-    <!-- 메인 콘텐츠 시작 -->
-    <!-- 메인 콘텐츠 시작 -->
     <main class="app-main">
-        <h2>관리자 페이지</h2>
-
-        <form method="post" action="/admin/logout">
-            <button class="logout-btn">로그아웃</button>
-        </form>
-
-        <div class="container">
-
-            <h2>📊 관리자 홈</h2>
-            <p>시스템 관리 기능을 선택하세요.</p>
-
-            <div class="card-grid">
-
-                <div class="card" onclick="location.href='#'">
-                    <div class="card-title">👤 사용자 관리</div>
-                    <div>회원 정보 조회 및 관리</div>
-                </div>
-
-                <div class="card" onclick="location.href='#'">
-                    <div class="card-title">📚 온보딩 관리</div>
-                    <div>로드맵 및 학습 콘텐츠 관리</div>
-                </div>
-
-                <div class="card" onclick="location.href='#'">
-                    <div class="card-title">📝 평가 관리</div>
-                    <div>퀴즈 및 평가 결과 관리</div>
-                </div>
-
-                <div class="card" onclick="location.href='#'">
-                    <div class="card-title">📄 결재 관리</div>
-                    <div>전자결재 문서 관리</div>
-                </div>
-
+        <div class="container-fluid p-4" style="max-width: 1160px; margin: 0 auto;">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2 class="fw-bold mb-0" style="color: #3c4b64;">
+                    CORE<span style="color: #321fdb;">WORK</span>
+                    <small class="text-muted" style="font-size: 1.2rem;">Admin Center</small>
+                </h2>
             </div>
 
+            <div class="row">
+                <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
+                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #321fdb !important;">
+                        <div class="card-body py-3">
+                            <div class="mb-2">
+                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">전체 온보딩 대상</span>
+                            </div>
+                            <div class="h3 mb-0 fw-bold text-dark" th:text="${totalOnboarding + '명'}">0명</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
+                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #2eb85c !important;">
+                        <div class="card-body py-3">
+                            <div class="mb-2">
+                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">평균 온보딩 완료율</span>
+                            </div>
+                            <div class="h3 mb-0 fw-bold text-dark" th:text="${avgProgress + '%'}">0%</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
+                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #f9b115 !important;">
+                        <div class="card-body py-3">
+                            <div class="mb-2">
+                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">평가 제출 건수</span>
+                            </div>
+                            <div class="h3 mb-0 fw-bold text-dark" th:text="${evaluationSubmissions + '건'}">0건</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
+                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #3399ff !important;">
+                        <div class="card-body py-3">
+                            <div class="mb-2">
+                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">AI 비서 사용 건수</span>
+                            </div>
+                            <div class="h3 mb-0 fw-bold text-dark" th:text="${#numbers.formatInteger(aiActivities, 0, 'COMMA') + '건'}">0건</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-xl-6 mb-4 d-flex">
+                    <div class="card shadow-sm border-0 h-100 w-100">
+                        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0 text-dark">
+                                온보딩 완료율 (%)
+                                <span class="badge border ms-2" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">AI Analysis</span>
+                            </h6>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="온보딩 완료율 기준">
+                                <button type="button" class="btn btn-outline-primary active" id="onboardingTeamBtn">팀별</button>
+                                <button type="button" class="btn btn-outline-primary" id="onboardingDivisionBtn">본부별</button>
+                            </div>
+                        </div>
+                        <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
+                            <canvas id="onboardingChart" height="300"></canvas>
+                            <div id="onboardingEmpty" class="text-muted" style="display: none;">온보딩 진행 데이터가 없습니다.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6 mb-4 d-flex">
+                    <div class="card shadow-sm border-0 h-100 w-100">
+                        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0 text-dark">평균 퀴즈 점수</h6>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="퀴즈 점수 기준">
+                                <button type="button" class="btn btn-outline-success active" id="quizTeamBtn">팀별</button>
+                                <button type="button" class="btn btn-outline-success" id="quizDivisionBtn">본부별</button>
+                            </div>
+                        </div>
+                        <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
+                            <canvas id="quizScoreChart" height="300"></canvas>
+                            <div id="quizEmpty" class="text-muted" style="display: none;">퀴즈 성적 데이터가 없습니다.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-xl-6 mb-4 d-flex">
+                    <div class="card shadow-sm border-0 h-100 w-100">
+                        <div class="card-header bg-white border-0 py-3">
+                            <h6 class="fw-bold mb-0 text-dark">RAG 지식베이스 처리 현황</h6>
+                        </div>
+                        <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
+                            <canvas id="ragStatusChart" height="300"></canvas>
+                            <div id="ragEmpty" class="text-muted" style="display: none;">RAG 처리 데이터가 없습니다.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6 mb-4 d-flex">
+                    <div class="card shadow-sm border-0 h-100 w-100">
+                        <div class="card-header bg-white border-0 py-3">
+                            <h6 class="fw-bold mb-0 text-dark">AI 비서 기능 활용도</h6>
+                        </div>
+                        <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
+                            <canvas id="aiUsageChart" height="300"></canvas>
+                            <div id="aiUsageEmpty" class="text-muted" style="display: none;">AI 활용 데이터가 없습니다.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-xl-6 mb-4 d-flex">
+                    <div class="card shadow-sm border-0 h-100 w-100">
+                        <div class="card-header bg-white border-0 py-3">
+                            <h6 class="fw-bold mb-0 text-dark">평가 결과 분포</h6>
+                        </div>
+                        <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
+                            <canvas id="evaluationStatusChart" height="300"></canvas>
+                            <div id="evaluationStatusEmpty" class="text-muted" style="display: none;">평가 결과 데이터가 없습니다.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-xl-6 mb-4 d-flex">
+                    <div class="card shadow-sm border-0 h-100 w-100">
+                        <div class="card-header bg-white border-0 py-3">
+                            <h6 class="fw-bold mb-0 text-dark">최근 시스템 활동</h6>
+                        </div>
+                        <div class="card-body p-0">
+                            <div class="list-group list-group-flush border-top-0" th:if="${recentActivities != null and !#lists.isEmpty(recentActivities)}">
+                                <a th:each="activity : ${recentActivities}"
+                                   th:href="${activity.url}"
+                                   class="list-group-item list-group-item-action px-4 py-3 border-start border-4"
+                                   th:classappend="${activity.borderClass}">
+                                    <div class="small text-muted mb-1" th:text="${activity.time_label}">방금 전</div>
+                                    <div class="fw-bold small" th:classappend="${activity.textClass}" th:text="${activity.title}">활동</div>
+                                    <span th:text="${activity.message}">최근 활동 내용</span>
+                                </a>
+                            </div>
+                            <div class="p-4 text-muted" th:if="${recentActivities == null or #lists.isEmpty(recentActivities)}">
+                                최근 시스템 활동이 없습니다.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </main>
-    <!-- 메인 콘텐츠 끝 -->
-    <!-- 푸터 시작 -->
-    <th:block th:replace="~{/admin/common/footer}"></th:block>
-    <!-- 푸터 끝 -->
-</div>
-<!--end::App Wrapper-->
 
-<!--스크립트 시작-->
-<th:block th:replace="~{/admin/common/commonJs}"></th:block> <!-- 공통 사용 스크립트 불러오기-->
-<!-- 각 페이지 별로 필요한 스크립트 작성 혹은 임포트 -->
-<!--스크립트 끝-->
+    <th:block th:replace="~{/admin/common/footer}"></th:block>
+</div>
+
+<th:block th:replace="~{/admin/common/commonJs}"></th:block>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script th:inline="javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        const stats = [[${stats}]];
+
+        const onboardingTeamData = stats?.onboardingTeam || [];
+        const onboardingDivisionData = stats?.onboardingDivision || [];
+        const quizTeamData = stats?.quizTeam || [];
+        const quizDivisionData = stats?.quizDivision || [];
+
+        function setActiveButton(activeButton, inactiveButton) {
+            activeButton.classList.add('active');
+            inactiveButton.classList.remove('active');
+        }
+
+        function buildBarChart(canvasId, emptyId, dataset, valueKey, color, label) {
+            const canvas = document.getElementById(canvasId);
+            const empty = document.getElementById(emptyId);
+
+            if (!dataset || dataset.length === 0) {
+                canvas.style.display = 'none';
+                empty.style.display = 'block';
+                return null;
+            }
+
+            canvas.style.display = 'block';
+            empty.style.display = 'none';
+
+            return new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: dataset.map(d => d.dept_name),
+                    datasets: [{
+                        label: label,
+                        data: dataset.map(d => d[valueKey]),
+                        backgroundColor: color,
+                        borderRadius: 5
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: valueKey === 'completion_rate' ? 100 : undefined
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function updateBarChart(chart, dataset, valueKey, label) {
+            chart.data.labels = dataset.map(d => d.dept_name);
+            chart.data.datasets[0].label = label;
+            chart.data.datasets[0].data = dataset.map(d => d[valueKey]);
+            chart.update();
+        }
+
+        const onboardingChart = buildBarChart('onboardingChart', 'onboardingEmpty', onboardingTeamData, 'completion_rate', '#321fdb', '완료율(%)');
+        const quizChart = buildBarChart('quizScoreChart', 'quizEmpty', quizTeamData, 'avg_score', '#2eb85c', '평균 점수');
+
+        if (onboardingChart) {
+            const onboardingTeamBtn = document.getElementById('onboardingTeamBtn');
+            const onboardingDivisionBtn = document.getElementById('onboardingDivisionBtn');
+
+            onboardingTeamBtn.addEventListener('click', function() {
+                setActiveButton(onboardingTeamBtn, onboardingDivisionBtn);
+                updateBarChart(onboardingChart, onboardingTeamData, 'completion_rate', '완료율(%)');
+            });
+
+            onboardingDivisionBtn.addEventListener('click', function() {
+                setActiveButton(onboardingDivisionBtn, onboardingTeamBtn);
+                updateBarChart(onboardingChart, onboardingDivisionData, 'completion_rate', '완료율(%)');
+            });
+        }
+
+        if (quizChart) {
+            const quizTeamBtn = document.getElementById('quizTeamBtn');
+            const quizDivisionBtn = document.getElementById('quizDivisionBtn');
+
+            quizTeamBtn.addEventListener('click', function() {
+                setActiveButton(quizTeamBtn, quizDivisionBtn);
+                updateBarChart(quizChart, quizTeamData, 'avg_score', '평균 점수');
+            });
+
+            quizDivisionBtn.addEventListener('click', function() {
+                setActiveButton(quizDivisionBtn, quizTeamBtn);
+                updateBarChart(quizChart, quizDivisionData, 'avg_score', '평균 점수');
+            });
+        }
+
+        const ragData = stats?.rag || [];
+        if (ragData.length === 0) {
+            document.getElementById('ragStatusChart').style.display = 'none';
+            document.getElementById('ragEmpty').style.display = 'block';
+        } else {
+            new Chart(document.getElementById('ragStatusChart'), {
+                type: 'pie',
+                data: {
+                    labels: ragData.map(d => d.stage),
+                    datasets: [{
+                        data: ragData.map(d => d.count),
+                        backgroundColor: ['#3399ff', '#2eb85c', '#f9b115', '#e55353']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        const aiUsageData = stats?.ai_usage || {};
+        if (Object.keys(aiUsageData).length === 0) {
+            document.getElementById('aiUsageChart').style.display = 'none';
+            document.getElementById('aiUsageEmpty').style.display = 'block';
+        } else {
+            new Chart(document.getElementById('aiUsageChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(aiUsageData),
+                    datasets: [{
+                        data: Object.values(aiUsageData),
+                        backgroundColor: ['#321fdb', '#3399ff', '#ced2d8', '#f9b115']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '70%',
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+
+        const evaluationStatusData = stats?.evaluationStatus || [];
+        if (evaluationStatusData.length === 0) {
+            document.getElementById('evaluationStatusChart').style.display = 'none';
+            document.getElementById('evaluationStatusEmpty').style.display = 'block';
+        } else {
+            new Chart(document.getElementById('evaluationStatusChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: evaluationStatusData.map(d => d.status),
+                    datasets: [{
+                        data: evaluationStatusData.map(d => d.count),
+                        backgroundColor: ['#2eb85c', '#e55353']
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    cutout: '68%',
+                    plugins: { legend: { position: 'bottom' } }
+                }
+            });
+        }
+    });
+</script>
 </body>
-<!--end::Body-->
 </html>

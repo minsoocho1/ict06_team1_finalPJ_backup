@@ -1,3 +1,15 @@
+/**
+ * @FileName : EvaluationStatus.js
+ * @Description : AI 온보딩 평가 응시 현황 화면
+ * @Author : 김다솜
+ * @Date : 2026. 05. 06
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.06    김다솜       최초 생성, Quiz.js에서 평가 응시 현황 컴포넌트 분리
+ * @ 2026.05.15    김다솜       UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ */
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -120,7 +132,24 @@ const EvaluationStatus = () => {
                   isPassed: hasPassed,
                   isSubmitted: hasSubmitted,
                 })}`}
-                style={statusButton}
+                style={{
+                  ...statusButton,
+                  border: !isLearningCompleted
+                    ? '1px solid #DDE3EA'
+                    : hasPassed
+                      ? '1px solid #16A34A'
+                      : hasSubmitted
+                        ? '1px solid #F59E0B'
+                        : '1px solid #2563EB',
+                  background: !isLearningCompleted
+                    ? '#FFFFFF'
+                    : hasPassed
+                      ? '#16A34A'
+                      : hasSubmitted
+                        ? '#F59E0B'
+                        : '#2563EB',
+                  color: !isLearningCompleted ? '#6B7280' : '#FFFFFF',
+                }}
                 disabled={!isLearningCompleted}
                 onClick={() => {
                   if (isLearningCompleted && hasPassed) {

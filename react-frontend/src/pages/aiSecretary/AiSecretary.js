@@ -1,17 +1,19 @@
-/**
+﻿/**
  * @FileName : AiSecretary.js
- * @Description : 사내 AI 포털 하위 화면을 렌더링하는 최상위 컨트롤 컴포넌트
- *                - 전체 페이지 조립기
+ * @Description : 사내 AI 비서 화면을 묶는 최상위 컨테이너 컴포넌트
+ *                - 전체 페이지 구성
  *                - URL 기반 화면 분기
- *                - AI 비서/챗봇/문장 다듬기/지식 요청 화면 흐름 제어
+ *                - AI 비서/챗봇/문장 다듬기/지식 요청 화면 제어
  * @Author : 송혜진
  * @Date : 2026. 04. 28
  * @Modification_History
  * @
- * @ 수정일         수정자        수정내용
+ * @ 수정일        수정자        수정내용
  * @ ----------    ---------    ----------------------------------------
- * @ 2026.04.27    송혜진        최초 생성
- * @ 2026.05.06    송혜진        더미 데이터 삭제 / DB 기반 최근 작성 목록 연결
+ * @ 2026.04.27    송혜진       최초 생성
+ * @ 2026.05.06    송혜진       문서 데이터 제거 / DB 기반 최근 작성 목록 연결
+ * @ 2026.05.07    송혜진       문서 유형 REPORT / MINUTES / APPROVAL 정리
+ * @ 2026.05.07    송혜진       mail 명목 correction 화면으로 정리
  */
 
 import React, { useEffect, useMemo, useState } from "react";
@@ -56,47 +58,251 @@ import {
 import { styles } from "./styles/aiSecretaryTheme";
 
 /**
- * ASSISTANT 세션 응답을 Sidebar / AssistantHome에서 쓰는 recent 문서 형식으로 변환한다.
+ * ASSISTANT 세션 응답을 Sidebar / AssistantHome에서 사용하는 recent 문서 형식으로 변환한다.
  *
- * 현재 한계:
- * - AI_CHAT_SESSION에 report/minutes/approval 같은 documentType 컬럼이 아직 없음
- * - 그래서 우선 type은 report로 기본 처리
+ * 현재 상태:
+ * - AI_CHAT_SESSION에는 documentType 컬럼이 아직 없음
+ * - 상황에 따라 REPORT를 기본값으로 사용
  *
- * 추후 개선:
+ * 향후 개선:
  * - AI_CHAT_SESSION.document_type 컬럼 추가
  * - 백엔드 AiChatSessionResponseDto에 documentType 추가
  * - 이 함수에서 session.documentType을 type으로 매핑
  */
+function normalizeRecentDocumentType(type) {
+  const normalized = String(type || "").trim().toUpperCase();
+
+  if (normalized === "MINUTES") return "MINUTES";
+  if (normalized === "APPROVAL") return "APPROVAL";
+  if (normalized === "TEMPLATE") return "TEMPLATE";
+  return "REPORT";
+}
+
 const mapSessionToRecentDoc = (session) => ({
   id: String(session.sessionId),
   sessionId: session.sessionId,
   title: session.title || "제목 없는 AI 문서",
-  type: "report",
+  type: normalizeRecentDocumentType(
+    session.documentType || session.type || "REPORT"
+  ),
   screen: "writer",
-  updatedAt: session.lastMessageAt,
+  updatedAt: session.lastMessageAt || session.updatedAt || session.createdAt,
 });
 
+const buildVersionsFromMessages = (messages) => {
+  const assistantMessages = (Array.isArray(messages) ? messages : [])
+    .filter((message) =>
+      String(message?.role || "").trim().toUpperCase() === "ASSISTANT"
+    )
+    .sort((left, right) => (left?.seqNo || 0) - (right?.seqNo || 0));
+
+  return assistantMessages.map((message, index) => {
+    const versionNumber = index + 1;
+
+    return {
+      id: `v${versionNumber}-${message?.messageId ?? versionNumber}`,
+      messageId: message?.messageId ?? null,
+      label: `V${versionNumber}`,
+      title: `V${versionNumber}`,
+      summary: message?.modelName
+        ? `${message.modelName} 응답`
+        : "DB에서 불러온 버전입니다.",
+      content: message?.content || "",
+      createdAt: message?.createdAt || null,
+      seqNo: message?.seqNo ?? versionNumber,
+      modelName: message?.modelName || "",
+      current: index === assistantMessages.length - 1,
+    };
+  });
+};
+
+const buildReferenceTargets = (referenceFiles, referenceMemo) => {
+  const targets = [];
+
+  const fileNames = Array.isArray(referenceFiles)
+    ? referenceFiles
+        .map((file) => String(file?.name || "").trim())
+        .filter(Boolean)
+    : [];
+
+  if (fileNames.length > 0) {
+    targets.push(`참고 자료: ${fileNames.join(", ")}`);
+  }
+
+  const memo = String(referenceMemo || "").trim();
+  if (memo) {
+    targets.push(`참고 자료 메모: ${memo}`);
+  }
+
+  return targets;
+};
+
+function normalizeTemplateDeptLabel(value) {
+  return String(value || "")
+    .split(",")
+    .map((part) => part.trim())
+    .map((part) => part.split(">").pop().trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
+function normalizeTemplateOrganizationSeed(seed) {
+  if (!seed) {
+    return null;
+  }
+
+  if (typeof seed === "string") {
+    const deptText = normalizeTemplateDeptLabel(seed);
+    return deptText ? { deptText } : null;
+  }
+
+  if (typeof seed !== "object") {
+    return null;
+  }
+
+  const headquarterId = String(
+    seed.headquarterId ||
+      seed.headquarter?.deptId ||
+      seed.headquarter?.id ||
+      seed.headquarter?.dept_id ||
+      ""
+  ).trim();
+  const headquarterName = normalizeTemplateDeptLabel(
+    seed.headquarterName ||
+      seed.headquarter?.deptName ||
+      seed.headquarter?.name ||
+      seed.headquarter?.displayName ||
+      ""
+  );
+  const teamIds = Array.isArray(seed.teamIds)
+    ? seed.teamIds.map((teamId) => String(teamId || "").trim()).filter(Boolean)
+    : [];
+  const teamNames = Array.isArray(seed.teamNames)
+    ? seed.teamNames.map((name) => normalizeTemplateDeptLabel(name)).filter(Boolean)
+    : [];
+  const displayName = normalizeTemplateDeptLabel(
+    seed.displayName || teamNames.join(", ") || seed.deptText || ""
+  );
+  const deptText = normalizeTemplateDeptLabel(seed.deptText || displayName);
+
+  if (
+    !headquarterId &&
+    !headquarterName &&
+    teamIds.length === 0 &&
+    teamNames.length === 0 &&
+    !displayName &&
+    !deptText
+  ) {
+    return null;
+  }
+
+  return {
+    headquarterId,
+    headquarterName,
+    teamIds,
+    teamNames,
+    displayName,
+    deptText,
+  };
+}
+
+const buildTemplateSeedFromCard = (card) => {
+  const title = String(card?.title || "").trim();
+  const purpose = String(card?.situation || "").trim();
+  const rawDescription = String(
+    card?.templateSeed?.description || card?.description || card?.desc || ""
+  ).trim();
+  const description =
+    rawDescription && rawDescription !== "설명이 없습니다."
+      ? rawDescription
+      : "";
+  const content = String(
+    card?.templateSeed?.content || card?.content || card?.generatedContent || ""
+  ).trim();
+  const previewList = Array.isArray(card?.templateSeed?.preview)
+    ? card.templateSeed.preview
+    : Array.isArray(card?.preview)
+    ? card.preview
+    : [];
+  const previewLines = previewList
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+
+  const detailParts = [];
+  if (description) {
+    detailParts.push(`설명:\n${description}`);
+  }
+  if (content && content !== description) {
+    detailParts.push(content);
+  }
+  if (previewLines.length > 0) {
+    detailParts.push(`템플릿 구성:\n${previewLines.join("\n")}`);
+  }
+
+  const organizationSeed = normalizeTemplateOrganizationSeed(
+    card?.templateFilters?.generation?.relatedDept ||
+      card?.relatedDept ||
+      card?.deptMeta
+  );
+  const deptText = normalizeTemplateDeptLabel(
+    organizationSeed?.displayName || card?.dept || ""
+  );
+
+  return {
+    type: normalizeFormType(card?.type),
+    title,
+    purpose,
+    detail: detailParts.join("\n\n").trim() || description || content || "",
+    amount: card?.templateSeed?.amount || "보통",
+    audience: card?.templateSeed?.audience || "",
+    targets: Array.isArray(card?.templateSeed?.targets)
+      ? card.templateSeed.targets
+      : [],
+    referenceFiles: Array.isArray(card?.templateSeed?.referenceFiles)
+      ? card.templateSeed.referenceFiles
+      : [],
+    referenceMemo: card?.templateSeed?.referenceMemo || "",
+    organizationSeed: card?.templateSeed?.organizationSeed || organizationSeed,
+    deptText:
+      card?.templateSeed?.deptText ||
+      deptText ||
+      normalizeTemplateDeptLabel(card?.dept || ""),
+  };
+};
 export default function AiSecretary({ userInfo }) {
   const location = useLocation();
   const navigate = useNavigate();
   const { docId } = useParams();
   const [searchParams] = useSearchParams();
 
+  // ------------------------------------------------
+  // 0) 화면 공통 상태
+  // ------------------------------------------------
+
   /**
-   * 화면 상태
+   * StartFormScreen 입력값
    */
   const [formData, setFormData] = useState(initialFormData);
+  const [templateSeed, setTemplateSeed] = useState(null);
+
+  /**
+   * CorrectionScreen 상태
+   */
   const [correction, setCorrection] = useState(initialCorrectionState);
+
+  /**
+   * WriterScreen 상태
+   */
   const [writerState, setWriterState] = useState(initialWriterState);
 
   /**
-   * 최근 작성 목록
+   * 최근 생성 목록
    *
-   * 기존:
-   * - recentDocsSeed 기반 정적 목록
-   *
-   * 변경:
-   * - DB의 AI_CHAT_SESSION 중 ASSISTANT 세션만 조회
+    * 기본값:
+    * - recentDocsSeed 기반 정적 목록
+    *
+    * 변경 사항
+    * - DB 기반 AI_CHAT_SESSION 중 ASSISTANT 세션만 조회
    */
   const [recents, setRecents] = useState([]);
   const [loadingRecents, setLoadingRecents] = useState(false);
@@ -118,52 +324,59 @@ export default function AiSecretary({ userInfo }) {
    * 로그인 사용자 사번
    *
    * 주의:
-   * - userInfo가 null이면 최근 목록 조회/초안 생성은 중단
-   * - 필요하면 추후 /api/user/welcome 재조회 방식 추가 가능
+   * - userInfo가 null이면 최근 목록 조회/초안 생성이 중단됨
+   * - 필요하면 이후 /api/user/welcome 방식 추가 가능
    */
   const empNo = userInfo?.empNo ?? userInfo?.emp_no ?? null;
 
   // ------------------------------------------------
-  // 1) URL 기반 현재 화면 상태 파생
+  // 1) URL 기반 현재 페이지 상태 확인
   // ------------------------------------------------
 
   /**
    * query string의 type 값을 문서 유형으로 정규화한다.
    *
-   * 예:
-   * /ai-portal/assistant/new?type=report
-   * /ai-portal/assistant/new?type=minutes
-   * /ai-portal/assistant/new?type=approval
+   * 경로 예시:
+   * /ai-portal/assistant/new?type=REPORT
+   * /ai-portal/assistant/new?type=MINUTES
+   * /ai-portal/assistant/new?type=APPROVAL
+   *
+   * normalizeFormType은 대문자로 정규화한다.
    */
   const queryType = normalizeFormType(searchParams.get("type"));
 
   /**
-   * 현재 URL의 docId가 최근 작성 목록에 존재하면 해당 문서를 찾는다.
+ * 현재 URL의 docId가 최근 작성 목록에 있으면 해당 문서를 찾는다.
    *
-   * 현재 recent.id는 sessionId 문자열이다.
+ * recent.id는 sessionId 문자열이다.
    */
   const matchedRecentDoc = useMemo(() => {
     return recents.find((doc) => String(doc.id) === String(docId));
   }, [recents, docId]);
 
   /**
-   * 현재 큰 탭 구분
+ * 현재 탭 구분
    *
    * assistant:
-   * - AI 비서 홈/문서 작성/템플릿/Writer
+ * - AI 비서 문서 작성/미리보기 Writer
    *
    * chatbot:
-   * - 사내 지식 챗봇
+ * - 사내 지식 챗봇
    *
-   * polish:
-   * - 문장 다듬기
+   * correction:
+   * - 臾몄옣 ?ㅻ벉湲?
    *
    * knowledge-request:
-   * - 지식 추가 요청
+ * - 문장 다듬기
    */
   const currentTab = useMemo(() => {
     if (location.pathname.startsWith(PATH.AI.CHATBOT)) return "chatbot";
-    if (location.pathname.startsWith(PATH.AI.CORRECTION)) return "polish";
+
+    /**
+     * 기존 polish 명칭은 내부 호환용으로만 유지
+     * 기능명과 API/route 기준이 맞지 않더라도 correction으로 정리한다.
+     */
+    if (location.pathname.startsWith(PATH.AI.CORRECTION)) return "correction";
 
     if (location.pathname.startsWith(PATH.AI.KNOWLEDGE_REQUEST)) {
       return "knowledge-request";
@@ -173,7 +386,7 @@ export default function AiSecretary({ userInfo }) {
   }, [location.pathname]);
 
   /**
-   * assistant 탭 내부 화면 구분
+   * assistant ???대? ?붾㈃ 援щ텇
    */
   const currentScreen = useMemo(() => {
     if (location.pathname === PATH.AI.ASSISTANT) return "assistant-home";
@@ -187,18 +400,23 @@ export default function AiSecretary({ userInfo }) {
     return "assistant-home";
   }, [location.pathname]);
 
-  /**
-   * 현재 문서 유형
-   *
-   * 우선순위:
-   * 1. 최근 작성 목록에서 찾은 문서 type
-   * 2. query string type
-   * 3. normalizeFormType 내부 기본값
-   */
+  // 현재 문서 유형
+  // 최근 작성 목록에서 찾은 문서 type + query string type + normalizeFormType 중 우선값을 사용한다.
   const currentFormType = useMemo(() => {
-    if (matchedRecentDoc?.type) return matchedRecentDoc.type;
+    if (currentScreen === "writer") {
+      if (matchedRecentDoc?.type) {
+        return normalizeRecentDocumentType(matchedRecentDoc.type);
+      }
+
+      return normalizeRecentDocumentType(searchParams.get("type"));
+    }
+
+    if (matchedRecentDoc?.type) {
+      return normalizeFormType(matchedRecentDoc.type);
+    }
+
     return queryType;
-  }, [matchedRecentDoc, queryType]);
+  }, [currentScreen, matchedRecentDoc, queryType, searchParams]);
 
   // ------------------------------------------------
   // 2) URL 이동 helper
@@ -206,15 +424,29 @@ export default function AiSecretary({ userInfo }) {
 
   const goAssistantHome = () => navigate(PATH.AI.ASSISTANT);
 
-  const goAssistantForm = (type = "report") => {
+  /**
+   * AI 비서 문서 작성 시작 화면으로 이동
+   *
+   * 문서 유형:
+   * - REPORT
+   * - MINUTES
+   * - APPROVAL
+   */
+  const goAssistantForm = (type = "REPORT", options = {}) => {
     const normalized = normalizeFormType(type);
+    if (!options.keepTemplateSeed) {
+      setTemplateSeed(null);
+    }
     navigate(`${PATH.AI.ASSISTANT_NEW}?type=${normalized}`);
   };
 
   const goAssistantTemplate = () => navigate(PATH.AI.ASSISTANT_TEMPLATE);
 
-  const goAssistantDoc = (targetDocId, type = "report") => {
-    const normalized = normalizeFormType(type);
+  /**
+   * AI 비서 문서 작성/수정 화면으로 이동
+   */
+  const goAssistantDoc = (targetDocId, type = "REPORT") => {
+    const normalized = normalizeRecentDocumentType(type);
     navigate(`${buildAssistantDocPath(targetDocId)}?type=${normalized}`);
   };
 
@@ -230,9 +462,9 @@ export default function AiSecretary({ userInfo }) {
    * ASSISTANT 세션만 최근 작성 목록으로 조회한다.
    *
    * 정책:
-   * - ASSISTANT 세션은 장기 보관
-   * - 최근 작성 목록에 노출
-   * - CHATBOT 세션은 최근 작성 목록에 노출하지 않음
+   * - ASSISTANT 세션은 기존 그대로 유지
+   * - 최근 작성 목록만 불러옴
+   * - CHATBOT 세션은 최근 작성 목록에 포함하지 않음
    */
   useEffect(() => {
     if (!empNo) return;
@@ -268,16 +500,16 @@ export default function AiSecretary({ userInfo }) {
   // ------------------------------------------------
 
   /**
-   * 최근 작성 문서 클릭 또는 URL 직접 진입 시:
+   * 최근 작성 문서를 클릭하면 URL로 직접 진입한다.
    *
-   * /ai-portal/assistant/docs/{sessionId}?type=report
+   * /ai-portal/assistant/docs/{sessionId}?type=REPORT
    *
-   * 위와 같은 writer 화면으로 들어오면,
+   * 같은 writer 화면으로 들어가면,
    * sessionId 기준으로 메시지 목록을 불러온다.
    *
-   * 현재 정책:
+   * 현재 동작:
    * - 가장 마지막 ASSISTANT 메시지를 최신 문서 본문으로 사용
-   * - 모든 메시지를 좌측 AI 대화 이력으로 표시
+   * - 모든 메시지를 왼쪽 AI 대화 내용으로 표시
    */
   useEffect(() => {
     if (currentScreen !== "writer") return;
@@ -323,36 +555,28 @@ export default function AiSecretary({ userInfo }) {
           fallback: lastAssistantMessage.modelName === "gemini-fallback",
 
           /**
-           * 좌측 AI와 대화 영역에 DB 메시지를 그대로 복원한다.
+ * 왼쪽 AI 대화 영역의 DB 메시지를 그대로 복원한다.
            */
           chat: messages.map((message) => ({
             role: message.role === "USER" ? "user" : "ai",
             text: message.content,
-            time: "저장됨",
+            time: "방금",
           })),
 
           /**
-           * 현재는 별도 document_version 테이블이 없으므로
-           * 마지막 ASSISTANT 메시지를 v1로 구성한다.
+ * 현재는 document_version 테이블이 없으므로
+ * 마지막 ASSISTANT 메시지를 v1로 구성한다.
            *
-           * 추후 개선:
-           * - 메시지 seq_no 또는 별도 버전 테이블 기반으로 v1/v2/v3 복원 가능
+ * 향후 개선:
+ * - 메시지 seq_no 또는 버전 테이블 기준으로 v1/v2/v3 복원 가능
            */
-          versions: [
-            {
-              id: "v1",
-              title: "저장된 문서",
-              summary: "DB에서 불러온 최근 작성 문서입니다.",
-              content: lastAssistantMessage.content,
-              current: true,
-            },
-          ],
+          versions: buildVersionsFromMessages(messages),
 
           prompt: "",
           showHistory: false,
         }));
       } catch (error) {
-        console.error("AI 문서 메시지 조회 실패", error);
+      console.error("AI 문서 메시지 조회 실패", error);
       }
     };
 
@@ -363,29 +587,9 @@ export default function AiSecretary({ userInfo }) {
   // 5) AI 초안 생성
   // ------------------------------------------------
 
-  /**
-   * StartFormScreen의 "AI 초안 생성" 버튼 클릭 시 실행된다.
-   *
-   * 처리 흐름:
-   * 1. 입력값 검증
-   * 2. /assistant/draft API 호출
-   * 3. writerState에 응답 결과 저장
-   * 4. recents에 즉시 반영
-   * 5. WriterScreen으로 이동
-   */
+  // StartFormScreen의 "AI 초안 생성" 버튼 클릭 시 실행
+  // /assistant/draft API 호출
   const handleGenerateDraft = async () => {
-    /**
-     * 디버깅이 필요할 때만 주석 해제
-     *
-     * console.log("[DRAFT] 버튼 클릭됨", {
-     *   userInfo,
-     *   empNo,
-     *   currentFormType,
-     *   formData,
-     *   generatingDraft,
-     * });
-     */
-
     if (generatingDraft) {
       return;
     }
@@ -401,7 +605,7 @@ export default function AiSecretary({ userInfo }) {
     }
 
     if (!formData.detail?.trim()) {
-      setDraftError("핵심 내용을 입력해 주세요.");
+      setDraftError("답변 내용을 입력해 주세요.");
       return;
     }
 
@@ -415,7 +619,13 @@ export default function AiSecretary({ userInfo }) {
         title: formData.title,
         purpose: formData.purpose,
         audience: formData.audience,
-        targets: formData.targets,
+        targets: [
+          ...(Array.isArray(formData.targets) ? formData.targets : []),
+          ...buildReferenceTargets(
+            formData.referenceFiles,
+            formData.referenceMemo
+          ),
+        ],
         detail: formData.detail,
         amount: formData.amount,
         tone: "BUSINESS",
@@ -428,15 +638,13 @@ export default function AiSecretary({ userInfo }) {
         sessionId: data.sessionId,
         userMessageId: data.userMessageId,
         aiMessageId: data.aiMessageId,
-        type: data.type,
+        type: normalizeFormType(data.type || currentFormType),
         title: data.title,
         content: data.content,
         modelName: data.modelName,
         fallback: data.fallback,
 
-        /**
-         * WriterScreen 좌측 AI 대화 영역 초기 메시지
-         */
+        // 왼쪽 AI 대화 영역의 초기 메시지
         chat: [
           {
             role: "user",
@@ -446,42 +654,39 @@ export default function AiSecretary({ userInfo }) {
           {
             role: "ai",
             text: data.fallback
-              ? "AI 응답 생성이 원활하지 않아 기본 안내 응답을 반영했습니다."
+              ? "AI 응답 생성이 아직 완료되지 않아 기본 안내를 반영했습니다."
               : "요청하신 내용을 바탕으로 초안을 생성했습니다.",
             time: "방금",
           },
         ],
 
-        /**
-         * 최초 생성 버전
-         *
-         * 중요:
-         * - content를 반드시 넣어야 v1 미리보기/복원이 정상 동작한다.
-         */
-        versions: [
+        // 최초 생성 버전
+        // content를 바탕으로 v1 미리보기/복원 정상 동작
+        versions: buildVersionsFromMessages([
           {
-            id: "v1",
-            title: "초안 생성",
-            summary: "AI가 최초 초안을 생성했습니다.",
+            messageId: data.aiMessageId,
+            role: "ASSISTANT",
             content: data.content,
-            current: true,
+            seqNo: 1,
+            createdAt: new Date().toISOString(),
+            modelName: data.modelName,
           },
-        ],
+        ]),
 
         prompt: "",
         showHistory: false,
       }));
 
       /**
-       * 새 초안 생성 후 최근 작성 목록에도 즉시 반영한다.
-       * DB 재조회 전에도 Sidebar/AssistantHome에 바로 보이게 하기 위함.
+ * 초안 생성 후 최근 작성 목록도 즉시 반영한다.
+ * DB 기준이라도 Sidebar/AssistantHome에 바로 보이게 함.
        */
       setRecents((prev) => [
         {
           id: String(data.sessionId),
           sessionId: data.sessionId,
           title: data.title || formData.title || "제목 없는 AI 문서",
-          type: data.type || currentFormType,
+          type: normalizeFormType(data.type || currentFormType),
           screen: "writer",
           updatedAt: new Date().toISOString(),
         },
@@ -490,7 +695,7 @@ export default function AiSecretary({ userInfo }) {
         ),
       ]);
 
-      goAssistantDoc(data.sessionId, currentFormType);
+      goAssistantDoc(data.sessionId, data.type || currentFormType);
     } catch (err) {
       console.error("AI 초안 생성 실패", err);
       setDraftError(
@@ -516,7 +721,8 @@ export default function AiSecretary({ userInfo }) {
       return;
     }
 
-    if (next === "polish") {
+    // correction: 현재 정리된 문장 다듬기 key
+    if (next === "correction") {
       goCorrection();
       return;
     }
@@ -529,12 +735,12 @@ export default function AiSecretary({ userInfo }) {
   /**
    * 최근 작성 클릭 처리
    *
-   * DB 기반 recent 문서는 screen="writer"로 들어온다.
-   * 이 경우 sessionId 기준으로 writer URL로 이동한다.
+   * DB 기반 recent 문서의 screen이 "writer"이면
+   * sessionId 기준으로 writer URL로 이동한다.
    */
   const handleRecentClick = (doc) => {
     if (doc.screen === "writer") {
-      goAssistantDoc(doc.sessionId ?? doc.id, doc.type ?? "report");
+      goAssistantDoc(doc.sessionId ?? doc.id, doc.type ?? "REPORT");
       return;
     }
 
@@ -543,11 +749,11 @@ export default function AiSecretary({ userInfo }) {
       title: doc.title,
     }));
 
-    goAssistantForm(doc.type ?? "report");
+    goAssistantForm(doc.type ?? "REPORT");
   };
 
   // ------------------------------------------------
-  // 7) 독립 기능 화면 렌더링
+  // 7) 라우팅 함수 모음
   // ------------------------------------------------
 
   const renderStandalonePage = () => {
@@ -555,7 +761,7 @@ export default function AiSecretary({ userInfo }) {
       return <ChatbotScreen userInfo={userInfo} />;
     }
 
-    if (currentTab === "polish") {
+    if (currentTab === "correction") {
       return (
         <CorrectionScreen
           correction={correction}
@@ -573,7 +779,7 @@ export default function AiSecretary({ userInfo }) {
   };
 
   // ------------------------------------------------
-  // 8) AI 비서 내부 화면 렌더링
+  // 8) AI 비서 각 화면 렌더링
   // ------------------------------------------------
 
   const renderAssistantPage = () => {
@@ -595,6 +801,11 @@ export default function AiSecretary({ userInfo }) {
         <StartFormScreen
           formType={currentFormType}
           formData={formData}
+          templateSeed={templateSeed}
+          initialOrganizationSeed={
+            templateSeed?.organizationSeed ||
+            (templateSeed?.deptText ? { deptText: templateSeed.deptText } : null)
+          }
           onChangeFormType={goAssistantForm}
           onChangeFormData={(key, value) =>
             setFormData((prev) => ({ ...prev, [key]: value }))
@@ -610,64 +821,39 @@ export default function AiSecretary({ userInfo }) {
     if (currentScreen === "template") {
       return (
         <TemplateScreen
+          empNo={empNo}
           onOpenForm={goAssistantForm}
           onStartTemplate={(card) => {
-            // 선택한 템플릿의 title / desc / preview를 기반으로 AI 초안 생성에 필요한 입력값을 미리 구성
-            const previewText = Array.isArray(card.preview)
-              ? card.preview.join("\n")
-              : "";
+            /**
+             * 선택한 템플릿의 generatedContent / preview를 기준으로
+             * AI 초안 생성에 필요한 입력값을 미리 구성한다.
+             *
+             * 선택 순서:
+             * 1. AI 생성 템플릿 card.generatedContent
+             * 2. 정적 추천 템플릿 card.preview.join("\n")
+             */
+            const inferredType = normalizeFormType(card.type);
+            const nextTemplateSeed =
+              card?.templateSeed || buildTemplateSeedFromCard(card);
 
-            const inferredType =
-              card.type === "minutes" || card.type === "approval" || card.type === "report"
-                ? card.type
-                : card.tag?.includes("회의") || card.title?.includes("회의")
-                ? "minutes"
-                : card.tag?.includes("결재") || card.title?.includes("결재")
-                ? "approval"
-                : "report";
-
+            setTemplateSeed(nextTemplateSeed);
             setFormData((prev) => ({
               ...prev,
-
-              // 문서 제목
-              title: card.title || "",
-
-              // 작성 목적
-              purpose:
-                card.desc ||
-                "선택한 템플릿을 바탕으로 업무 문서 초안을 작성하기 위함",
-
-              // 대상 독자
-              audience:
-                inferredType === "approval"
-                  ? "팀장 및 결재권자"
-                  : inferredType === "minutes"
-                  ? "회의 참석자 및 공유 대상자"
-                  : "팀장 및 유관 부서 담당자",
-
-              // 정리 대상/보고 대상
-              targets:
-                inferredType === "minutes"
-                  ? ["참석자 공유", "액션아이템 중심"]
-                  : inferredType === "approval"
-                  ? ["팀장", "부서장"]
-                  : ["팀장", "전사 공유"],
-
-              // 핵심 내용
-              detail:
-                previewText ||
-                "선택한 템플릿의 구조를 바탕으로 문서 초안을 작성해 주세요.",
-
-              // 원하는 분량/방식
-              amount:
-                inferredType === "minutes"
-                  ? "결정사항 및 액션아이템 중심"
-                  : inferredType === "approval"
-                  ? "승인자가 이해하기 쉬운 간결한 결재 사유"
-                  : "A4 1페이지 내외",
+              title: nextTemplateSeed.title || card.title || "",
+              purpose: nextTemplateSeed.purpose || "",
+              audience: nextTemplateSeed.audience || "",
+              targets: Array.isArray(nextTemplateSeed.targets)
+                ? nextTemplateSeed.targets
+                : [],
+              detail: nextTemplateSeed.detail || "",
+              amount: nextTemplateSeed.amount || "보통",
+              referenceFiles: Array.isArray(nextTemplateSeed.referenceFiles)
+                ? nextTemplateSeed.referenceFiles
+                : [],
+              referenceMemo: nextTemplateSeed.referenceMemo || "",
             }));
 
-            goAssistantForm(inferredType);
+            goAssistantForm(inferredType, { keepTemplateSeed: true });
           }}
         />
       );
@@ -734,4 +920,4 @@ export default function AiSecretary({ userInfo }) {
       <main style={styles.main}>{page}</main>
     </div>
   );
-} 
+}

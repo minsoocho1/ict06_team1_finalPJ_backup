@@ -14,7 +14,7 @@ public class AssistantDraftRequestDto {
     private String empNo;
 
     @NotBlank(message = "문서 유형은 필수입니다.")
-    private String type; // report / minutes / approval
+    private String type; // REPORT / MINUTES / approval
 
     @NotBlank(message = "제목은 필수입니다.")
     private String title;

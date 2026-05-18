@@ -9,5 +9,5 @@ public enum ProcessStage {
     EMBED,
     INDEX,
     APPROVAL,
-    REFLECT
+    PUBLISH
 }

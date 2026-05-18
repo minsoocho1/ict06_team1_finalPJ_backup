@@ -1,3 +1,15 @@
+/**
+ * @FileName : QuizDetailView.js
+ * @Description : AI 온보딩 평가 상세 결과 화면
+ * @Author : 김다솜
+ * @Date : 2026. 05. 06
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.06    김다솜       최초 생성, Quiz.js에서 평가 상세 결과 컴포넌트 분리
+ * @ 2026.05.15    김다솜       UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ */
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 
@@ -39,7 +51,7 @@ const QuizDetailView = () => {
       return { text: '오답입니다.', color: '#dc3545' };
     }
 
-    return { text: 'AI 평가 완료', color: '#321fdb' };
+    return { text: 'AI 평가 완료', color: '#2563EB' };
   };
 
   return (
@@ -78,8 +90,9 @@ const QuizDetailView = () => {
                   style={{
                     marginTop: '10px',
                     padding: '10px',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '6px',
+                    backgroundColor: '#F4F7FB',
+                    borderRadius: '12px',
+                    border: '1px solid #DDE3EA',
                   }}
                 >
                   <small><strong>AI 피드백:</strong> {item.aiFeedback}</small>

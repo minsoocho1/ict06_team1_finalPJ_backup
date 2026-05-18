@@ -28,8 +28,11 @@ const _nav = [
     to: '/ai-portal',
     icon: <CIcon icon={cilChatBubble} customClassName="nav-icon" />,
     badge: {
-      color: 'primary',
+      color: 'light',
       text: 'AI',
+      attributes: {
+        className: 'badge badge-ai-sidebar ms-auto',
+      },
     },
   },
   {
@@ -70,8 +73,11 @@ const _nav = [
     to: PATH.ONBOARDING.DASHBOARD,
     icon: <CIcon icon={cilTask} customClassName="nav-icon" />,
     badge: {
-      color: 'primary',
+      color: 'light',
       text: 'AI',
+      attributes: {
+        className: 'badge badge-ai-sidebar ms-auto',
+      },
     },
   },
   {
@@ -80,8 +86,11 @@ const _nav = [
     to: PATH.EVALUATION.ROOT,
     icon: <CIcon icon={cilChartLine} customClassName="nav-icon" />,
     badge: {
-      color: 'primary',
+      color: 'light',
       text: 'AI',
+      attributes: {
+        className: 'badge badge-ai-sidebar ms-auto',
+      },
     },
     end: true,
   },

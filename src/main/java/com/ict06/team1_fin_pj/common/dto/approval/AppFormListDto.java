@@ -22,6 +22,8 @@ public class AppFormListDto {
 
     private String formName;
 
+    private Boolean isDefault;
+
     private LocalDateTime updatedAt;
 
     // 연결된 결재선 정보

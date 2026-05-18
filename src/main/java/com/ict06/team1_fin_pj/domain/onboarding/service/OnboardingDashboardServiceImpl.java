@@ -12,6 +12,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.06    김다솜        최초 생성 및 온보딩 대시보드 집계 로직 구현
  * @ 2026.05.08    김다솜        체크리스트 진행률 집계 추가
+ * @ 2026.05.14    김다솜        학습 진행률 계산 방식 변경 (카테고리 단위 -> 전체 항목 완료 수 기준)
  */
 
 package com.ict06.team1_fin_pj.domain.onboarding.service;
@@ -47,13 +48,7 @@ public class OnboardingDashboardServiceImpl {
     private final ChecklistRepository checklistRepository;
     private final ChecklistProgressRepository checklistProgressRepository;
 
-    /**
-     * @MethodName : getDashboard
-     * @Description : 사번 기준 온보딩 대시보드 요약 정보 조회
-     *
-     * @param empNo 사번
-     * @return 온보딩 대시보드 요약 응답 DTO
-     */
+    // 사번 기준 학습 진행률, 체크리스트 현황, 평가 통계 등을 포함한 종합 대시보드 데이터 산출
     public OnboardingDashboardResponse getDashboard(String empNo) {
 
         List<RoadItemEntity> roadmapItems = roadmapRepository
@@ -114,9 +109,9 @@ public class OnboardingDashboardServiceImpl {
                         .allMatch(item -> statusByItemId.get(item.getItemId()) == ProgressStatus.COMPLETED))
                 .count();
 
-        int learningProgressPercent = totalCategoryCount == 0
+        int learningProgressPercent = totalLearningCount == 0
                 ? 0
-                : (int) Math.round((completedCategoryCount * 100.0) / totalCategoryCount);
+                : (int) Math.round((completedLearningCount * 100.0) / totalLearningCount);
 
         int totalChecklistCount = (int) checklistRepository.count();
         int completedChecklistCount = (int) checklistProgressRepository

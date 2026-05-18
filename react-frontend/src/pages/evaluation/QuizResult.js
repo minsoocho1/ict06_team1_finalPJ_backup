@@ -1,3 +1,15 @@
+/**
+ * @FileName : QuizResult.js
+ * @Description : AI 온보딩 평가 응시 결과 컴포넌트
+ * @Author : 김다솜
+ * @Date : 2026. 05. 06
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.06    김다솜       최초 생성, Quiz.js에서 평가 응시 결과 컴포넌트 분리 
+ * @ 2026.05.15    김다솜       UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ */
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -39,8 +51,8 @@ const QuizResult = ({ submitResult, onRetry }) => {
           style={{
             ...submitButton,
             background: '#fff',
-            color: '#321fdb',
-            border: '1px solid #321fdb',
+            color: '#2563EB',
+            border: '1px solid #2563EB',
           }}
           onClick={() => navigate(PATH.EVALUATION.RESULT)}
         >

@@ -1,7 +1,16 @@
-/* aiSecretary 전용 작은 조각들 (Field) */
-// src/pages/aiSecretary/components/Field.js
-// 라벨 / 필수표시 / children 입력영역 공통 컴포넌트로 분리
-// 활용: 입력 폼의 라벨 + 입력영역 배치는 StartFormScreen, KnowledgeRequestScreen 등
+/**
+ * @FileName : Field.js
+ * @Description : aiSecretary 전용 작은 조각들 (Field)
+ *                - 라벨 / 필수표시 / children 입력영역 공통 컴포넌트 분리
+ *                - 활용: 입력 폼의 라벨 + 입력영역 배치는 StartFormScreen, KnowledgeRequestScreen 등
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일         수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.04.29    송혜진        최초 생성
+ */
 
 import React from "react";
 

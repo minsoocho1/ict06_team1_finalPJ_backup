@@ -1,4 +1,4 @@
-<!--
+﻿<!--
     @FileName : roadItemList.html
     @Description : 특정 온보딩 로드맵에 포함된 아이템 목록 조회 및 출력 순서 변경 화면
     @Author : 김다솜
@@ -10,10 +10,13 @@
     @ 2026.05.08    김다솜        최초 생성
     @ 2026.05.10    김다솜        아이템 순서 조정(Move Up/Down) 및 일괄 저장 기능 추가
     @ 2026.05.11    김다솜        검색/필터 기능 추가 및 버튼 상태 제어 로직 보완
+    @ 2026.05.13    김다솜        상세 화면 상단/하단 로드맵 재생성 버튼 추가 및 레이아웃 정리
+    @ 2026.05.14    김다솜        HTML 폼 중첩 제거(재생성 버튼 오류 해결) 및 필수 여부 컬럼 추가
 -->
+
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
+<head th:insert="~{/admin/common/head.html :: common_header}">
     <meta charset="UTF-8">
     <title id="page_title">로드맵 아이템 관리</title>
 </head>
@@ -34,10 +37,19 @@
                     </div>
 
                     <div class="col-auto ms-auto">
-                        <a th:href="@{/admin/onboarding/roadmaps/{roadmapId}/items/new(roadmapId=${roadmap.roadmapId})}"
-                           class="btn btn-primary btn-sm text-nowrap d-inline-flex align-items-center">
-                            아이템 등록
-                        </a>
+                        <div class="d-flex gap-2">
+                            <form th:action="@{/admin/onboarding/roadmaps/{roadmapId}/regenerate(roadmapId=${roadmap.roadmapId})}"
+                                  method="post"
+                                  onsubmit="return confirm('최신 콘텐츠 기준으로 이 직원의 로드맵을 다시 생성하시겠습니까? 기존 진행 상태는 초기화됩니다.');">
+                                <button type="submit" class="btn btn-outline-success btn-sm text-nowrap d-inline-flex align-items-center">
+                                    로드맵 재생성
+                                </button>
+                            </form>
+                            <a th:href="@{/admin/onboarding/roadmaps/{roadmapId}/items/new(roadmapId=${roadmap.roadmapId})}"
+                               class="btn btn-primary btn-sm text-nowrap d-inline-flex align-items-center">
+                                아이템 등록
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -70,7 +82,7 @@
                 </div>
 
                 <div class="alert alert-light border mb-3">
-                    순서는 아래 화살표로 먼저 조정한 뒤, 마지막에 <strong>순서 저장</strong>을 눌러 한 번에 반영합니다.
+                    순서는 위아래 버튼으로 먼저 조정한 뒤 마지막에 <strong>순서 저장</strong>을 눌러 한 번에 반영합니다.
                 </div>
 
                 <form th:action="@{/admin/onboarding/roadmaps/{roadmapId}/items/reorder(roadmapId=${roadmap.roadmapId})}"
@@ -84,12 +96,12 @@
                                     <th>순서</th>
                                     <th>카테고리</th>
                                     <th>아이템 제목</th>
+                                    <th>구분</th>
                                     <th>연결 콘텐츠</th>
                                     <th>콘텐츠 유형</th>
                                     <th>관리</th>
                                 </tr>
                                 </thead>
-
                                 <tbody id="roadItemTableBody">
                                 <tr th:each="item, itemStat : ${items}" th:attr="data-item-id=${item.itemId}" class="road-item-row">
                                     <td>
@@ -98,37 +110,31 @@
 
                                         <div class="d-flex align-items-center gap-2">
                                             <span class="badge bg-secondary order-label" th:text="${item.orderNo}">1</span>
-                                            <button type="button"
-                                                    class="btn btn-sm btn-outline-secondary move-up"
-                                                    th:disabled="${itemStat.first}">
-                                                ▲
+                                            <button type="button" class="btn btn-sm btn-outline-secondary move-up" th:disabled="${itemStat.first}">
+                                                ↑
                                             </button>
-                                            <button type="button"
-                                                    class="btn btn-sm btn-outline-secondary move-down"
-                                                    th:disabled="${itemStat.last}">
-                                                ▼
+                                            <button type="button" class="btn btn-sm btn-outline-secondary move-down" th:disabled="${itemStat.last}">
+                                                ↓
                                             </button>
                                         </div>
                                     </td>
                                     <td th:text="${item.categoryName}" class="road-item-category">카테고리</td>
                                     <td th:text="${item.itemTitle}" class="road-item-title">아이템 제목</td>
+                                    <td>
+                                        <span th:if="${item.content.isMandatory}" class="badge bg-danger">필수</span>
+                                        <span th:unless="${item.content.isMandatory}" class="badge bg-info">선택</span>
+                                    </td>
                                     <td th:text="${item.content.title}" class="road-item-content">연결 콘텐츠</td>
                                     <td th:text="${item.content.type}" class="road-item-type">VIDEO</td>
                                     <td>
                                         <div class="d-flex gap-1">
                                             <a class="btn btn-sm btn-outline-primary"
-                                               th:href="@{/admin/onboarding/roadmaps/{roadmapId}/items/{itemId}/edit(
-                                                    roadmapId=${roadmap.roadmapId},
-                                                    itemId=${item.itemId}
-                                               )}">
+                                               th:href="@{/admin/onboarding/roadmaps/{roadmapId}/items/{itemId}/edit(roadmapId=${roadmap.roadmapId}, itemId=${item.itemId})}">
                                                 수정
                                             </a>
                                             <button type="submit"
                                                     class="btn btn-sm btn-outline-danger"
-                                                    th:formaction="@{/admin/onboarding/roadmaps/{roadmapId}/items/{itemId}/delete(
-                                                        roadmapId=${roadmap.roadmapId},
-                                                        itemId=${item.itemId}
-                                                    )}"
+                                                    th:formaction="@{/admin/onboarding/roadmaps/{roadmapId}/items/{itemId}/delete(roadmapId=${roadmap.roadmapId}, itemId=${item.itemId})}"
                                                     formmethod="post"
                                                     onclick="return confirm('아이템을 삭제하시겠습니까?');">
                                                 삭제
@@ -146,20 +152,30 @@
                             </table>
                         </div>
                     </div>
+                </form>
 
-                    <div class="mt-3 d-flex justify-content-between">
-                        <a th:href="@{/admin/onboarding/roadmaps}" class="btn btn-outline-secondary">
-                            로드맵 목록으로
-                        </a>
+                <div class="mt-3 d-flex justify-content-between">
+                    <a th:href="@{/admin/onboarding/roadmaps}" class="btn btn-outline-secondary">
+                        로드맵 목록으로
+                    </a>
+                    <div class="d-flex gap-2">
+                        <form th:action="@{/admin/onboarding/roadmaps/{roadmapId}/regenerate(roadmapId=${roadmap.roadmapId})}"
+                              method="post"
+                              onsubmit="return confirm('최신 콘텐츠 기준으로 이 직원의 로드맵을 다시 생성하시겠습니까? 기존 진행 상태는 초기화됩니다.');">
+                            <button type="submit" class="btn btn-outline-success btn-sm text-nowrap d-inline-flex align-items-center">
+                                로드맵 재생성
+                            </button>
+                        </form>
                         <button type="submit"
-                                class="btn btn-primary"
+                                form="reorderForm"
+                                class="btn btn-primary btn-sm text-nowrap d-inline-flex align-items-center"
                                 id="saveOrderButton"
                                 th:disabled="${#lists.isEmpty(items)}"
                                 disabled>
                             순서 저장
                         </button>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
     </main>

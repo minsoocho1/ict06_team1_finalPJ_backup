@@ -1,0 +1,510 @@
+sts3.0 설치
+
+마이바티스 에러 => 테이블 컬럼 사이즈 불일치시 오류
+                현 예제 소스 => address(50) 
+
+
+
+----------------------------------------------------
+0. 오류 
+java.lang.ClassNotFoundException: oracle.jdbc.driver.OracleDriver
+
+=> mvnrepository.com에서 검색하거나 복사하거나
+
+<!-- jdbc 오류 나신분들만 pom.xml에 추가  -->
+<!-- Cannot load JDBC driver class 'oracle.jdbc.driver.OracleDriver' -->
+	<dependency> 
+	 <groupId>com.oracle.database.jdbc</groupId>
+     <artifactId>ojdbc6</artifactId> 
+     <version>11.2.0.4</version> 
+   </dependency>
+  
+   <dependency> 
+         <groupId>commons-dbcp</groupId>
+         <artifactId>commons-dbcp</artifactId>
+         <version>1.4</version>
+    </dependency>
+	<!-- jdbc -->
+
+
+1. context.xml에 커넥션풀 추가 
+
+ <Resource author="Container" 
+    driverClassName="oracle.jdbc.driver.OracleDriver" 
+    maxActive="7" 
+    maxWait="1000" 
+    name="jdbc/jsp_pj_ict05" 
+    password="tiger" 
+    type="javax.sql.DataSource" 
+    url="jdbc:oracle:thin:@localhost:1521:xe" 
+    username="jsp_pj_ict05"/>     
+     
+-----------------------------------------------------     
+2. 플젝 생성 : NEW > Spring Legacy Project > 프로젝트명 입력 > Spring MVC Project 선택 > 패키지(3레벨이상) 입력 : spring.mvc.spring_pj_ict05
+  => 패키지(3레벨이상) 입력해야 하며, 3레벨이 컨텍스트명(spring_pj_ict05)이 된다. 
+  
+=> 테스트 => http://localhost/
+	home.jsp 실행
+	Hello world!
+
+1) 자바 설정
+	
+	- project 우클릭 > properties > Project Facets > java를 11로 변경
+		Runtimes 탭에서 Apache Tomcat v9.0 클릭 > Apply 버튼
+	
+	- project 우클릭 > properties > Java Build Path > Library 탭 > jre System library 선택후 Edit 선택 / 또는 jre System library 더블클릭
+	> 세번째 workspace default JRE(jre1.11.0_xxx) 선택
+	
+	- java compiler - 11버전 확인
+	
+	[Apply AND Close] 클릭
+	
+2) pom.xml에 버전 반영   => 3.1.1.RELEASE 버전이면 어떤것도 작동되지 않는다.
+	<properties>
+		<java-version>11</java-version>
+		<org.springframework-version>5.1.8.RELEASE</org.springframework-version>	
+		
+			
+에러가 없어야 한다.		
+
+3) 실행 :   HomeController에서 실행
+	http://localhost/spring_pj_ict05/
+	=> http://localhost/세번째 패키지명/
+	
+	=> 안되면 Project > clean
+	
+	   안되면 maven > update project
+	
+-----------------------------------------------------	
+3. 패키지 생성(base-package 하위에 해야 객체가 생성된다.)
+   View Menu(세로점3개) > Package Presentaion > Hierarchial로 변경
+
+	spring.mvc.spring_pj_ict05.controller
+	spring.mvc.spring_pj_ict05.service
+	spring.mvc.spring_pj_ict05.dao
+	spring.mvc.spring_pj_ict05.dto
+
+-----------------------------------------------------	
+4. web.xml 맨 아래에 한글 안깨지도록 추가
+
+	<!-- 한글 안깨지게 처리 시작 -->
+	<filter>
+		<filter-name>encodingFilter</filter-name>
+		<filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+		
+		<init-param>
+			<param-name>encoding</param-name>
+			<param-value>UTF-8</param-value>
+		</init-param>	
+		
+		<init-param>
+			<param-name>forceEncoding</param-name>
+			<param-value>true</param-value>
+		</init-param>
+	</filter>
+	
+	<filter-mapping>
+		<filter-name>encodingFilter</filter-name>
+		<url-pattern>/*</url-pattern>
+	</filter-mapping>
+	<!-- 한글 안깨지게 처리 종료 -->
+
+</web-app>
+
+
+확인 => http://localhost/spring_pj_ict05/  => 새로 고침 => 한글이 안깨짐
+	Hello world!
+	The time on the server is 2024년 7월 11일 오전 10시 19분 9초 KST.
+	
+-----------------------------------------------------	
+5. pom.xml에 Mybatis.jar 파일 설정
+   
+   mvnrepository.com에서 4개의 라이브러리를 검색해서 복사후 pom.xml에 등록하면
+   maven 중앙 repository(저장소)로부터 다운로드 후 빌드되어 Maven Dependencies(.m2.repository)에 저장된다.
+   
+ 	<!-- Mybatis 설정 시작 -->
+	<dependency>
+	    <groupId>org.mybatis</groupId>
+	    <artifactId>mybatis-spring</artifactId>
+	    <version>1.3.2</version>
+	</dependency>
+	
+	<dependency>
+	    <groupId>org.mybatis</groupId>
+	    <artifactId>mybatis</artifactId>
+	    <version>3.4.6</version>
+	</dependency>
+	
+	<dependency>
+		    <groupId>org.springframework</groupId>
+		    <artifactId>spring-jdbc</artifactId>
+		    <version>5.3.24</version>
+	</dependency>
+	<!-- Mybatis 설정 끝 -->
+	
+   --spring-test
+   
+ 6. jsp의 CustomerController open
+ 
+ 	
+ 	- 해당 경로에 Customer 파일 복사해서 가져온다. 	
+ 	스프링
+ 	[ CustomerController ] 소스 만들고 작성
+ 	
+ 		package spring.mvc.spring_pj_ict05.controller;
+
+		import org.slf4j.Logger;
+		import org.slf4j.LoggerFactory;
+		import org.springframework.stereotype.Controller;
+		import org.springframework.web.bind.annotation.RequestMapping;
+		
+		@Controller
+		public class CustomerController {
+			
+			private static final Logger logger = LoggerFactory.getLogger(CustomerController.class);
+			
+			// 첫페이지
+			@RequestMapping("main.do")
+			public String main() {
+				logger.info("<<< url ==>  /main.do >>>");
+				
+				return "common/main";
+			}
+		}
+
+    -------------------------------------------------
+ 	
+ 	
+ 	- jsp : common폴더   => 복사해서 WEB-INF/views 폴더에 붙여넣는다.
+ 	  jsp : resources/ css,images,js => 3폴더 복사해서 자동생성된 webapp/resources 폴더에 붙여넣는다.
+ 	  index.jsp를 webapp 폴더에 붙여넣고 수정  (주의)
+ 	  
+		 	
+		<%-- <%@ include file="common/setting.jsp" %>      --%>
+		<!DOCTYPE html>
+		<html>
+		<head>
+		<meta charset="UTF-8">
+		<title>index 페이지</title>
+		
+		<script type="text/javascript">
+				setTimeout(function() {
+				/* window.location="${path}/main.do" */
+					window.location="/spring_pj_ict05/main.do"
+			}, 2000);
+		</script>
+		
+ 
+ //////////////////////////// 1) main.do //////////////////////////
+ 
+ index.jsp 우클릭 > Run As > Run On Server
+ 
+ http://localhost/spring_pj_ict05/main.do => 1초후에 메인페이지가 뜬다.
+ 
+ 
+ 
+  //////////////////////////// 2) 회원가입 join.do //////////////////////////
+  
+    webapp/customer 폴더를 views 폴더에 붙여넣는다.
+    CustomerService, CustomerServiceImpl 복사해서 가져온다.
+  	CustomerDTO 복사해서 가져온다.
+ 	CustomerDAO, CustomerDAOImpl 복사해서 가져온다.
+  
+   DAO, DAOImpl => CustomerDTO 스프링 패키지로 수정
+   	                id 중복확인 제외한 나머지 메서드 모두 주석처리
+   	Service, ServiceImpl => CustomerDTO, 에러난 import문을 스프링 패키지로 수정
+   	                       id 중복확인 제외한 나머지 메서드 모두 주석처리
+   	
+   ==> 스프링으로 변환	(jsp는 경로만 수정 => /WEB-INF/views 추가
+                    , 백엔드(클래스는 어노테이션 처리, DAO는 마이바티스로 작성후 호출)) 
+   @Service
+   public class CustomerServiceImpl implements CustomerService{  }
+   
+   @Repository
+	public class CustomerDAOImpl implements CustomerDAO { }
+	
+   
+    *** 단 서비스, DAO는 전체 주석처리하고, 컨트롤러에서 호출시 해당 메서드만 주석해제하고, 소스 수정
+   
+   
+ [ 경로 수정 ]
+<%@ include file="/WEB-INF/views/common/setting.jsp" %>  
+<%@ include file="/WEB-INF/views/common/header.jsp" %>
+<%@ include file="/WEB-INF/views/common/footer.jsp" %>
+
+에러난 경로를 위처럼 수정한다.
+
+컨트롤러에 회원가입, 회원중복처리 추가
+
+ http://localhost/spring_pj_ict05/join.do 
+
+  //////////////////////////// 중복확인 idConfirmAction.do //////////////////////////
+  
+resources > js > customer > join.js  => 주의사항 
+아이디 중복확인 : spring_pj_ict05으로 고친후 강력 새로고침 => 500 에러 : 서비스~~ 처리
+let url="/spring_pj_ict05/idConfirmAction.do?user_id=" + document.joinform.user_id.value;
+
+Cannot load JDBC driver class 'oracle.jdbc.driver.OracleDriver' => pom.xml에 ojdbc6 추가
+<dependency> 
+	 <groupId>com.oracle.database.jdbc</groupId>
+     <artifactId>ojdbc6</artifactId> 
+     <version>11.2.0.4</version> 
+   </dependency>
+
+
+ [ 경로 수정 ]
+ 
+idConfirmAction.jsp
+<%@ include file="/WEB-INF/views/common/setting.jsp" %>  
+<%@ include file="/WEB-INF/views/common/header.jsp" %>
+<%@ include file="/WEB-INF/views/common/footer.jsp" %>
+
+///////////////////////////////////////////////////////////
+// CustomerService.java   
+dto 경로 수정
+
+// CustomerServiceImpl.java
+
+@Service 추가
+dto 경로 수정
+
+// CustomerDAO.java
+dto 경로 수정
+
+// CustomerDAOImpl.java  
+dto 경로 수정
+@Repository 추가
+
+
+각 참조변수에 @Autowired 추가
+
+class ServiceImpl {
+@Autowired
+	private CustomerDAO dao;
+		
+	// 6단계. jsp로 처리결과 전달
+	model.addAttribute("selectCnt", selectCnt);
+	model.addAttribute("strUserid", strUserid);		
+				
+}	
+
+
+Service, ServiceImpl에서 매개변수 model 추가
+
+// ID 중복확인 처리
+	public void idConfirmAction(HttpServletRequest req, Model model)
+			throws ServletException, IOException; 
+	
+			
+[ Controller 수정 ]
+
+	@Autowired
+	private CustomerServiceImpl service;
+	
+// 아이디 중복확인
+@RequestMapping("idConfirmAction.do")
+public String idConfirmAction(HttpServletRequest req, Model model) 
+		throws ServletException, IOException {
+	logger.info("<<< url ==> /idConfirmAction.do >>>");
+	
+	service.idConfirmAction(req, model);
+	return "customer/join/idConfirmAction";
+}
+
+Service, ServiceImpl, DAO, DAOImpl => id 중복확인 제외한 나머지 메서드 모두 주석처리
+
+[context.xml]에 DBCP 연결 => 생략시 getConnection 오류
+<Resource author="Container" 
+	    driverClassName="oracle.jdbc.driver.OracleDriver" 
+	    maxActive="7" maxWait="1000" 
+	    name="jdbc/jsp_pj_ict05" 
+	    password="tiger" 
+	    type="javax.sql.DataSource" 
+	    url="jdbc:oracle:thin:@localhost:1521:xe" 
+	    username="jsp_pj_ict05"/>   
+
+http://localhost/spring_pj_ict05/join.do => ID 중복확인시 OK
+
+
+///////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////  join.do //////////////////////////
+  
+ JSP 서블릿띄워서  비교하면서 한다.   
+   6-2) join.do
+   
+      컨트롤러
+   //--------------- [회원가입] -----------------	
+   // 회원가입화면
+	@RequestMapping("join.do")
+	public String join() {
+		logger.info("[url ==> confirmIdAction.do]");
+		
+		return "customer/join/join";
+	}
+   --
+   join.jsp 
+   
+   => header, footer, setting.jsp 경로 수정  : /WEB-INF/views 추가
+   
+   <%@ include file="/WEB-INF/views/common/setting.jsp" %>
+   <%@ include file="/WEB-INF/views/common/header.jsp" %>   
+   <%@ include file="/WEB-INF/views/common/footer.jsp" %> 
+    
+    
+    6-3) 컨트롤러, 서비스, DAO에 어노테이션 추가
+      패키지 오류 먼저 수정(jsp패키지와 스프링 패키지가 다르므로)후 어노테이션 추가
+    
+    @Controller
+	public class CustomerController {
+	
+		@Autowired
+		CustomerServiceImpl service;
+		
+		// 회원가입 처리
+		@RequestMapping("joinAction.do")
+		public String joinAction(HttpServletRequest req, Model model) {
+			logger.info("[url => /joinAction.do]");
+		
+		service.signInAction(req, model);
+		
+		return "customer/join/joinAction";
+		
+	
+		나머지 소스는 주석처리
+	}
+    
+    // CustomerServiceImpl, CustomerService 복사해서 붙여넣는다. 해당부분 제외하고 나머지 주석처리
+    @Service
+	public class CustomerServiceImpl implements CustomerService {
+	
+		@Autowired
+		CustomerDAO dao;
+		
+		// 회원가입 처리
+		@Override
+		public void signInAction(HttpServletRequest req, Model model) {
+			System.out.println("서비스 => 회원가입 처리");
+		
+		model.addAttribute("insertCnt", insertCnt);
+		
+	
+		나머지 소스는 주석처리, import 경로 수정
+		
+		
+	*** DAO, DAOImpl은 마이바티스로 작성전에 기존 DAO 방식으로 중복확인 테스트
+	*** 오류가 없으면 마이바티스로 수정
+	
+	
+	
+	
+	
+	}	
+	
+	// CustomerDAOImpl, CustomerDAO 복사해서 붙여넣는다. 해당부분 제외하고 나머지 주석처리
+	
+	@Repository
+	public class CustomerDAOImpl implements CustomerDAO {
+	   // 6-5)
+	   @Autowired
+		SqlSession sqlSession;
+		
+		나머지 소스는 주석처리
+	}
+	
+	********
+	6-4) src/main/resources/dataSource-config.xml 작성
+	    => web.xml에 등록해야 함 
+	    <context-param>
+			<param-name>contextConfigLocation</param-name>
+			<param-value>
+						classpath:/dataSource-config.xml  <!-- 추가해야 작동  -->
+			</param-value>
+		</context-param>
+		--------
+
+         pom.xml에 마이바티스 추가
+         => 위 5. pom.xml에 Mybatis.jar 파일 설정 참고
+		--------
+		src/main/resources/ 우클릭 > New > Spring Bean Configuration File > dataSource-config.xml
+		dataSource-config.xml  소스 작성
+		<!-- Mybatis 설정 시작 -->
+		<!-- 컨넥션풀 -->
+		<bean id="dataSource" class="org.springframework.jndi.JndiObjectFactoryBean">
+			<property name="jndiName" value="java:comp/env/jdbc/jsp_pj_ict05" />
+			<property name="resourceRef" value="true" />
+		</bean>
+		
+		<!-- Mybatis 파일 위치 지정, 컨넥션풀 -->
+		<bean id="sqlSessionFactory" class="org.mybatis.spring.SqlSessionFactoryBean">
+			<property name="dataSource" ref="dataSource" />
+			<property name="mapperLocations" value="classpath:mappers/**/*.xml" />  
+		</bean>
+		
+		<!-- 생성자 DI이며, sqlSession이 참조변수 -->
+		<bean id="sqlSession" class="org.mybatis.spring.SqlSessionTemplate">
+			<constructor-arg ref="sqlSessionFactory" />
+		</bean>
+		
+		<!-- Mybatis 설정 종료 -->
+	
+	6-5) DAOImpl에 sqlSession 추가
+	
+	// Mybatis jar 파일들이 pom.xml에 등록되어 있어야 SqlSession이 import 가능
+	// dataSource-config.xml에 bean id="sqlSession"로 설정되어 있어야 함
+	
+	@Autowired
+	SqlSession sqlSession;   // dataSource-config.xml - 컨넥션풀 + 마이바티스 설정(pom.xml)
+	
+	6-6) 마이바티스 매퍼 파일 작성
+	
+		=> 1. 한두줄의 자바코드로 DB연동을 처리한다
+		   2. SQL 명령어를 자바 코드에서 분리하여 XML 파일에 Mapper로 따로 관리
+		   
+	   - src/main/resources/에서 폴더 생성 : mappers 폴더 생성
+	   - 그 폴더 우클릭 > new > other > xml file > customerMapper.xml 생성
+	   
+	   -  customerMapper.xml에 추가
+	   <?xml version="1.0" encoding="UTF-8"?>
+
+	<!DOCTYPE mapper
+	  PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+	  "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+	  
+	 <mapper namespace="spring.mvc.pj_01.dao.CustomerDAO">  <!-- namespace="패키지명.인터페이스" -->
+	
+	 </mapper> 
+	********
+	
+	실행 : main.do -> join.do 회원가입
+	
+	
+-------------------------------------------------------------------------------------------
+[중복확인]
+	컨트롤러 > 중복확인
+	서비스 > 	중복확인
+	DAO > 중복확인
+	mapper 중복확인
+	DAOImpl > 중복확인
+	
+[회원가입]	
+	
+	컨트롤러 > 회원가입
+	서비스 > 	회원가입
+	DAO > 회원가입
+	mapper 회원가입
+	DAOImpl > 회원가입
+
+[회원수정]	
+[회원회원삭제]
+
+ 	
+ -------------------------------------------------------------------------------------------	
+    
+
+
+ 
+ 
+ 
+ 
