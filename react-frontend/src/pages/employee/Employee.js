@@ -1,94 +1,206 @@
-import React from 'react';
+import React, { useState } from 'react';
+import RecentHireCard from './RecentHireCard';
+import OrganizationSummaryCard from './OrganizationSummaryCard';
 
-// CoreUI 
-import { CButton, CCard, CCardBody, CCardHeader } from '@coreui/react';
+// CoreUI
+import {
+    CCard,
+    CCardBody,
+    CCardHeader,
+    CCol,
+    CRow,
+    CModal,
+    CModalHeader,
+    CModalTitle,
+    CModalBody
+} from '@coreui/react';
 
-// 페이지 이동
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+// 조직도 컴포넌트
+import OrganizationTree from './OrganizationTree';
+import OrganizationEmployeeList from './OrganizationEmployeeList';
+import EmployeeProfileCard from './EmployeeProfileCard';
 
-// 시연용 이미지 파일
-import refImage from 'src/assets/images/first_demo/[Employee]home.png'
+/*
+ * [사용자] 인사관리 메인 페이지
+ *
+ * 역할:
+ * - 조직도 화면 레이아웃 구성
+ * - 선택한 부서 상태 관리
+ * - 선택한 사원 상태 관리
+ * - 선택한 사원의 상세 정보를 모달로 표시
+ */
+const Employee = ({ userInfo }) => {
 
-// 1차 시연용으로 화면과 sql 쿼리를 함께 보여주기 위한 스타일 구현
-import { containerStyle, stepCardStyle } from 'src/styles/js/demoPageStyle';
+    /*
+     * 현재 선택한 부서 정보
+     */
+    const [selectedDepartment, setSelectedDepartment] = useState({
+        deptId: null,
+        deptName: '',
+    });
 
-// 코드 하이라이터 : sql 코드 보여주는 용
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; 
-import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { PATH } from 'src/constants/path';
+    /*
+     * 현재 선택한 사원 정보
+     *
+     * 값이 있으면 상세 모달이 열린다.
+     * null이면 상세 모달이 닫힌다.
+     */
+    const [selectedEmployee, setSelectedEmployee] = useState(null);
 
-// [인사관리] 메인 페이지
-const Employee = () => {
-
-    //DefaultLayout.js의 Outlet에서 보낸 userInfo 데이터 받기
-    const [userInfo] = useOutletContext();
-
-    //해당 화면의 SQL 쿼리 작성(백틱 `` 사용)
-    const sqlQuery = `
-        SELECT 
-            m.user_id, m.name, d.dept_name, j.job_name, m.status, m.hire_date
-        FROM members m
-        JOIN departments d ON m.dept_id = d.dept_id
-        JOIN jobs j ON m.job_id = j.job_id
-        WHERE m.name ILIKE '%' || #{keyword} || '%'  
-        AND m.dept_id = COALESCE(#{deptId}, m.dept_id) 
-        AND m.status = ANY(#{statusList}::text[]) 
-        ORDER BY m.hire_date DESC;
-    `;
+    /*
+     * 사원 상세 모달 닫기
+     */
+    const closeEmployeeModal = () => {
+        setSelectedEmployee(null);
+    };
 
     return (
-        <div style={containerStyle}>
-            <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>인사관리 메인</h2>
-            </header>
+        <div className="container-fluid">
 
-            <hr style={{ border: '0', height: '1px', background: '#eee', margin: '40px 0' }} />
+            {/* 페이지 제목 */}
+            <div className="mb-4">
+                <h2 className="fw-bold">내 정보 및 조직도</h2>
 
-            {/* 1차 시연용 영역 */}
-            <CCard className="mb-4" style={{ height: 'calc(100vh - 120px)' }}>
-                <CCardHeader>
-                    <strong>시연 화면 및 관련 SQL쿼리</strong>
-                </CCardHeader>
-                <CCardBody className="p-0 d-flex flex-column">
-                    <div className="p-2 d-flex justify-content-end">
-                        {/* 시연용 화면 이동 버튼 */}
-                        {/* path에서 경로 상수 불러오기 */}
-                        {/* <Link to="/employee/detail"> */}
-                        <Link to={PATH.EMPLOYEE.DETAIL}>
-                            <CButton
-                                color='primary'
-                                variant='outline'
-                                style={{ fontWeight: 'bold' }}
+                <div className="text-medium-emphasis">
+                    조직도 및 구성원 정보를 조회할 수 있습니다.
+                </div>
+            </div>
+
+            {/* 전체 레이아웃 */}
+            <CRow>
+
+                {/* ============================= */}
+                {/* 왼쪽 조직도 영역 */}
+                {/* ============================= */}
+                <CCol lg={3}>
+
+                    <CCard className="shadow-sm border-0 h-100">
+
+                        <CCardHeader className="fw-bold">
+                            조직도
+                        </CCardHeader>
+
+                        <CCardBody
+                            style={{
+                                height: '75vh',
+                                overflowY: 'auto',
+                            }}
+                        >
+
+                            {/* 조직도 트리 */}
+                            <OrganizationTree
+                                selectedDepartment={selectedDepartment}
+                                setSelectedDepartment={setSelectedDepartment}
+                                setSelectedEmployee={setSelectedEmployee}
+                                userInfo={userInfo}
+                            />
+
+                        </CCardBody>
+
+                    </CCard>
+
+                </CCol>
+
+                {/* ============================= */}
+                {/* 오른쪽 영역 */}
+                {/* ============================= */}
+                <CCol lg={9}>
+
+                    <CRow>
+
+                        {/* ============================= */}
+                        {/* 사원 목록 영역 */}
+                        {/* ============================= */}
+                        <CCol lg={12} className="mb-3">
+
+                            <CCard className="shadow-sm border-0">
+
+                                <CCardHeader className="fw-bold">
+
+                                    {
+                                        selectedDepartment?.deptName
+                                            ? `${selectedDepartment.deptName} 구성원`
+                                            : '구성원 목록'
+                                    }
+
+                                </CCardHeader>
+
+                                <CCardBody
+                                    style={{
+                                        height: '50vh',
+                                        overflowY: 'auto',
+                                    }}
                                 >
-                                인사관리 상세
-                            </CButton>
-                        </Link>
-                    </div>
 
-                    {/* 레퍼런스 이미지 영역 */}
-                    <div className="text-center" style={{ backgroundColor: '#f4f4f4', borderTop: '1px solid #eee' }}>
-                        <img 
-                            src={refImage} 
-                            alt="인사관리 메인" 
-                            style={{ width: '100%',
-                            height: 'auto',
-                            display: 'block' }} 
-                        />
-                    </div>
+                                    <OrganizationEmployeeList
+                                        selectedDepartment={selectedDepartment}
+                                        selectedEmployee={selectedEmployee}
+                                        setSelectedEmployee={setSelectedEmployee}
+                                    />
 
-                    {/* SQL 쿼리 영역 */}
-                    <div className='text-start mt-4'>
-                        <h5 className='mb-3' style={{ fontWeight: 'bold', color: '#4f5d73' }}>
-                            <span style={{ borderLeft: '4px solid #321fdb', paddingLeft: '10px' }}>
-                                관련 SQL 쿼리
-                            </span>
-                        </h5>
-                        <SyntaxHighlighter language='sql' style={coy}>
-                            {sqlQuery}
-                        </SyntaxHighlighter>
-                    </div>
-                </CCardBody>
-            </CCard>
+                                </CCardBody>
+
+                            </CCard>
+
+                        </CCol>
+
+                        {/* ============================= */}
+                        {/* 하단 정보 영역 */}
+                        {/* ============================= */}
+                        <CCol lg={12}>
+
+                            <CRow>
+
+                                {/* ============================= */}
+                                {/* 조직 통계 */}
+                                {/* ============================= */}
+                                <CCol lg={5} className="mb-3">
+
+                                    <OrganizationSummaryCard />
+
+                                </CCol>
+
+                                {/* ============================= */}
+                                {/* 최근 입사자 */}
+                                {/* ============================= */}
+                                <CCol lg={7} className="mb-3">
+
+                                    <RecentHireCard />
+
+                                </CCol>
+
+                            </CRow>
+
+                        </CCol>
+
+                    </CRow>
+
+                </CCol>
+
+            </CRow>
+
+            {/* ============================= */}
+            {/* 사원 상세 모달 */}
+            {/* ============================= */}
+            <CModal
+                visible={selectedEmployee !== null}
+                onClose={closeEmployeeModal}
+                alignment="center"
+                size="lg"
+            >
+                <CModalHeader>
+                    <CModalTitle>
+                        구성원 상세 정보
+                    </CModalTitle>
+                </CModalHeader>
+
+                <CModalBody>
+                    <EmployeeProfileCard
+                        selectedEmployee={selectedEmployee}
+                    />
+                </CModalBody>
+            </CModal>
+
         </div>
     );
 };

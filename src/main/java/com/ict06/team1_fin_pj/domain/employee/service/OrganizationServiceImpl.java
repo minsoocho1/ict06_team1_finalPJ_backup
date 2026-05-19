@@ -111,19 +111,42 @@ public class OrganizationServiceImpl implements OrganizationService {
      * 중복을 줄이기 위해 private 메서드로 분리했다.
      */
     private List<OrgEmployeeDto> convertToOrgEmployeeDtos(List<EmpEntity> employees) {
+
         return employees.stream()
                 .map(emp -> OrgEmployeeDto.builder()
+
+                        // 사번
                         .empNo(emp.getEmpNo())
+
+                        // 사원 아이디
+                        .empId(emp.getEmpId())
+
+                        // 이름
                         .name(emp.getName())
+
+                        // 부서 정보
                         .deptId(emp.getDepartment().getDeptId())
                         .deptName(emp.getDepartment().getDeptName())
+
+                        // 직급 정보
                         .positionId(emp.getPosition().getPositionId())
                         .positionName(emp.getPosition().getPositionName())
+
+                        // 재직 상태
                         .status(emp.getStatus())
+
+                        // 연락처 정보
                         .email(emp.getEmail())
                         .phone(emp.getPhone())
+
+                        // 프로필 이미지
                         .profileImg(emp.getProfileImg())
+
+                        // 입사일
+                        .hireDate(emp.getHireDate())
+
                         .build())
+
                 .toList();
     }
 }
