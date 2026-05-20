@@ -9,6 +9,9 @@ public enum AttendanceStatus {
     LATE("지각"),
     EARLY("조퇴"),
     LEFT("퇴근"),
+    OVERTIME("연장근무"),
+
+    // 전자결재/휴가 연동용 상태
     LEAVE("휴가"),
     HALF_LEAVE("반차");
 

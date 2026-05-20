@@ -128,12 +128,57 @@
                     <hr>
                     근태·급여
                 </li>
-                <li class="nav-item">
-                    <a th:href="@{/admin/attendance/main}" class="nav-link">
+                <!-- 시작: 근태 관리 -->
+                <li class="nav-item"
+                    th:classappend="${activeAttendanceMenu != null} ? ' menu-open'">
+
+                    <!-- 근태 관리 상위 메뉴 -->
+                    <a href="#"
+                       class="nav-link"
+                       th:classappend="${activeAttendanceMenu != null} ? ' active'">
                         <i class="nav-icon fa-regular fa-clock"></i>
-                        <p>근태 관리</p>
+                        <p>
+                            근태 관리
+                            <i class="nav-arrow fa-solid fa-angle-right"></i>
+                        </p>
                     </a>
+
+                    <!-- 근태 관리 하위 메뉴 -->
+                    <ul class="nav nav-treeview">
+
+                        <!-- 근태 현황 -->
+                        <li class="nav-item">
+                            <a th:href="@{/admin/attendance/main}"
+                               class="nav-link"
+                               th:classappend="${activeAttendanceMenu == 'main'} ? ' active'">
+                                <i class="nav-icon fa-solid fa-angle-right"></i>
+                                <p>근태 현황</p>
+                            </a>
+                        </li>
+
+                        <!-- 근태 통계 -->
+                        <li class="nav-item">
+                            <a th:href="@{/admin/attendance/statistics}"
+                               class="nav-link"
+                               th:classappend="${activeAttendanceMenu == 'statistics'} ? ' active'">
+                                <i class="nav-icon fa-solid fa-angle-right"></i>
+                                <p>근태 통계</p>
+                            </a>
+                        </li>
+
+                        <!-- 연차/휴가 현황 -->
+                        <li class="nav-item">
+                            <a th:href="@{/admin/attendance/leave}"
+                               class="nav-link"
+                               th:classappend="${activeAttendanceMenu == 'leave'} ? ' active'">
+                                <i class="nav-icon fa-solid fa-angle-right"></i>
+                                <p>연차/휴가 현황</p>
+                            </a>
+                        </li>
+
+                    </ul>
                 </li>
+                <!-- 끝: 근태 관리 -->
                 <li class="nav-item">
                     <a th:href="@{/admin/payroll}" class="nav-link">
                         <i class="nav-icon fa-solid fa-won-sign"></i>

@@ -26,11 +26,7 @@ public class AdAttendanceSearchDTO {
     // 검색 조건: 사원명 검색어
     private String keyword;
 
-    // 현재 페이지 번호
-    // 기본값은 1페이지
-    private int page = 1;
+    // 검색 조건: 정렬 기준
+    private String sortType;
 
-    // 한 페이지에 보여줄 데이터 개수
-    // 기본값은 10개
-    private int size = 10;
 }

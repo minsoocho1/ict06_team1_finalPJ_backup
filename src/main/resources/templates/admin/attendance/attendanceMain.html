@@ -131,10 +131,35 @@
                   <select id="deptId"
                           name="deptId"
                           class="form-select">
+                    <!-- 전체 부서 선택 -->
                     <option value="">전체 부서</option>
-                    <option value="1" th:selected="${searchDTO.deptId == '1'}">인사팀</option>
-                    <option value="2" th:selected="${searchDTO.deptId == '2'}">개발팀</option>
-                    <option value="3" th:selected="${searchDTO.deptId == '3'}">영업팀</option>
+
+                    <!--
+                      DB에서 조회한 부서 목록 반복 출력
+
+                      departmentList:
+                      - Controller에서 model.addAttribute("departmentList", departmentList)로 전달한 값
+
+                      dept:
+                      - 반복문 안에서 사용하는 부서 1개 객체
+
+                      th:value:
+                      - 실제 검색 조건으로 넘어갈 부서 ID
+                      - 예: deptId=1
+
+                      th:text:
+                      - 화면에 보여줄 부서명
+                      - 예: 인사팀, 개발팀
+
+                      th:selected:
+                      - 검색 후에도 선택한 부서가 유지되도록 처리
+                    -->
+                    <option th:each="dept : ${departmentList}"
+                            th:value="${dept.deptId}"
+                            th:text="${dept.deptName}"
+                            th:selected="${searchDTO.deptId == #strings.toString(dept.deptId)}">
+                      부서명
+                    </option>
                   </select>
                 </div>
                 <!-- 근태 상태 필터 -->
@@ -164,6 +189,97 @@
                          placeholder="사원명 입력"
                          th:value="${searchDTO.keyword}">
                 </div>
+                <!-- 정렬 기준 -->
+                <div class="col-md-3">
+                  <label for="sortType" class="form-label">정렬</label>
+
+                  <!--
+                    정렬 기준 select
+
+                    name="sortType"
+                    - Controller의 @RequestParam String sortType 과 연결됨
+
+                    th:selected
+                    - 검색 후에도 선택한 정렬값이 유지되도록 처리
+                  -->
+                  <select id="sortType"
+                          name="sortType"
+                          class="form-select">
+
+                    <!-- 최신 근무일순: 기본값 -->
+                    <option value="latest"
+                            th:selected="${searchDTO.sortType == null or searchDTO.sortType == 'latest'}">
+                      최신 근무일순
+                    </option>
+
+                    <!-- 오래된 근무일순 -->
+                    <option value="oldest"
+                            th:selected="${searchDTO.sortType == 'oldest'}">
+                      오래된 근무일순
+                    </option>
+
+                    <!-- 사번순 -->
+                    <option value="empNo"
+                            th:selected="${searchDTO.sortType == 'empNo'}">
+                      사번순
+                    </option>
+
+                    <!-- 이름순 -->
+                    <option value="name"
+                            th:selected="${searchDTO.sortType == 'name'}">
+                      이름순
+                    </option>
+                  </select>
+                </div>
+                <!-- 페이지 크기 선택 -->
+                <div class="col-md-3">
+
+                  <!-- 제목 -->
+                  <label for="size" class="form-label">
+                    목록 개수
+                  </label>
+
+                  <!--
+                    한 페이지에 몇 개의 데이터를 보여줄지 선택하는 select box
+
+                    Controller와 연결:
+                    @RequestParam int size
+
+                    예:
+                    size=10
+                    size=20
+                    size=30
+
+                    검색 버튼 클릭 시
+                    URL에 size 값이 함께 전달된다.
+
+                    th:selected:
+                    - 현재 선택한 size 값을 유지하기 위한 설정
+                  -->
+                  <select id="size"
+                          name="size"
+                          class="form-select">
+
+                    <!-- 10개 -->
+                    <option value="10"
+                            th:selected="${attendancePage.size == 10}">
+                      10개씩 보기
+                    </option>
+
+                    <!-- 20개 -->
+                    <option value="20"
+                            th:selected="${attendancePage.size == 20}">
+                      20개씩 보기
+                    </option>
+
+                    <!-- 30개 -->
+                    <option value="30"
+                            th:selected="${attendancePage.size == 30}">
+                      30개씩 보기
+                    </option>
+
+                  </select>
+                </div>
               </div>
               <!-- 검색 버튼 영역 -->
               <div class="row mt-3">
@@ -172,8 +288,18 @@
                   <button type="submit" class="btn btn-primary">
                     검색
                   </button>
-                  <!-- 초기화 버튼 -->
-                  <a href="/admin/attendance/main" class="btn btn-secondary">
+                  <!--
+                    초기화 버튼
+
+                    역할:
+                    - 모든 검색 조건 제거
+                    - 근무일 / 부서 / 상태 / 사원명 / 정렬 / 목록 개수 초기화
+                    - Controller의 기본값 적용
+                      sortType = latest
+                      size = 10
+                  -->
+                  <a th:href="@{/admin/attendance/main}"
+                     class="btn btn-secondary">
                     초기화
                   </a>
                 </div>
@@ -187,7 +313,48 @@
         <div class="card">
           <!-- 테이블 제목 영역 -->
           <div class="card-header">
-            <h5 class="card-title mb-0">전체 사원 근태 목록</h5>
+            <div class="d-flex justify-content-between align-items-center">
+              <!-- 테이블 제목 -->
+              <h5 class="card-title mb-0">
+                전사 근태 조회 결과
+              </h5>
+
+              <div class="d-flex align-items-center gap-3">
+
+                <!-- Excel 다운로드 버튼 -->
+                <!-- 현재 검색 조건을 유지한 상태로 Excel 파일을 내려받는다. -->
+                <a th:href="@{/admin/attendance/excel(
+                      workDate=${searchDTO.workDate},
+                      deptId=${searchDTO.deptId},
+                      status=${searchDTO.status},
+                      keyword=${searchDTO.keyword},
+                      sortType=${searchDTO.sortType}
+                   )}"
+                   class="btn btn-sm btn-outline-success">
+
+                  <i class="fa-solid fa-file-excel me-1"></i>
+                  Excel 다운로드
+
+                </a>
+
+                <!-- 근태 수정 이력 화면 이동 버튼 -->
+                <a th:href="@{/admin/attendance/log}"
+                   class="btn btn-sm btn-outline-secondary">
+                  수정 이력 보기
+                </a>
+
+                <small class="text-muted"
+                       th:if="${attendancePage != null}">
+                  검색 결과
+                  <strong th:text="${attendancePage.totalElements}">0</strong>건 /
+                  현재
+                  <strong th:text="${attendancePage.number + 1}">1</strong>
+                  /
+                  <strong th:text="${attendancePage.totalPages}">1</strong>
+                  페이지
+                </small>
+              </div>
+            </div>
           </div>
           <!-- 테이블 영역 -->
           <div class="card-body table-responsive p-0">
@@ -203,14 +370,14 @@
                   <th>퇴근 시간</th>
                   <th>근무 시간</th>
                   <th>상태</th>
+                  <th>관리</th>
                 </tr>
               </thead>
               <tbody>
-
               <!-- 검색 결과 없을 경우 -->
               <!-- attendanceList가 없거나 비어있을 경우 -->
               <tr th:if="${attendanceList == null or #lists.isEmpty(attendanceList)}">
-                <td colspan="8" class="text-center text-muted py-4">
+                <td colspan="9" class="text-center text-muted py-4">
                   조회된 근태 데이터가 없습니다.
                 </td>
               </tr>
@@ -272,12 +439,131 @@
                     퇴근완료
                   </span>
                 </td>
+                <td>
+                  <!-- 관리자 근태 수정 버튼 -->
+                  <!-- data-* 속성은 수정 Modal에 기존 값을 넣기 위해 사용한다 -->
+                  <button type="button"
+                          class="btn btn-sm btn-outline-primary attendance-update-btn"
+                          th:data-attendance-id="${attendance.attendanceId}"
+                          th:data-work-date="${attendance.workDate}"
+                          th:data-check-in="${attendance.checkIn}"
+                          th:data-check-out="${attendance.checkOut}"
+                          th:data-status="${attendance.status}">
+                    수정
+                  </button>
+                </td>
               </tr>
               </tbody>
             </table>
           </div>
         </div>
         <!-- 관리자 근태 목록 테이블 영역 끝 -->
+
+        <!-- 관리자 근태 수정 Modal 시작 -->
+        <div class="modal fade" id="attendanceUpdateModal" tabindex="-1" aria-hidden="true">
+          <div class="modal-dialog">
+            <div class="modal-content">
+
+              <!-- Modal 제목 영역 -->
+              <div class="modal-header">
+                <h5 class="modal-title">관리자 근태 수정</h5>
+
+                <!-- Modal 닫기 버튼 -->
+                <button type="button"
+                        class="btn-close"
+                        data-bs-dismiss="modal"
+                        aria-label="Close">
+                </button>
+              </div>
+
+              <!-- Modal 입력 영역 -->
+              <div class="modal-body">
+
+                <!-- 수정 대상 근태 ID: 화면에는 보이지 않음 -->
+                <input type="hidden" id="updateAttendanceId">
+
+                <!-- 근무일: 수정 불가 -->
+                <div class="mb-3">
+                  <label for="updateWorkDate" class="form-label">근무일</label>
+                  <input type="date"
+                         id="updateWorkDate"
+                         class="form-control"
+                         readonly>
+                </div>
+
+                <!-- 출근 시간: 시간만 수정 -->
+                <div class="mb-3">
+                  <label for="updateCheckInTime" class="form-label">출근 시간</label>
+                  <input type="time"
+                         id="updateCheckInTime"
+                         class="form-control">
+                </div>
+
+                <!-- 퇴근 시간: 시간만 수정 -->
+                <div class="mb-3">
+                  <label for="updateCheckOutTime" class="form-label">퇴근 시간</label>
+                  <input type="time"
+                         id="updateCheckOutTime"
+                         class="form-control">
+                </div>
+
+                <!-- 근태 상태 -->
+                <div class="mb-3">
+                  <label for="updateStatus" class="form-label">근태 상태</label>
+                  <select id="updateStatus" class="form-select">
+                    <option value="ON_TIME">정상</option>
+                    <option value="LATE">지각</option>
+                    <option value="EARLY">조퇴</option>
+                    <option value="ABSENT">결근</option>
+                    <option value="LEFT">퇴근완료</option>
+                  </select>
+                </div>
+
+                <!-- 수정 사유 분류 -->
+                <div class="mb-3">
+                  <label for="updateReasonType" class="form-label">수정 사유 분류</label>
+                  <select id="updateReasonType"
+                          class="form-select">
+                    <option value="">사유 분류 선택</option>
+                    <option value="출근 누락">출근 누락</option>
+                    <option value="퇴근 누락">퇴근 누락</option>
+                    <option value="GPS 오류">GPS 오류</option>
+                    <option value="시스템 오류">시스템 오류</option>
+                    <option value="관리자 정정">관리자 정정</option>
+                    <option value="기타">기타</option>
+                  </select>
+                </div>
+
+                <!-- 수정 사유 -->
+                <div class="mb-3">
+                  <label for="updateReason" class="form-label">수정 사유</label>
+                  <textarea id="updateReason"
+                            class="form-control"
+                            rows="3"
+                            placeholder="수정 사유를 입력하세요"></textarea>
+                </div>
+
+              </div>
+
+              <!-- Modal 버튼 영역 -->
+              <div class="modal-footer">
+                <button type="button"
+                        class="btn btn-secondary"
+                        data-bs-dismiss="modal">
+                  취소
+                </button>
+
+                <button type="button"
+                        class="btn btn-primary"
+                        id="attendanceUpdateSaveBtn">
+                  저장
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+        <!-- 관리자 근태 수정 Modal 끝 -->
 
         <!-- 관리자 근태 목록 페이징 영역 시작 -->
         <div class="row mt-3">
@@ -299,7 +585,8 @@
                 workDate=${searchDTO.workDate},
                 deptId=${searchDTO.deptId},
                 status=${searchDTO.status},
-                keyword=${searchDTO.keyword}
+                keyword=${searchDTO.keyword},
+                sortType=${searchDTO.sortType}
              )}">
                     이전
                   </a>
@@ -318,7 +605,8 @@
                 workDate=${searchDTO.workDate},
                 deptId=${searchDTO.deptId},
                 status=${searchDTO.status},
-                keyword=${searchDTO.keyword}
+                keyword=${searchDTO.keyword},
+                sortType=${searchDTO.sortType}
              )}">
                     1
                   </a>
@@ -334,7 +622,8 @@
                 workDate=${searchDTO.workDate},
                 deptId=${searchDTO.deptId},
                 status=${searchDTO.status},
-                keyword=${searchDTO.keyword}
+                keyword=${searchDTO.keyword},
+                sortType=${searchDTO.sortType}
              )}">
                     다음
                   </a>
@@ -359,6 +648,234 @@
 <!--스크립트 시작-->
 <th:block th:replace="~{/admin/common/commonJs}"></th:block> <!-- 공통 사용 스크립트 불러오기-->
 <!-- 각 페이지 별로 필요한 스크립트 작성 혹은 임포트 -->
+
+<script>
+  /*
+   * 관리자 근태 수정 버튼 클릭 이벤트
+   *
+   * 역할:
+   * - 수정 버튼의 data-* 값을 읽는다.
+   * - Modal input에 기존 근태 값을 채운다.
+   * - Bootstrap Modal을 화면에 띄운다.
+   */
+  document.addEventListener("DOMContentLoaded", function () {
+
+    // 1. 모든 수정 버튼 찾기
+    const updateButtons = document.querySelectorAll(".attendance-update-btn");
+
+    // 2. 수정 Modal DOM 찾기
+    const updateModalElement = document.getElementById("attendanceUpdateModal");
+
+    // 3. Bootstrap Modal 객체 생성
+    const updateModal = new bootstrap.Modal(updateModalElement);
+
+    // 4. 수정 버튼마다 클릭 이벤트 연결
+    updateButtons.forEach(function (button) {
+
+      button.addEventListener("click", function () {
+
+        // 버튼에 들어있는 data-* 값 읽기
+        const attendanceId = button.dataset.attendanceId;
+        const workDate = button.dataset.workDate;
+        const checkIn = button.dataset.checkIn;
+        const checkOut = button.dataset.checkOut;
+        const status = button.dataset.status;
+
+        // 확인용 콘솔
+        console.log("수정 대상 ID:", attendanceId);
+        console.log("출근 시간:", checkIn);
+        console.log("퇴근 시간:", checkOut);
+        console.log("상태:", status);
+
+        // Modal hidden input에 attendanceId 넣기
+        document.getElementById("updateAttendanceId").value = attendanceId;
+
+        // datetime-local 형식으로 변환해서 input에 넣기
+        document.getElementById("updateWorkDate").value = workDate;
+        document.getElementById("updateCheckInTime").value = extractTime(checkIn);
+        document.getElementById("updateCheckOutTime").value = extractTime(checkOut);
+
+        // 한글 상태값을 enum 값으로 변환해서 select에 넣기
+        document.getElementById("updateStatus").value = convertStatusToEnum(status);
+
+        // 수정 사유는 새로 입력해야 하므로 비워둔다
+        document.getElementById("updateReason").value = "";
+        document.getElementById("updateReasonType").value = "";
+
+        // Modal 열기
+        updateModal.show();
+      });
+    });
+
+    // 5. 저장 버튼 클릭 이벤트 연결
+    document.getElementById("attendanceUpdateSaveBtn").addEventListener("click", function () {
+
+      // 수정 사유 분류 가져오기
+      const reasonType = document.getElementById("updateReasonType").value;
+
+      // 상세 수정 사유 가져오기
+      const reasonDetail = document.getElementById("updateReason").value.trim();
+
+      // 수정 사유 분류 필수 검증
+      if (!reasonType) {
+        alert("수정 사유 분류를 선택하세요.");
+        return;
+      }
+
+      // 상세 수정 사유 필수 검증
+      if (!reasonDetail) {
+        alert("상세 수정 사유를 입력하세요.");
+        return;
+      }
+
+      // 상세 수정 사유 길이 검증
+      if (reasonDetail.length < 5) {
+        alert("상세 수정 사유는 5자 이상 입력하세요.");
+        return;
+      }
+
+      // 상태값만 사유로 입력하는 것 방지
+      const invalidReasons = ["정상", "지각", "조퇴", "결근", "퇴근완료"];
+
+      if (invalidReasons.includes(reasonDetail)) {
+        alert("상세 사유에는 상태값만 입력할 수 없습니다. 구체적인 사유를 입력하세요.");
+        return;
+      }
+
+      // 최종 저장용 사유 문자열
+      const changeReason = "[" + reasonType + "] " + reasonDetail;
+
+      // 출근/퇴근 시간 값 가져오기
+      const checkInTime = document.getElementById("updateCheckInTime").value;
+      const checkOutTime = document.getElementById("updateCheckOutTime").value;
+
+      // 출근/퇴근 시간 필수 검증
+      if (!checkInTime || !checkOutTime) {
+        alert("출근 시간과 퇴근 시간을 입력하세요.");
+        return;
+      }
+
+      // 출근 시간이 퇴근 시간보다 늦거나 같으면 안 됨
+      if (checkInTime >= checkOutTime) {
+        alert("출근 시간은 퇴근 시간보다 빨라야 합니다.");
+        return;
+      }
+
+      // 기준 출근/퇴근 시간
+      const standardCheckIn = "09:00";
+      const standardCheckOut = "18:00";
+
+      // 선택한 상태
+      const selectedStatus = document.getElementById("updateStatus").value;
+
+      // 지각 검증
+      if (checkInTime > standardCheckIn && selectedStatus !== "LATE") {
+        alert("출근 시간이 09:00 이후이면 상태는 '지각'이어야 합니다.");
+        return;
+      }
+
+      // 조퇴 검증
+      if (checkOutTime < standardCheckOut && selectedStatus !== "EARLY") {
+        alert("퇴근 시간이 18:00 이전이면 상태는 '조퇴'여야 합니다.");
+        return;
+      }
+
+      // 정상 검증
+      if (checkInTime <= standardCheckIn &&
+          checkOutTime >= standardCheckOut &&
+          selectedStatus !== "ON_TIME") {
+        alert("정상 근무 시간인 경우 상태는 '정상'이어야 합니다.");
+        return;
+      }
+
+      // 서버로 보낼 데이터 생성
+      const requestData = {
+        attendanceId: document.getElementById("updateAttendanceId").value,
+        checkInAt: document.getElementById("updateWorkDate").value + "T" + checkInTime,
+        checkOutAt: document.getElementById("updateWorkDate").value + "T" + checkOutTime,
+        status: selectedStatus,
+        changeReason: changeReason
+      };
+
+      // 확인용 콘솔
+      console.log("서버로 보낼 수정 데이터:", requestData);
+
+      // 최종 확인
+      if (!confirm("근태 정보를 수정하시겠습니까?")) {
+        return;
+      }
+
+      // 관리자 근태 수정 요청
+      fetch("/admin/attendance/update", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify(requestData)
+      })
+      .then(function (response) {
+        if (!response.ok) {
+          throw new Error("근태 수정 실패");
+        }
+
+        return response.text();
+      })
+      .then(function (message) {
+        alert(message);
+
+        // 수정 완료 후 목록 새로고침
+        location.reload();
+      })
+      .catch(function (error) {
+        console.error(error);
+        alert("근태 수정 중 오류가 발생했습니다.");
+      });
+    });
+
+  });
+
+  /*
+   * "2026-05-23 08:48" 같은 문자열에서 시간만 꺼낸다.
+   * 결과: "08:48"
+   */
+  function extractTime(value) {
+    if (!value || value === "-") {
+      return "";
+    }
+
+    return value.substring(11, 16);
+  }
+
+  /*
+   * 화면 한글 상태값을 서버 enum 값으로 변환
+   *
+   * 화면: 정상, 지각, 조퇴, 결근, 퇴근완료
+   * 서버: ON_TIME, LATE, EARLY, ABSENT, LEFT
+   */
+  function convertStatusToEnum(status) {
+    if (status === "정상") {
+      return "ON_TIME";
+    }
+
+    if (status === "지각") {
+      return "LATE";
+    }
+
+    if (status === "조퇴") {
+      return "EARLY";
+    }
+
+    if (status === "결근") {
+      return "ABSENT";
+    }
+
+    if (status === "퇴근완료") {
+      return "LEFT";
+    }
+
+    return "ON_TIME";
+  }
+</script>
 <!--스크립트 끝-->
 </body>
 <!--end::Body-->

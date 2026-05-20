@@ -11,7 +11,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <!--begin::Head-->
 <head th:include="/admin/common/head.html :: common_header">
-  <title id="page_title">근태 관리 메인</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
+  <title id="page_title">관리자 연차/휴가 현황</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
 </head>
 <!--end::Head-->
 <!--begin::Body-->
@@ -34,7 +34,456 @@
       <div class="container-fluid">
         <br>
         <!-- begin::Row-->
+        <!-- 관리자 연차/휴가 현황 페이지 제목 -->
+        <div class="row mb-3">
+          <div class="col-12 d-flex justify-content-between align-items-center">
 
+            <!-- 페이지 설명 영역 -->
+            <div>
+              <h3 class="mb-1">관리자 연차/휴가 현황</h3>
+              <p class="text-muted mb-0">
+                사원별 총 연차, 사용 연차, 잔여 연차를 조회합니다.
+              </p>
+            </div>
+
+            <!-- 페이지 상단 버튼 영역 -->
+            <div class="d-flex gap-2">
+
+              <!-- 전체 사원 연차 자동 부여 요청 Form -->
+              <form method="post"
+                    th:action="@{/admin/attendance/leave/grant-all}"
+                    onsubmit="return confirm('재직 중인 사원을 대상으로 연차 자동 부여를 실행하시겠습니까?\n이미 부여된 연차는 중복 생성되지 않습니다.');">
+
+                <!-- 전체 사원 연차 자동 부여 실행 버튼 -->
+                <button type="submit"
+                        class="btn btn-outline-primary">
+                  연차 자동 부여
+                </button>
+
+              </form>
+
+              <!-- 근태 현황 화면으로 이동 -->
+              <a th:href="@{/admin/attendance/main}"
+                 class="btn btn-outline-secondary">
+                근태 현황으로 돌아가기
+              </a>
+
+            </div>
+
+          </div>
+        </div>
+
+        <!-- 연차 자동 부여 성공 메시지 -->
+        <div th:if="${successMessage != null}"
+             class="alert alert-success alert-dismissible fade show"
+             role="alert">
+
+          <span th:text="${successMessage}">
+            연차 자동 부여가 완료되었습니다.
+          </span>
+
+          <button type="button"
+                  class="btn-close"
+                  data-bs-dismiss="alert"
+                  aria-label="Close">
+          </button>
+
+        </div>
+
+        <!-- 관리자 연차/휴가 요약 카드 -->
+        <div class="row mb-4">
+
+          <!-- 총 부여 연차 카드 -->
+          <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+              <div class="card-body">
+
+                <!-- LEAVE_OCCURRENCE.occur_days 합계 -->
+                <div class="text-muted mb-2">총 부여 연차</div>
+
+                <h3 class="mb-0 text-primary"
+                    th:text="${#aggregates.sum(leaveStatusList.![totalDays])}">
+                  0
+                </h3>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- 사용 연차 카드 -->
+          <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+              <div class="card-body">
+
+                <!-- LEAVE_OCCURRENCE.used_days 합계 -->
+                <div class="text-muted mb-2">사용 연차</div>
+
+                <h3 class="mb-0 text-warning"
+                    th:text="${#aggregates.sum(leaveStatusList.![usedDays])}">
+                  0
+                </h3>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- 잔여 연차 카드 -->
+          <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+              <div class="card-body">
+
+                <!-- LEAVE_OCCURRENCE.remain_days 합계 -->
+                <div class="text-muted mb-2">잔여 연차</div>
+
+                <h3 class="mb-0 text-success"
+                    th:text="${#aggregates.sum(leaveStatusList.![remainDays])}">
+                  0
+                </h3>
+
+              </div>
+            </div>
+          </div>
+
+          <!-- 관리 대상 인원 카드 -->
+          <div class="col-md-3">
+            <div class="card shadow-sm border-0">
+              <div class="card-body">
+
+                <!-- 현재 연차 현황에 조회된 사원 수 -->
+                <div class="text-muted mb-2">관리 대상 인원</div>
+
+                <h3 class="mb-0 text-danger"
+                    th:text="${#lists.size(leaveStatusList)}">
+                  0
+                </h3>
+
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 연차 현황 검색 영역 -->
+        <div class="row mb-3">
+          <div class="col-12">
+            <div class="card">
+
+              <!-- 검색 영역 제목 -->
+              <div class="card-header">
+                <h3 class="card-title mb-0">연차 검색 조건</h3>
+              </div>
+
+              <div class="card-body">
+                <form method="get"
+                      th:action="@{/admin/attendance/leave}">
+
+                  <!-- 검색 조건 입력 줄 -->
+                  <div class="row g-3">
+
+                    <!-- 사원명 검색 -->
+                    <div class="col-md-3">
+                      <label class="form-label">사원명 검색</label>
+                      <input type="text"
+                             name="keyword"
+                             class="form-control"
+                             placeholder="사원명 입력"
+                             th:value="${keyword}">
+                    </div>
+
+                    <!-- 부서 검색 -->
+                    <div class="col-md-3">
+                      <label class="form-label">부서</label>
+                      <select name="deptId"
+                              class="form-select">
+                        <option value=""
+                                th:selected="${deptId == null}">
+                          전체 부서
+                        </option>
+
+                        <option th:each="dept : ${departmentList}"
+                                th:value="${dept.deptId}"
+                                th:text="${dept.deptName}"
+                                th:selected="${deptId != null and deptId == dept.deptId}">
+                          개발팀
+                        </option>
+                      </select>
+                    </div>
+
+                    <!-- 정렬 조건 -->
+                    <div class="col-md-3">
+                      <label class="form-label">정렬</label>
+                      <select name="sortType"
+                              class="form-select">
+                        <option value="empNo"
+                                th:selected="${sortType == null or sortType == 'empNo'}">
+                          사번순
+                        </option>
+
+                        <option value="name"
+                                th:selected="${sortType == 'name'}">
+                          이름순
+                        </option>
+
+                        <option value="remainDesc"
+                                th:selected="${sortType == 'remainDesc'}">
+                          잔여연차 많은순
+                        </option>
+
+                        <option value="remainAsc"
+                                th:selected="${sortType == 'remainAsc'}">
+                          잔여연차 적은순
+                        </option>
+                      </select>
+                    </div>
+
+                    <!-- 목록 개수 -->
+                    <div class="col-md-3">
+                      <label class="form-label">목록 개수</label>
+                      <select name="size"
+                              class="form-select">
+                        <option value="10"
+                                th:selected="${size == 10}">
+                          10개씩 보기
+                        </option>
+
+                        <option value="20"
+                                th:selected="${size == 20}">
+                          20개씩 보기
+                        </option>
+
+                        <option value="30"
+                                th:selected="${size == 30}">
+                          30개씩 보기
+                        </option>
+                      </select>
+                    </div>
+
+                  </div>
+
+                  <!-- 검색 버튼 줄 -->
+                  <div class="row mt-3">
+                    <div class="col-12 d-flex justify-content-end gap-2">
+
+                      <!-- 검색 조건 적용 -->
+                      <button type="submit"
+                              class="btn btn-primary">
+                        검색
+                      </button>
+
+                      <!-- 검색 조건 초기화 -->
+                      <a th:href="@{/admin/attendance/leave}"
+                         class="btn btn-secondary">
+                        초기화
+                      </a>
+
+                    </div>
+                  </div>
+
+                </form>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        <!-- 관리자 연차/휴가 현황 테이블 카드 -->
+        <div class="row">
+          <div class="col-12">
+            <div class="card">
+
+              <!-- 카드 상단 제목 및 조회 건수 -->
+              <div class="card-header">
+
+                <div class="d-flex justify-content-between align-items-center">
+
+                  <!-- 테이블 제목 -->
+                  <h5 class="card-title mb-0">
+                    사원별 연차 현황
+                  </h5>
+
+                  <!-- 오른쪽 영역 -->
+                  <div class="d-flex align-items-center gap-3">
+
+                    <!-- Excel 다운로드 버튼 -->
+                    <!-- 현재 검색 조건을 유지한 상태로 연차/휴가 현황 Excel 파일을 내려받는다. -->
+                    <a th:href="@{/admin/attendance/leave/excel(
+                          keyword=${keyword},
+                          deptId=${deptId},
+                          sortType=${sortType}
+                       )}"
+                       class="btn btn-sm btn-outline-success">
+
+                      <i class="fa-solid fa-file-excel me-1"></i>
+                      Excel 다운로드
+
+                    </a>
+
+                    <!-- 조회 결과 및 현재 페이지 -->
+                    <small class="text-muted"
+                           th:if="${leaveStatusPage != null}">
+
+                      검색 결과
+                      <strong th:text="${leaveStatusPage.totalElements}">0</strong>건 /
+
+                      현재
+                      <strong th:text="${leaveStatusPage.number + 1}">1</strong>
+
+                      /
+
+                      <strong th:text="${leaveStatusPage.totalPages}">1</strong>
+                      페이지
+
+                    </small>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+              <!-- 카드 본문 -->
+              <div class="card-body">
+
+                <!-- 데이터가 없을 때 -->
+                <div th:if="${#lists.isEmpty(leaveStatusList)}"
+                     class="alert alert-secondary text-center mb-0">
+                  조회된 연차 현황 데이터가 없습니다.
+                </div>
+
+                <!-- 데이터가 있을 때 -->
+                <div th:if="${!#lists.isEmpty(leaveStatusList)}"
+                     class="table-responsive">
+
+                  <table class="table table-hover table-striped text-nowrap mb-0 text-center align-middle">
+                    <thead class="table-light">
+                    <tr>
+                      <th>사번</th>
+                      <th>사원명</th>
+                      <th>부서명</th>
+                      <th>총 연차</th>
+                      <th>사용 연차</th>
+                      <th>잔여 연차</th>
+                      <th>사용 상태</th>
+                    </tr>
+                    </thead>
+
+                    <tbody>
+                    <!-- 조회 결과가 없을 경우 -->
+                    <tr th:if="${leaveStatusList == null or #lists.isEmpty(leaveStatusList)}">
+
+                      <!-- 테이블 컬럼 수만큼 colspan 설정 -->
+                      <td colspan="7"
+                          class="text-center text-muted py-4">
+
+                        조회된 연차 데이터가 없습니다.
+
+                      </td>
+
+                    </tr>
+                    <!-- Controller에서 넘긴 leaveStatusList 반복 출력 -->
+                    <tr th:each="leave : ${leaveStatusList}">
+                      <td th:text="${leave.empNo}">20260001</td>
+                      <td th:text="${leave.empName}">홍길동</td>
+                      <td th:text="${leave.deptName}">개발팀</td>
+                      <td th:text="${leave.totalDays}">15.0</td>
+                      <td th:text="${leave.usedDays}">2.0</td>
+                      <td th:text="${leave.remainDays}">13.0</td>
+                      <!-- 연차 사용 상태 Badge -->
+                      <td>
+
+                        <!-- 사용 연차가 없는 경우 -->
+                        <span th:if="${leave.usedDays == 0}"
+                              class="badge bg-secondary">
+                          미사용
+                        </span>
+
+                        <!-- 잔여 연차가 0인 경우 -->
+                        <span th:if="${leave.remainDays == 0}"
+                              class="badge bg-danger">
+                          소진
+                        </span>
+
+                        <!-- 연차를 일부 사용 중인 경우 -->
+                        <span th:if="${leave.usedDays > 0 and leave.remainDays > 0}"
+                              class="badge bg-success">
+                          사용중
+                        </span>
+                      </td>
+                    </tr>
+                    </tbody>
+                  </table>
+
+                </div>
+
+                <!-- 연차 현황 페이징 영역 시작 -->
+                <div class="row mt-3">
+
+                  <!-- 가운데 정렬 -->
+                  <div class="col-12 d-flex justify-content-center">
+
+                    <!-- Bootstrap Pagination -->
+                    <nav>
+                      <ul class="pagination">
+
+                        <!-- 이전 버튼 -->
+                        <li class="page-item"
+                            th:classappend="${leaveStatusPage.first} ? ' disabled'">
+                          <a class="page-link"
+                             th:href="@{/admin/attendance/leave(
+                                page=${leaveStatusPage.number - 1},
+                                size=${leaveStatusPage.size},
+                                keyword=${keyword},
+                                deptId=${deptId},
+                                sortType=${sortType}
+                             )}">
+                            이전
+                          </a>
+                        </li>
+
+                        <!-- 페이지 번호 반복 -->
+                        <li class="page-item"
+                            th:each="pageNum : ${#numbers.sequence(0, leaveStatusPage.totalPages - 1)}"
+                            th:classappend="${pageNum == leaveStatusPage.number} ? ' active'">
+                          <a class="page-link"
+                             th:text="${pageNum + 1}"
+                             th:href="@{/admin/attendance/leave(
+                                page=${pageNum},
+                                size=${leaveStatusPage.size},
+                                keyword=${keyword},
+                                deptId=${deptId},
+                                sortType=${sortType}
+                             )}">
+                            1
+                          </a>
+                        </li>
+
+                        <!-- 다음 버튼 -->
+                        <li class="page-item"
+                            th:classappend="${leaveStatusPage.last} ? ' disabled'">
+                          <a class="page-link"
+                             th:href="@{/admin/attendance/leave(
+                                page=${leaveStatusPage.number + 1},
+                                size=${leaveStatusPage.size},
+                                keyword=${keyword},
+                                deptId=${deptId},
+                                sortType=${sortType}
+                             )}">
+                            다음
+                          </a>
+                        </li>
+
+                      </ul>
+                    </nav>
+
+                  </div>
+                </div>
+                <!-- 연차 현황 페이징 영역 끝 -->
+
+              </div>
+
+            </div>
+          </div>
+        </div>
         <!-- end::Row-->
       </div>
       <!--end::Container-->
