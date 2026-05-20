@@ -2,6 +2,10 @@ package com.ict06.team1_fin_pj.domain.aiSecretary.service;
 
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiLogEntity;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiLogType;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiKnowledgeRequestEntity;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiKnowledgeStatus;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.DocumentDomain;
+import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiKnowledgeRequestRepository;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiLogRepository;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiTemplateDashboardRepository;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiDocumentRepository;
@@ -11,12 +15,19 @@ import com.ict06.team1_fin_pj.common.dto.aiSecretary.AdAiDashboardRecentLogDto;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.AdAiDashboardResponseDto;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.AdAiDashboardSummaryDto;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.AdAiDashboardUsageTrendDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.KnowledgeResponseDto;
+import com.ict06.team1_fin_pj.domain.auth.repository.EmpRepository;
+import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.DocumentEntity;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.DocumentStage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
@@ -25,18 +36,23 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.time.format.DateTimeParseException;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
 
+    private static final String AI_RAG_DOMAIN = DocumentDomain.AI_RAG.name();
     private static final ZoneId SEOUL = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
     private static final DateTimeFormatter DATE_LABEL_FORMATTER = DateTimeFormatter.ofPattern("MM-dd");
@@ -45,6 +61,8 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
     private final AiLogRepository aiLogRepository;
     private final AiDocumentRepository aiDocumentRepository;
     private final AiTemplateDashboardRepository aiTemplateDashboardRepository;
+    private final AiKnowledgeRequestRepository aiKnowledgeRequestRepository;
+    private final EmpRepository empRepository;
 
     @Override
     public AdAiDashboardResponseDto getDashboardData(
@@ -114,13 +132,13 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
         StringBuilder csv = new StringBuilder();
         csv.append('\uFEFF');
         appendCsvRow(csv,
-                "사용 시각",
-                "사용자명",
-                "부서명",
-                "AI 기능",
-                "요청 요약",
+                "요청 시각",
+                "요청자",
+                "요청 유형",
+                "AI 응답",
                 "처리 결과",
-                "응답 소요 시간"
+                "응답 소요 시간",
+                "메시지 내용"
         );
 
         for (AiLogEntity log : logs) {
@@ -141,6 +159,258 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
 
         return csv.toString().getBytes(StandardCharsets.UTF_8);
     }
+
+    @Override
+    public List<KnowledgeResponseDto> getKnowledgeRequestsForAdmin(
+            String requestStartDate,
+            String requestEndDate,
+            String requestStatus,
+            String requestType,
+            String requestCategory
+    ) {
+        LocalDate parsedStartDate = parseDate(requestStartDate);
+        LocalDate parsedEndDate = parseDate(requestEndDate);
+
+        if (parsedStartDate != null && parsedEndDate != null && parsedStartDate.isAfter(parsedEndDate)) {
+            LocalDate temp = parsedStartDate;
+            parsedStartDate = parsedEndDate;
+            parsedEndDate = temp;
+        }
+
+        final LocalDate startDate = parsedStartDate;
+        final LocalDate endDate = parsedEndDate;
+
+        String normalizedStatus = safe(requestStatus);
+        String normalizedType = safe(requestType);
+        String normalizedCategory = safe(requestCategory);
+
+        Predicate<KnowledgeResponseDto> statusFilter = dto ->
+                normalizedStatus.isEmpty()
+                        || normalizedStatus.equalsIgnoreCase(safe(dto.getStatus()))
+                        || normalizedStatus.equalsIgnoreCase(safe(dto.getStatusLabel()));
+
+        Predicate<KnowledgeResponseDto> typeFilter = dto ->
+                normalizedType.isEmpty()
+                        || normalizedType.equalsIgnoreCase(safe(dto.getRequestType()));
+
+        Predicate<KnowledgeResponseDto> categoryFilter = dto ->
+                normalizedCategory.isEmpty()
+                        || normalizedCategory.equalsIgnoreCase(safe(dto.getCategory()));
+
+        Predicate<KnowledgeResponseDto> dateFilter = dto -> {
+            if (startDate == null && endDate == null) {
+                return true;
+            }
+
+            if (dto.getCreatedAt() == null) {
+                return false;
+            }
+
+            LocalDate createdDate = dto.getCreatedAt().toLocalDate();
+
+            boolean afterStart = startDate == null || !createdDate.isBefore(startDate);
+            boolean beforeEnd = endDate == null || !createdDate.isAfter(endDate);
+
+            return afterStart && beforeEnd;
+        };
+
+        return aiKnowledgeRequestRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(KnowledgeResponseDto::from)
+                .filter(dateFilter)
+                .filter(statusFilter)
+                .filter(typeFilter)
+                .filter(categoryFilter)
+                .sorted(Comparator
+                        .comparing((KnowledgeResponseDto dto) ->
+                                !"PENDING".equalsIgnoreCase(safe(dto.getStatus())))
+                        .thenComparing(
+                                KnowledgeResponseDto::getCreatedAt,
+                                Comparator.nullsLast(Comparator.reverseOrder())
+                        ))
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    @Transactional
+    public KnowledgeResponseDto reviewKnowledgeRequest(
+            Long requestId,
+            String status,
+            String adminComment,
+            String reviewerEmpNo
+    ) {
+        if (requestId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "요청 ID가 누락되었습니다.");
+        }
+
+        AiKnowledgeStatus reviewStatus = parseReviewStatus(status);
+        String trimmedComment = safe(adminComment);
+        if (trimmedComment.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "관리자 검토 메모를 입력해 주세요.");
+        }
+
+        AiKnowledgeRequestEntity request = aiKnowledgeRequestRepository.findById(requestId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "자료 등록 요청을 찾을 수 없습니다."));
+
+        EmpEntity reviewer = empRepository.findByEmpNo(safe(reviewerEmpNo))
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "검토자 정보를 찾을 수 없습니다."));
+
+        request.updateReviewStatus(reviewStatus, trimmedComment, reviewer);
+        AiKnowledgeRequestEntity saved = aiKnowledgeRequestRepository.save(request);
+        return KnowledgeResponseDto.from(saved);
+    }
+
+    @Override
+    public List<Map<String, Object>> getDocumentManagementRows(List<KnowledgeResponseDto> knowledgeRequests) {
+        List<Map<String, Object>> rows = new ArrayList<>();
+
+        List<DocumentEntity> documents = Optional.ofNullable(aiDocumentRepository.findAiRagDocuments())
+                .orElseGet(List::of);
+        for (DocumentEntity document : documents) {
+            rows.add(buildDocumentManagementRow(document));
+        }
+
+        if (knowledgeRequests != null) {
+            knowledgeRequests.stream()
+                    .filter(this::isApprovedOrPublishedKnowledgeRequest)
+                    .filter(request -> request.getTargetDocId() == null)
+                    .map(this::buildApprovedRequestRow)
+                    .forEach(rows::add);
+        }
+
+        rows.sort(Comparator.comparing(
+                (Map<String, Object> row) -> (LocalDateTime) row.get("registeredAt"),
+                Comparator.nullsLast(Comparator.reverseOrder())
+        ));
+        return rows;
+    }
+
+    private Map<String, Object> buildDocumentManagementRow(DocumentEntity document) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        DocumentStage stage = document == null ? null : document.getCurrentStage();
+        int chunkCount = document == null || document.getChunks() == null ? 0 : document.getChunks().size();
+        int vectorCount = document == null || document.getChunks() == null
+                ? 0
+                : (int) document.getChunks().stream()
+                .filter(chunk -> chunk.getVector() != null)
+                .count();
+
+        row.put("rowType", "DOCUMENT");
+        row.put("documentDomain", AI_RAG_DOMAIN);
+        row.put("documentId", document == null ? null : document.getDocId());
+        row.put("requestId", null);
+        row.put("registeredAt", document == null ? null : (document.getCreatedAt() != null ? document.getCreatedAt() : document.getUpdatedAt()));
+        row.put("status", stage == null ? "" : stage.name());
+        row.put("statusLabel", resolveDocumentStageLabel(stage));
+        row.put("title", document == null || document.getTitle() == null ? "-" : document.getTitle());
+        row.put("category", "-");
+        row.put("requestType", "-");
+        row.put("approverName", document != null && document.getCreatedBy() != null && document.getCreatedBy().getName() != null
+                ? document.getCreatedBy().getName()
+                : "-");
+        row.put("chunkCount", chunkCount);
+        row.put("vectorCount", vectorCount);
+        row.put("requesterName", "-");
+        row.put("requestDate", null);
+        row.put("reason", "-");
+        row.put("sampleQuestion", "-");
+        row.put("referenceUrl", document != null && document.getFilePath() != null ? document.getFilePath() : "");
+        row.put("summary", document != null && document.getSummaryPreview() != null && !document.getSummaryPreview().isBlank()
+                ? document.getSummaryPreview()
+                : "-");
+        row.put("adminComment", "-");
+        row.put("accessLevel", document == null || document.getAccessLevel() == null
+                ? "-"
+                : resolveDocumentAccessLevelLabel(document.getAccessLevel().name()));
+        row.put("targetDept", "-");
+        row.put("failureReason", isFailedDocumentStage(stage) ? "실패 사유가 기록되지 않았습니다." : "-");
+        row.put("retryable", isFailedDocumentStage(stage));
+        return row;
+    }
+
+    private Map<String, Object> buildApprovedRequestRow(KnowledgeResponseDto request) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        LocalDateTime registeredAt = request.getReviewedAt() != null ? request.getReviewedAt() : request.getCreatedAt();
+        String requestStatus = safe(request.getStatus());
+        String statusLabel = "PUBLISHED".equalsIgnoreCase(requestStatus) ? "반영 완료" : "업로드 완료";
+
+        row.put("rowType", "REQUEST");
+        row.put("documentDomain", AI_RAG_DOMAIN);
+        row.put("documentId", request.getTargetDocId());
+        row.put("requestId", request.getKnowledgeRequestId());
+        row.put("registeredAt", registeredAt);
+        row.put("status", requestStatus);
+        row.put("statusLabel", statusLabel);
+        row.put("title", safe(request.getTitle(), "-"));
+        row.put("category", safe(request.getCategory(), "-"));
+        row.put("requestType", safe(request.getRequestType(), "-"));
+        row.put("approverName", safe(request.getReviewerName(), "-"));
+        row.put("chunkCount", 0);
+        row.put("vectorCount", 0);
+        row.put("requesterName", safe(request.getRequesterName(), "-"));
+        row.put("requestDate", request.getCreatedAt());
+        row.put("reason", safe(request.getReason(), "-"));
+        row.put("sampleQuestion", safe(request.getSampleQuestion(), "-"));
+        row.put("referenceUrl", safe(request.getReferenceUrl()));
+        row.put("summary", safe(request.getReason(), "-"));
+        row.put("adminComment", safe(request.getAdminComment(), "-"));
+        row.put("accessLevel", resolveRequestAccessLevelLabel(request.getAccessLevel()));
+        row.put("targetDept", safe(request.getTargetDept(), "-"));
+        row.put("failureReason", "-");
+        row.put("retryable", false);
+        return row;
+    }
+
+    private String resolveDocumentStageLabel(DocumentStage stage) {
+        if (stage == null) {
+            return "-";
+        }
+
+        return switch (stage) {
+            case UPLOADED -> "업로드 완료";
+            case CHUNKING, EMBEDDING -> "임베딩 진행";
+            case APPROVAL_PENDING -> "임베딩 완료";
+            case CHUNK_FAILED, EMBED_FAILED -> "처리 실패";
+            case PUBLISHED -> "반영 완료";
+        };
+    }
+
+    private String resolveRequestAccessLevelLabel(String accessLevel) {
+        String normalized = safe(accessLevel);
+        if (normalized.isEmpty()) {
+            return "-";
+        }
+
+        return switch (normalized.toUpperCase(Locale.ROOT)) {
+            case "PUBLIC" -> "전체 공개";
+            case "CUSTOM" -> "조건 조합";
+            case "ADMIN_ONLY" -> "관리자 전용";
+            default -> normalized;
+        };
+    }
+
+    private String resolveDocumentAccessLevelLabel(String accessLevel) {
+        String normalized = safe(accessLevel);
+        if (normalized.isEmpty()) {
+            return "-";
+        }
+
+        return switch (normalized.toUpperCase(Locale.ROOT)) {
+            case "PUBLIC" -> "전체 공개";
+            case "DEPT", "ROLE" -> "조건 조합";
+            case "PRIVATE" -> "관리자 전용";
+            default -> normalized;
+        };
+    }
+
+    private boolean isApprovedOrPublishedKnowledgeRequest(KnowledgeResponseDto request) {
+        String status = safe(request == null ? null : request.getStatus()).toUpperCase(Locale.ROOT);
+        return "APPROVED".equals(status) || "PUBLISHED".equals(status);
+    }
+
+    private boolean isFailedDocumentStage(DocumentStage stage) {
+        return stage == DocumentStage.CHUNK_FAILED || stage == DocumentStage.EMBED_FAILED;
+    }
+
 
     private List<AdAiDashboardSummaryDto> buildSummaryCards(
             List<AiLogEntity> currentLogs,
@@ -516,6 +786,42 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
         return value == null ? "" : value.trim();
     }
 
+    private String safe(Object value) {
+        return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private String safe(String value, String fallback) {
+        String normalized = safe(value);
+        return normalized.isBlank() ? fallback : normalized;
+    }
+
+    private String safe(Object value, String fallback) {
+        String normalized = safe(value);
+        return normalized.isBlank() ? fallback : normalized;
+    }
+
+    private AiKnowledgeStatus parseReviewStatus(String value) {
+        String normalized = safe(value).toUpperCase(Locale.ROOT);
+        return switch (normalized) {
+            case "APPROVED" -> AiKnowledgeStatus.APPROVED;
+            case "REJECTED" -> AiKnowledgeStatus.REJECTED;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "승인 또는 반려 상태만 처리할 수 있습니다.");
+        };
+    }
+
+    private LocalDate parseDate(String value) {
+        String trimmed = safe(value);
+        if (trimmed.isEmpty()) {
+            return null;
+        }
+
+        try {
+            return LocalDate.parse(trimmed);
+        } catch (DateTimeParseException ex) {
+            return null;
+        }
+    }
+
     private LocalDate parseLocalDate(String value) {
         String safeValue = safe(value);
         if (safeValue.isBlank()) {
@@ -538,7 +844,7 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
         if (trimmed.length() <= maxLength) {
             return trimmed;
         }
-        return trimmed.substring(0, maxLength - 1) + "…";
+        return trimmed.substring(0, maxLength - 1) + "...";
     }
 
     private Integer parseIntegerMeta(String meta, String key) {
@@ -626,21 +932,21 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
     }
 
     private List<AdAiDashboardDocumentStatusDto> buildDocumentStatusSummary() {
-        long uploaded = aiDocumentRepository.countByCurrentStage("UPLOADED");
-        long processing = aiDocumentRepository.countByCurrentStageIn(List.of(
+        long uploaded = aiDocumentRepository.countAiRagByCurrentStage("UPLOADED");
+        long processing = aiDocumentRepository.countAiRagByCurrentStageIn(List.of(
                 "CHUNKING",
                 "EMBEDDING"
         ));
-        long approvalPending = aiDocumentRepository.countByCurrentStage("APPROVAL_PENDING");
-        long published = aiDocumentRepository.countByCurrentStage("PUBLISHED");
-        long failed = aiDocumentRepository.countByCurrentStageIn(List.of(
+        long approvalPending = aiDocumentRepository.countAiRagByCurrentStage("APPROVAL_PENDING");
+        long published = aiDocumentRepository.countAiRagByCurrentStage("PUBLISHED");
+        long failed = aiDocumentRepository.countAiRagByCurrentStageIn(List.of(
                 "CHUNK_FAILED",
                 "EMBED_FAILED"
         ));
 
         return List.of(
-                buildDocumentStatus("FAILED", "처리 실패", failed, "문서 처리 중 오류가 발생해 추가 확인이 필요한 상태입니다.", "text-bg-danger"),
-                buildDocumentStatus("APPROVAL_PENDING", "승인 대기", approvalPending, "문서 반영이 완료되었지만 관리자 최종 승인을 기다리는 상태입니다.", "text-bg-warning"),
+                buildDocumentStatus("FAILED", "처리 실패", failed, "문서 처리 중 오류가 발생한 건수입니다. 추가 확인이 필요한 상태입니다.", "text-bg-danger"),
+                buildDocumentStatus("APPROVAL_PENDING", "승인 대기", approvalPending, "문서 반영이 완료되었지만 최종 승인을 기다리는 상태입니다.", "text-bg-warning"),
                 buildDocumentStatus("PUBLISHED", "반영 완료", published, "최종 반영이 완료된 문서 상태입니다.", "text-bg-success"),
                 buildDocumentStatus("PROCESSING", "임베딩 진행", processing, "문서 처리와 임베딩이 진행 중인 상태입니다.", "text-bg-primary"),
                 buildDocumentStatus("UPLOADED", "업로드 완료", uploaded, "문서 업로드가 완료된 상태입니다.", "text-bg-secondary")
@@ -723,7 +1029,7 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
 
         int days = periodDays == 30 ? 30 : 7;
         LocalDate today = LocalDate.now(SEOUL);
-        String compareLabel = days == 30 ? "전월 대비" : "전주 대비";
+        String compareLabel = days == 30 ? "이전 월 대비" : "이전 주 대비";
 
         LocalDateTime endAt = today.plusDays(1).atStartOfDay();
         LocalDateTime startAt = today.minusDays(days - 1L).atStartOfDay();
