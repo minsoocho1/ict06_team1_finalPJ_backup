@@ -8,6 +8,8 @@
  * @ 수정일         수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.22    김다솜        최초 생성/OpenWeather API 연동 및 위젯 반영
+ * @ 2026.05.15    김다솜        홈 피드 날씨 위젯 상세 정보 표시용 필드 추가
+ * @ 2026.05.18    김다솜        날씨 위젯 현재 위치 상세 주소 표시 반영
 */
 
 import { cilSun, cilCloud, cilRain, cilSnowflake } from '@coreui/icons';
@@ -47,9 +49,14 @@ import axiosInstance from 'src/api/axiosInstance';
       //4. 리턴(날씨, 뉴스리스트 5개)
       return {
         temp: Math.round(weatherData.main.temp),
+        feelsLike: weatherData.main?.feels_like ? Math.round(weatherData.main.feels_like) : null,
+        humidity: weatherData.main?.humidity ?? null,
+        windSpeed: weatherData.wind?.speed ?? null,
+        cloudiness: weatherData.clouds?.all ?? null,
         desc: weatherData.weather[0].description,
         icon: weatherIcon,
-        city: weatherData.name,
+        city: weatherData.display_location_detail || weatherData.display_location || weatherData.name,
+        locationSource: weatherData.location_source === 'GPS' ? '현재 위치 기준' : '',
         newsList: newsRes.data
       };
     } catch (error) {
@@ -59,6 +66,11 @@ import axiosInstance from 'src/api/axiosInstance';
         desc: '연결 실패',
         icon: cilSun,
         city: '--',
+        feelsLike: null,
+        humidity: null,
+        windSpeed: null,
+        cloudiness: null,
+        locationSource: '',
         newsList: [{title: '뉴스를 불러올 수 없습니다.', link: '#'}],
         success: false
       };

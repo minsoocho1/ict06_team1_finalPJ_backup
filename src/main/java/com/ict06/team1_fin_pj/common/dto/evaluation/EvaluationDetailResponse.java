@@ -11,8 +11,13 @@
  * @ 2026.05.06    김다솜        최초 생성
  */
 
+/*
+ * 2026-05-19
+ * 평가 상세 화면에서 자기평가 AI 비교 피드백을 함께 반환하도록 필드 추가
+ */
 package com.ict06.team1_fin_pj.common.dto.evaluation;
 
+import com.ict06.team1_fin_pj.common.dto.onboarding.LearningSelfCheckResponseDto;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -28,6 +33,7 @@ public class EvaluationDetailResponse {
     private Integer totalScore;
     private Integer maxScore;
     private Boolean passed;
+    private LearningSelfCheckResponseDto selfCheckFeedback;
 
     private List<QuestionDetail> questions;
 

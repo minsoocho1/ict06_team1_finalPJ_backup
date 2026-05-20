@@ -7,8 +7,9 @@
     @
     @ 수정일자        수정자        수정내용
     @ ----------    ---------    -----------------------------------------------
-    @ 2026.05.10    김다솜        최초 생성 및 문서 업로드/정보 설정 기능 구현
-    @ 2026.05.11    김다솜        UI 텍스트 정제 및 처리 단계 표시 로직 수정
+    @ 2026.05.10                 최초 생성 및 문서 업로드 정보 설정 기능 구현
+    @ 2026.05.11                 UI 텍스트 정제 및 처리 단계 표시 로직 수정
+    @ 2026.05.18                 관련 콘텐츠 선택 메뉴 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -45,7 +46,39 @@
                                     <div class="mb-3">
                                         <label class="form-label">문서 경로</label>
                                         <input type="text" name="filePath" class="form-control" th:value="${document.filePath}" placeholder="/files/onboarding/guide.pdf" required>
-                                        <div class="form-text">실제 접근 가능한 경로나 문서 URL을 입력합니다. 저장 후 자동으로 청크 및 벡터 처리를 시도합니다.</div>
+                                        <div class="form-text">실제 접근 가능한 경로 또는 문서 URL을 입력합니다. 저장 후 자동으로 체크 및 벡터 처리를 시도합니다.</div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label class="form-label">관련 콘텐츠</label>
+                                        <select id="relatedContentSelect" class="form-select">
+                                            <option value="">관련 콘텐츠 선택</option>
+                                            <option th:each="content : ${contents}"
+                                                    th:value="${content.contentId}"
+                                                    th:attr="data-title=${content.title},data-category=${content.category != null ? content.category : '-'}"
+                                                    th:text="${'[' + (content.category != null ? content.category : '-') + '] ' + content.title}">
+                                            </option>
+                                        </select>
+                                        <div class="form-text">선택하면 아래 목록에 추가됩니다. 같은 문서를 여러 학습 콘텐츠와 연결할 수 있습니다.</div>
+
+                                        <div id="selectedContentList" class="list-group mt-3">
+                                            <div th:each="content : ${contents}"
+                                                 th:if="${document.contentIds != null and #lists.contains(document.contentIds, content.contentId)}"
+                                                 class="list-group-item d-flex align-items-center justify-content-between gap-3"
+                                                 th:attr="data-content-id=${content.contentId}">
+                                                <div>
+                                                    <input type="hidden" name="contentIds" th:value="${content.contentId}">
+                                                    <div class="fw-semibold" th:text="${content.title}">콘텐츠명</div>
+                                                    <div class="small text-muted" th:text="${content.category != null ? content.category : '-'}">카테고리</div>
+                                                </div>
+                                                <button type="button" class="btn btn-sm btn-outline-danger remove-content-button" aria-label="관련 콘텐츠 삭제">&times;</button>
+                                            </div>
+                                        </div>
+
+                                        <div id="emptySelectedContent" class="text-muted small mt-2"
+                                             th:classappend="${document.contentIds != null and !document.contentIds.isEmpty()} ? ' d-none'">
+                                            연결된 관련 콘텐츠가 없습니다.
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -110,5 +143,54 @@
     <th:block th:replace="~{/admin/common/footer}"></th:block>
 </div>
 <th:block th:replace="~{/admin/common/commonJs}"></th:block>
+<script>
+    (() => {
+        const select = document.getElementById('relatedContentSelect');
+        const list = document.getElementById('selectedContentList');
+        const emptyMessage = document.getElementById('emptySelectedContent');
+
+        const syncEmptyMessage = () => {
+            emptyMessage.classList.toggle('d-none', list.children.length > 0);
+        };
+
+        const bindRemoveButton = (button) => {
+            button.addEventListener('click', () => {
+                button.closest('[data-content-id]').remove();
+                syncEmptyMessage();
+            });
+        };
+
+        document.querySelectorAll('.remove-content-button').forEach(bindRemoveButton);
+
+        select.addEventListener('change', () => {
+            const option = select.selectedOptions[0];
+            const contentId = option.value;
+            if (!contentId || list.querySelector(`[data-content-id="${contentId}"]`)) {
+                select.value = '';
+                return;
+            }
+
+            const item = document.createElement('div');
+            item.className = 'list-group-item d-flex align-items-center justify-content-between gap-3';
+            item.dataset.contentId = contentId;
+            item.innerHTML = `
+                <div>
+                    <input type="hidden" name="contentIds" value="${contentId}">
+                    <div class="fw-semibold"></div>
+                    <div class="small text-muted"></div>
+                </div>
+                <button type="button" class="btn btn-sm btn-outline-danger remove-content-button" aria-label="관련 콘텐츠 삭제">&times;</button>
+            `;
+            item.querySelector('.fw-semibold').textContent = option.dataset.title || option.textContent;
+            item.querySelector('.small').textContent = option.dataset.category || '-';
+            bindRemoveButton(item.querySelector('.remove-content-button'));
+            list.appendChild(item);
+            select.value = '';
+            syncEmptyMessage();
+        });
+
+        syncEmptyMessage();
+    })();
+</script>
 </body>
 </html>

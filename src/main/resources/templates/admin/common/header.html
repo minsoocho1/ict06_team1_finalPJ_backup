@@ -1,9 +1,10 @@
 <!-- 관리자용 페이지에 필요한 공통 header 파일 (협의 없이 수정 금지!)-->
+<!-- 2026.05.19 김다솜: 관리자 세션 기반 알림 API 경로 변경 및 백그라운드 처리 실패 알림 폴링 추가 -->
 <!--begin::Header-->
 <nav class="app-header navbar navbar-expand bg-body">
     <!--begin::Container-->
     <div class="container-fluid">
-        <!--begin::Start Navbar Links-->
+        <!--begin::좌측: 사이드바 토글-->
         <ul class="navbar-nav">
             <li class="nav-item">
                 <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button">
@@ -11,166 +12,39 @@
                 </a>
             </li>
         </ul>
-        <!--end::Start Navbar Links-->
+        <!--end::좌측: 사이드바 토글-->
 
-        <!--begin::End Navbar Links-->
+        <!--begin::우측 메뉴: 알림 및 사용자 프로필-->
         <ul class="navbar-nav ms-auto">
-            <!--begin::Navbar Search-->
-            <li class="nav-item">
-                <a class="nav-link" data-widget="navbar-search" href="#" role="button">
-                    <i class="bi bi-search"></i>
-                </a>
-            </li>
-            <!--end::Navbar Search-->
-
-            <!--begin::Messages Dropdown Menu-->
-            <li class="nav-item dropdown">
-                <a class="nav-link" data-bs-toggle="dropdown" href="#">
-                    <i class="bi bi-chat-text"></i>
-                    <span class="navbar-badge badge text-bg-danger">3</span>
-                </a>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
-                    <a href="#" class="dropdown-item">
-                        <!--begin::Message-->
-                        <div class="d-flex">
-                            <div class="flex-shrink-0">
-<!--                                <img-->
-<!--                                        src="./assets/img/user1-128x128.jpg"-->
-<!--                                        alt="User Avatar"-->
-<!--                                        class="img-size-50 rounded-circle me-3"-->
-<!--                                />-->
-                            </div>
-                            <div class="flex-grow-1">
-                                <h3 class="dropdown-item-title">
-                                    Brad Diesel
-                                    <span class="float-end fs-7 text-danger"
-                                    ><i class="bi bi-star-fill"></i
-                                    ></span>
-                                </h3>
-                                <p class="fs-7">Call me whenever you can...</p>
-                                <p class="fs-7 text-secondary">
-                                    <i class="bi bi-clock-fill me-1"></i> 4 Hours Ago
-                                </p>
-                            </div>
-                        </div>
-                        <!--end::Message-->
-                    </a>
-                    <div class="dropdown-divider"></div>
-                    <a href="#" class="dropdown-item">
-                        <!--begin::Message-->
-                        <div class="d-flex">
-                            <div class="flex-shrink-0">
-<!--                                <img-->
-<!--                                        src="./assets/img/user8-128x128.jpg"-->
-<!--                                        alt="User Avatar"-->
-<!--                                        class="img-size-50 rounded-circle me-3"-->
-<!--                                />-->
-                            </div>
-                            <div class="flex-grow-1">
-                                <h3 class="dropdown-item-title">
-                                    John Pierce
-                                    <span class="float-end fs-7 text-secondary">
-                          <i class="bi bi-star-fill"></i>
-                        </span>
-                                </h3>
-                                <p class="fs-7">I got your message bro</p>
-                                <p class="fs-7 text-secondary">
-                                    <i class="bi bi-clock-fill me-1"></i> 4 Hours Ago
-                                </p>
-                            </div>
-                        </div>
-                        <!--end::Message-->
-                    </a>
-                    <div class="dropdown-divider"></div>
-                    <a href="#" class="dropdown-item">
-                        <!--begin::Message-->
-                        <div class="d-flex">
-                            <div class="flex-shrink-0">
-<!--                                <img-->
-<!--                                        src="./assets/img/user3-128x128.jpg"-->
-<!--                                        alt="User Avatar"-->
-<!--                                        class="img-size-50 rounded-circle me-3"-->
-<!--                                />-->
-                            </div>
-                            <div class="flex-grow-1">
-                                <h3 class="dropdown-item-title">
-                                    Nora Silvester
-                                    <span class="float-end fs-7 text-warning">
-                          <i class="bi bi-star-fill"></i>
-                        </span>
-                                </h3>
-                                <p class="fs-7">The subject goes here</p>
-                                <p class="fs-7 text-secondary">
-                                    <i class="bi bi-clock-fill me-1"></i> 4 Hours Ago
-                                </p>
-                            </div>
-                        </div>
-                        <!--end::Message-->
-                    </a>
-                    <div class="dropdown-divider"></div>
-                    <a href="#" class="dropdown-item dropdown-footer">See All Messages</a>
-                </div>
-            </li>
-            <!--end::Messages Dropdown Menu-->
-
             <!--begin::Notifications Dropdown Menu-->
             <li class="nav-item dropdown">
                 <a class="nav-link" data-bs-toggle="dropdown" href="#">
-                    <i class="bi bi-bell-fill"></i>
-                    <span class="navbar-badge badge text-bg-warning">15</span>
+                    <i class="bi bi-bell"></i>
+                    <span id="admin-noti-count" class="navbar-badge badge text-bg-warning d-none">0</span>
                 </a>
-                <div class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
-                    <span class="dropdown-item dropdown-header">15 Notifications</span>
+                <div id="admin-noti-list" class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
+                    <span class="dropdown-item dropdown-header"><span id="admin-noti-header-count">0</span>개의 새로운 알림</span>
                     <div class="dropdown-divider"></div>
-                    <a href="#" class="dropdown-item">
-                        <i class="bi bi-envelope me-2"></i> 4 new messages
-                        <span class="float-end text-secondary fs-7">3 mins</span>
-                    </a>
-                    <div class="dropdown-divider"></div>
-                    <a href="#" class="dropdown-item">
-                        <i class="bi bi-people-fill me-2"></i> 8 friend requests
-                        <span class="float-end text-secondary fs-7">12 hours</span>
-                    </a>
-                    <div class="dropdown-divider"></div>
-                    <a href="#" class="dropdown-item">
-                        <i class="bi bi-file-earmark-fill me-2"></i> 3 new reports
-                        <span class="float-end text-secondary fs-7">2 days</span>
-                    </a>
-                    <div class="dropdown-divider"></div>
-                    <a href="#" class="dropdown-item dropdown-footer"> See All Notifications </a>
+                    <!-- 알림 아이템이 여기에 자바스크립트로 삽입됩니다 -->
+                    <div id="admin-noti-items"></div>
+                    <a href="/admin/home" class="dropdown-item dropdown-footer">대시보드에서 확인</a>
                 </div>
             </li>
             <!--end::Notifications Dropdown Menu-->
 
-            <!--begin::Fullscreen Toggle-->
-            <li class="nav-item">
-                <a class="nav-link" href="#" data-lte-toggle="fullscreen">
-                    <i data-lte-icon="maximize" class="bi bi-arrows-fullscreen"></i>
-                    <i data-lte-icon="minimize" class="bi bi-fullscreen-exit" style="display: none"></i>
-                </a>
-            </li>
-            <!--end::Fullscreen Toggle-->
-
             <!--begin::User Menu Dropdown-->
             <li class="nav-item dropdown user-menu">
-                <a href="#" class="nav-link dropdown-toggle" data-bs-toggle="dropdown">
-<!--                    <img-->
-<!--                            src="./assets/img/user2-160x160.jpg"-->
-<!--                            class="user-image rounded-circle shadow"-->
-<!--                            alt="User Image"-->
-<!--                    />-->
-                    <span class="d-none d-md-inline">관리자1</span> <!-- TODO: 관리자 이름을 받아오기 -->
+                <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
+                    <i class="bi bi-person-circle fs-4 me-2"></i>
+                    <span class="d-none d-md-inline" th:text="${session.loginName != null ? session.loginName : '관리자'}">관리자</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
                     <!--begin::User Image-->
                     <li class="user-header text-bg-primary">
-<!--                        <img-->
-<!--                                src="./assets/img/user2-160x160.jpg"-->
-<!--                                class="rounded-circle shadow"-->
-<!--                                alt="User Image"-->
-<!--                        />-->
+                        <i class="bi bi-person-circle" style="font-size: 3rem;"></i>
                         <p>
-                            관리자 1 <!-- TODO: 관리자 이름을 받아오기 -->
+                            <span th:text="${session.loginName != null ? session.loginName : '관리자'}">관리자</span>
+                            <small>시스템 관리자</small>
                         </p>
                     </li>
                     <!--end::User Image-->
@@ -189,3 +63,63 @@
     <!--end::Container-->
 </nav>
 <!--end::Header-->
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 관리자 실시간 업무 알림 데이터 로드 및 렌더링
+        loadNotifications();
+        setInterval(loadNotifications, 15000);
+    });
+
+    function markAsRead(notiId, link) {
+        fetch(`/admin/notifications/${notiId}/read`, { method: 'PATCH' })
+            .then(() => {
+                location.href = link;
+            })
+            .catch(() => location.href = link);
+    }
+
+    function loadNotifications() {
+        fetch('/admin/notifications/summary')
+            .then(res => {
+                if (!res.ok) throw new Error('알림 데이터를 불러올 수 없습니다.');
+                return res.json();
+            })
+            .then(data => {
+                const countBadge = document.getElementById('admin-noti-count');
+                const headerCount = document.getElementById('admin-noti-header-count');
+                const itemsContainer = document.getElementById('admin-noti-items');
+
+                if (data && data.totalCount > 0) {
+                    // 1. 배지 카운트 업데이트 및 표시
+                    if (countBadge) {
+                        countBadge.textContent = data.totalCount;
+                        countBadge.classList.remove('d-none');
+                    }
+                    if (headerCount) headerCount.textContent = data.totalCount;
+
+                    // 2. 알림 목록 아이템 생성
+                    if (itemsContainer && data.items) {
+                        itemsContainer.innerHTML = data.items.map(item => `
+                            <a href="javascript:void(0);" onclick="markAsRead(${item.notiId}, '${item.link}')" class="dropdown-item">
+                                <i class="bi ${item.icon} me-2"></i>
+                                <span class="small text-wrap">[${item.category}] ${item.title}</span>
+                                <div class="text-end"><span class="text-secondary fs-7">${item.timeAgo}</span></div>
+                            </a>
+                            <div class="dropdown-divider"></div>
+                        `).join('');
+                    }
+                } else {
+                    if (countBadge) {
+                        countBadge.textContent = '0';
+                        countBadge.classList.add('d-none');
+                    }
+                    if (headerCount) headerCount.textContent = '0';
+                    if (itemsContainer) {
+                        itemsContainer.innerHTML = '<span class="dropdown-item text-secondary small">새 알림이 없습니다.</span>';
+                    }
+                }
+            })
+            .catch(error => console.error('Admin Notification Error:', error));
+    }
+</script>

@@ -1,11 +1,170 @@
 <!--
     @FileName : questionForm.html
-    @Description : 관리자 평가 문항 등록 및 수정 화면
+    @Description : 관리자 평가 문제 수정 화면
     @Author : 김다솜
     @Date : 2026. 05. 11
     @Modification_History
     @
-    @ 수정일자        수정자       수정내용
+    @ 수정일자        수정자        수정내용
     @ ----------    ---------    -------------------------------
     @ 2026.05.11    김다솜        최초 생성
+    @ 2026.05.13    김다솜        객관식/주관식 문제 수정 폼 및 저장 흐름 구현
 -->
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{/admin/common/head.html :: common_header}">
+    <meta charset="UTF-8">
+    <title id="page_title">평가 문제 수정</title>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<div class="app-wrapper">
+    <th:block th:replace="~{/admin/common/header}"></th:block>
+    <th:block th:replace="~{/admin/common/sidebar}"></th:block>
+
+    <main class="app-main">
+        <div class="app-content">
+            <div class="container-fluid">
+                <div class="row mb-3">
+                    <div class="col">
+                        <h3>평가 문제 수정</h3>
+                        <p class="text-muted mb-0">문제 유형에 맞게 보기, 모범답안, 키워드 답안을 수정합니다.</p>
+                    </div>
+                    <div class="col text-end">
+                        <a th:href="@{/admin/evaluation/questions}" class="btn btn-outline-secondary">목록으로</a>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-body">
+                        <form th:action="@{/admin/evaluation/questions/{questionId}/edit(questionId=${questionId})}"
+                              th:object="${question}"
+                              method="post">
+                            <div class="row g-3">
+                                <div class="col-md-6">
+                                    <label class="form-label">연결 콘텐츠</label>
+                                    <select class="form-select" th:field="*{contentId}" required>
+                                        <option value="">콘텐츠 선택</option>
+                                        <option th:each="content : ${contents}"
+                                                th:value="${content.contentId}"
+                                                th:text="${content.title}"></option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">카테고리</label>
+                                    <select class="form-select" th:field="*{categoryName}" required>
+                                        <option value="">카테고리 선택</option>
+                                        <option th:each="category : ${categories}"
+                                                th:value="${category}"
+                                                th:text="${category}"></option>
+                                    </select>
+                                </div>
+                                <div class="col-md-3">
+                                    <label class="form-label">문항 유형</label>
+                                    <select class="form-select" id="questionType" th:field="*{questionType}" required>
+                                        <option th:each="type : ${questionTypes}"
+                                                th:value="${type}"
+                                                th:text="${type.label}"></option>
+                                    </select>
+                                </div>
+
+                                <div class="col-12">
+                                    <label class="form-label">문제</label>
+                                    <textarea class="form-control" th:field="*{questionText}" rows="3" required></textarea>
+                                </div>
+
+                                <div class="col-md-6 objective-only">
+                                    <label class="form-label">보기 1</label>
+                                    <input type="text" class="form-control" th:field="*{option1}">
+                                </div>
+                                <div class="col-md-6 objective-only">
+                                    <label class="form-label">보기 2</label>
+                                    <input type="text" class="form-control" th:field="*{option2}">
+                                </div>
+                                <div class="col-md-6 objective-only">
+                                    <label class="form-label">보기 3</label>
+                                    <input type="text" class="form-control" th:field="*{option3}">
+                                </div>
+                                <div class="col-md-6 objective-only">
+                                    <label class="form-label">보기 4</label>
+                                    <input type="text" class="form-control" th:field="*{option4}">
+                                </div>
+                                <div class="col-md-3 objective-only">
+                                    <label class="form-label">정답 번호</label>
+                                    <select class="form-select" th:field="*{answerNo}">
+                                        <option value="">선택</option>
+                                        <option value="1">1</option>
+                                        <option value="2">2</option>
+                                        <option value="3">3</option>
+                                        <option value="4">4</option>
+                                    </select>
+                                </div>
+
+                                <div class="col-md-6 subjective-only">
+                                    <label class="form-label">모범답안</label>
+                                    <textarea class="form-control" th:field="*{sampleAnswer}" rows="3"></textarea>
+                                </div>
+                                <div class="col-md-6 subjective-only">
+                                    <label class="form-label">키워드 답안</label>
+                                    <input type="text" class="form-control" th:field="*{keywordAnswerText}"
+                                           placeholder="예: 협업, 보고, 전달 기준">
+                                    <div class="form-text">쉼표 구분 또는 JSON 배열 형식 입력</div>
+                                </div>
+                                <div class="col-12 subjective-only">
+                                    <label class="form-label">루브릭</label>
+                                    <textarea class="form-control" th:field="*{rubric}" rows="3"></textarea>
+                                </div>
+
+                                <div class="col-md-3">
+                                    <label class="form-label">배점</label>
+                                    <input type="number" class="form-control" th:field="*{score}" min="1" max="100" required>
+                                </div>
+                                <div class="col-md-9">
+                                    <label class="form-label">해설</label>
+                                    <textarea class="form-control" th:field="*{explanation}" rows="2"></textarea>
+                                </div>
+                            </div>
+
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <a th:href="@{/admin/evaluation/questions}" class="btn btn-outline-secondary">취소</a>
+                                <button type="submit" class="btn btn-primary">저장</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <th:block th:replace="~{/admin/common/footer}"></th:block>
+</div>
+<th:block th:replace="~{/admin/common/commonJs}"></th:block>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const questionTypeSelect = document.getElementById('questionType');
+        const objectiveFields = document.querySelectorAll('.objective-only');
+        const subjectiveFields = document.querySelectorAll('.subjective-only');
+
+        const toggleFields = () => {
+            const isObjective = questionTypeSelect.value === 'MULTIPLE_CHOICE';
+
+            objectiveFields.forEach((field) => {
+                field.style.display = isObjective ? '' : 'none';
+                field.querySelectorAll('input, select, textarea').forEach((input) => {
+                    input.disabled = !isObjective;
+                });
+            });
+
+            subjectiveFields.forEach((field) => {
+                field.style.display = isObjective ? 'none' : '';
+                field.querySelectorAll('input, select, textarea').forEach((input) => {
+                    input.disabled = isObjective;
+                });
+            });
+        };
+
+        questionTypeSelect.addEventListener('change', toggleFields);
+        toggleFields();
+    });
+</script>
+</body>
+</html>

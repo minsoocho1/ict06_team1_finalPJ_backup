@@ -1,19 +1,20 @@
 <!--
     @FileName : quizRuleList.html
-    @Description : 관리자 AI 퀴즈 출제 기준 목록 및 필터링 화면
+    @Description : 관리자 평가 항목 설정 목록 및 필터 화면
     @Author : 김다솜
     @Date : 2026. 05. 11
     @Modification_History
     @
-    @ 수정일자        수정자        수정내용
+    @ 수정일자        수정자       수정내용
     @ ----------    ---------    -----------------------------------------------
-    @ 2026.05.11    김다솜        최초 생성 및 검색/필터 및 정렬 스크립트 최적화
+    @ 2026.05.11    김다솜        최초 생성 및 검색/필터/정렬 스크립트 구성
+    @ 2026.05.14    김다솜        평가 항목 설정 요약 카드, 기준점/가중치 가시성 보강
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
+<head th:replace="~{/admin/common/head.html :: common_header}">
     <meta charset="UTF-8">
-    <title id="page_title">AI 퀴즈 출제 기준 관리</title>
+    <title id="page_title">평가 항목 설정</title>
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
 <div class="app-wrapper">
@@ -25,30 +26,80 @@
             <div class="container-fluid">
                 <div class="row mb-3">
                     <div class="col">
-                        <h3>AI 퀴즈 출제 기준 관리</h3>
-                        <p class="text-muted mb-0">
-                            카테고리별 AI 퀴즈 출제 기준을 관리합니다.
-                        </p>
+                        <h3>평가 항목 설정</h3>
+                        <p class="text-muted mb-0">카테고리별 문항 수, 합격 기준, 가중치, 난이도, 문항 유형을 설정합니다.</p>
                     </div>
                     <div class="col-auto">
-                        <a th:href="@{/admin/evaluation/quiz-rules/new}" class="btn btn-primary text-nowrap">
-                            기준 등록
-                        </a>
+                        <a th:href="@{/admin/evaluation/quiz-rules/new}" class="btn btn-primary text-nowrap">기준 등록</a>
                     </div>
                 </div>
 
                 <div th:if="${successMessage}" class="alert alert-success" role="alert" th:text="${successMessage}"></div>
                 <div th:if="${errorMessage}" class="alert alert-danger" role="alert" th:text="${errorMessage}"></div>
 
+                <div class="row g-3 mb-4">
+                    <div class="col-md-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">전체 평가 카테고리</div>
+                                <div class="fs-3 fw-semibold" th:text="${categoryCount}">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">설정 완료 기준 수</div>
+                                <div class="fs-3 fw-semibold" th:text="${configuredRuleCount}">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">활성 기준 수</div>
+                                <div class="fs-3 fw-semibold" th:text="${activeRuleCount}">0</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card shadow-sm h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">미설정 카테고리</div>
+                                <div class="fs-3 fw-semibold" th:text="${#lists.size(missingCategories)}">0</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-3" th:if="${!#lists.isEmpty(missingCategories)}">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2">
+                            <div>
+                                <h5 class="card-title mb-1">미설정 카테고리</h5>
+                                <p class="text-muted mb-0">아직 평가 기준이 없는 카테고리입니다. 필요 시 먼저 기준을 등록해 주세요.</p>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2">
+                                <span class="badge text-bg-warning" th:each="category : ${missingCategories}" th:text="${category}">카테고리</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card mb-3">
                     <div class="card-body">
                         <div class="row g-2">
-                            <div class="col-md-5">
+                            <div class="col-md-4">
                                 <input type="text" class="form-control" id="quizRuleSearchInput" placeholder="카테고리, 유형, 난이도 검색">
                             </div>
-                            <div class="col-md-3">
+                            <div class="col-md-2">
                                 <select class="form-select" id="quizRuleTypeFilter">
                                     <option value="">전체 문항 유형</option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select class="form-select" id="quizRuleDifficultyFilter">
+                                    <option value="">전체 난이도</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -64,6 +115,7 @@
                                     <option value="id-desc">정렬: ID 내림차순</option>
                                     <option value="category-asc">정렬: 카테고리 가나다순</option>
                                     <option value="count-desc">정렬: 문항 수 많은 순</option>
+                                    <option value="weight-desc">정렬: 가중치 높은 순</option>
                                 </select>
                                 <button type="button" class="btn btn-outline-secondary w-100" id="quizRuleFilterReset">초기화</button>
                             </div>
@@ -74,54 +126,52 @@
                 <div class="card">
                     <div class="card-body">
                         <div class="table-responsive">
-                        <table class="table table-hover align-middle" id="quizRuleTable">
-                            <thead>
-                            <tr>
-                                <th>ID</th>
-                                <th>카테고리</th>
-                                <th>문항 수</th>
-                                <th>합격 점수</th>
-                                <th>난이도</th>
-                                <th>문항 유형</th>
-                                <th>사용 여부</th>
-                                <th>관리</th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <tr th:each="rule, iterStat : ${rules}" class="quiz-rule-row">
-                                <td th:text="${rule.ruleId}">1</td>
-                                <td th:text="${rule.categoryName}" class="quiz-rule-category">전사</td>
-                                <td th:text="${rule.questionCount}">5</td>
-                                <td th:text="|${rule.passScore}점|">80점</td>
-                                <td th:text="${rule.difficulty.label}" class="quiz-rule-difficulty">쉬움</td>
-                                <td th:text="${rule.questionType.label}" class="quiz-rule-type">객관식</td>
-                                <td class="quiz-rule-active">
-                                    <span th:if="${rule.isActive != null and rule.isActive}" class="badge bg-success">사용</span>
-                                    <span th:unless="${rule.isActive != null and rule.isActive}" class="badge bg-secondary">미사용</span>
-                                </td>
-                                <td>
-                                    <div class="d-flex gap-1">
-                                        <a class="btn btn-sm btn-outline-primary"
-                                           th:href="@{/admin/evaluation/quiz-rules/{id}/edit(id=${rule.ruleId})}">
-                                            수정
-                                        </a>
-                                        <form th:action="@{/admin/evaluation/quiz-rules/{id}/delete(id=${rule.ruleId})}"
-                                              method="post"
-                                              onsubmit="return confirm('AI 퀴즈 출제 기준을 삭제하시겠습니까?');">
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                삭제
-                                            </button>
-                                        </form>
-                                    </div>
-                                </td>
-                            </tr>
-                            <tr th:if="${#lists.isEmpty(rules)}">
-                                <td colspan="8" class="text-center text-muted">
-                                    등록된 AI 퀴즈 출제 기준이 없습니다.
-                                </td>
-                            </tr>
-                            </tbody>
-                        </table>
+                            <table class="table table-hover align-middle" id="quizRuleTable">
+                                <thead>
+                                <tr>
+                                    <th style="min-width: 70px;">ID</th>
+                                    <th style="min-width: 110px;">카테고리</th>
+                                    <th style="min-width: 90px;">문항 수</th>
+                                    <th style="min-width: 100px;">예상 만점</th>
+                                    <th style="min-width: 140px;">합격 기준</th>
+                                    <th style="min-width: 90px;">가중치</th>
+                                    <th style="min-width: 100px;">난이도</th>
+                                    <th style="min-width: 120px;">문항 유형</th>
+                                    <th style="min-width: 100px;">사용 여부</th>
+                                    <th style="min-width: 150px;">관리</th>
+                                </tr>
+                                </thead>
+                                <tbody>
+                                <tr th:each="rule : ${rules}" class="quiz-rule-row">
+                                    <td th:text="${rule.ruleId}">1</td>
+                                    <td th:text="${rule.categoryName}" class="quiz-rule-category">인사</td>
+                                    <td th:text="${rule.questionCount}" class="quiz-rule-count">5</td>
+                                    <td th:text="${'100점'}">100점</td>
+                                    <td th:text="${rule.passScore + '% (' + rule.passScore + '점)'}">80% (80점)</td>
+                                    <td th:text="${rule.weightPercent + '%'}" class="quiz-rule-weight">100%</td>
+                                    <td th:text="${rule.difficulty.label}" class="quiz-rule-difficulty">쉬움</td>
+                                    <td th:text="${rule.questionType.label}" class="quiz-rule-type">객관식</td>
+                                    <td class="quiz-rule-active">
+                                        <span th:if="${rule.isActive != null and rule.isActive}" class="badge bg-success">사용</span>
+                                        <span th:unless="${rule.isActive != null and rule.isActive}" class="badge bg-secondary">미사용</span>
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1 flex-nowrap">
+                                            <a class="btn btn-sm btn-outline-primary"
+                                               th:href="@{/admin/evaluation/quiz-rules/{id}/edit(id=${rule.ruleId})}">수정</a>
+                                            <form th:action="@{/admin/evaluation/quiz-rules/{id}/delete(id=${rule.ruleId})}"
+                                                  method="post"
+                                                  onsubmit="return confirm('평가 항목 설정을 삭제하시겠습니까?');">
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">삭제</button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <tr th:if="${#lists.isEmpty(rules)}">
+                                    <td colspan="10" class="text-center text-muted">등록된 평가 항목 설정이 없습니다.</td>
+                                </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 </div>
@@ -137,14 +187,19 @@
         const rows = Array.from(document.querySelectorAll('#quizRuleTable tbody .quiz-rule-row'));
         const searchInput = document.getElementById('quizRuleSearchInput');
         const typeFilter = document.getElementById('quizRuleTypeFilter');
+        const difficultyFilter = document.getElementById('quizRuleDifficultyFilter');
         const activeFilter = document.getElementById('quizRuleActiveFilter');
         const sortOrder = document.getElementById('quizRuleSortOrder');
         const resetButton = document.getElementById('quizRuleFilterReset');
         const tbody = document.querySelector('#quizRuleTable tbody');
 
         const uniqueTypes = [...new Set(rows.map((row) => row.querySelector('.quiz-rule-type')?.innerText.trim()).filter(Boolean))];
+        const uniqueDifficulties = [...new Set(rows.map((row) => row.querySelector('.quiz-rule-difficulty')?.innerText.trim()).filter(Boolean))];
+
         typeFilter.innerHTML = '<option value="">전체 문항 유형</option>' +
             uniqueTypes.map((type) => `<option value="${type}">${type}</option>`).join('');
+        difficultyFilter.innerHTML = '<option value="">전체 난이도</option>' +
+            uniqueDifficulties.map((difficulty) => `<option value="${difficulty}">${difficulty}</option>`).join('');
 
         const sortRows = () => {
             const sortValue = sortOrder.value;
@@ -156,13 +211,22 @@
                 }
 
                 if (sortValue === 'category-asc') {
-                    return (a.querySelector('.quiz-rule-category')?.innerText || '').localeCompare(b.querySelector('.quiz-rule-category')?.innerText || '', 'ko');
+                    return (a.querySelector('.quiz-rule-category')?.innerText || '').localeCompare(
+                        b.querySelector('.quiz-rule-category')?.innerText || '',
+                        'ko'
+                    );
                 }
 
                 if (sortValue === 'count-desc') {
-                    const aCount = Number(a.children[2]?.innerText.trim() || 0);
-                    const bCount = Number(b.children[2]?.innerText.trim() || 0);
+                    const aCount = Number(a.querySelector('.quiz-rule-count')?.innerText.trim() || 0);
+                    const bCount = Number(b.querySelector('.quiz-rule-count')?.innerText.trim() || 0);
                     return bCount - aCount;
+                }
+
+                if (sortValue === 'weight-desc') {
+                    const aWeight = Number((a.querySelector('.quiz-rule-weight')?.innerText || '0').replace('%', ''));
+                    const bWeight = Number((b.querySelector('.quiz-rule-weight')?.innerText || '0').replace('%', ''));
+                    return bWeight - aWeight;
                 }
 
                 return 0;
@@ -174,22 +238,25 @@
         const applyFilters = () => {
             const searchValue = searchInput.value.trim().toLowerCase();
             const typeValue = typeFilter.value;
+            const difficultyValue = difficultyFilter.value;
             const activeValue = activeFilter.value;
 
             rows.forEach((row) => {
                 const rowText = row.innerText.toLowerCase();
                 const rowType = row.querySelector('.quiz-rule-type')?.innerText.trim() || '';
+                const rowDifficulty = row.querySelector('.quiz-rule-difficulty')?.innerText.trim() || '';
                 const rowActive = row.querySelector('.quiz-rule-active')?.innerText.trim() || '';
 
                 const matchesSearch = !searchValue || rowText.includes(searchValue);
                 const matchesType = !typeValue || rowType === typeValue;
+                const matchesDifficulty = !difficultyValue || rowDifficulty === difficultyValue;
                 const matchesActive = !activeValue || rowActive.includes(activeValue);
 
-                row.style.display = matchesSearch && matchesType && matchesActive ? '' : 'none';
+                row.style.display = matchesSearch && matchesType && matchesDifficulty && matchesActive ? '' : 'none';
             });
         };
 
-        [searchInput, typeFilter, activeFilter].forEach((element) => {
+        [searchInput, typeFilter, difficultyFilter, activeFilter].forEach((element) => {
             element.addEventListener('input', applyFilters);
             element.addEventListener('change', applyFilters);
         });
@@ -198,6 +265,7 @@
         resetButton.addEventListener('click', function () {
             searchInput.value = '';
             typeFilter.value = '';
+            difficultyFilter.value = '';
             activeFilter.value = '';
             sortOrder.value = 'id-asc';
             sortRows();

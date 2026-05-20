@@ -5,6 +5,8 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.LocalDate;
+
 /*
  * 조직도 사원 목록 DTO
  *
@@ -12,7 +14,7 @@ import lombok.NoArgsConstructor;
  * 오른쪽에 표시할 사원 정보이다.
  *
  * 관리자 Thymeleaf 화면과
- * 나중에 만들 사용자 React 화면에서 공통으로 사용할 수 있다.
+ * 사용자 React 화면에서 공통으로 사용한다.
  */
 @Getter
 @NoArgsConstructor
@@ -24,6 +26,11 @@ public class OrgEmployeeDto {
      * 사번
      */
     private String empNo;
+
+    /*
+     * 사원 아이디
+     */
+    private String empId;
 
     /*
      * 사원 이름
@@ -43,7 +50,7 @@ public class OrgEmployeeDto {
     /*
      * 직급 ID
      *
-     * 직급 정렬할 때 사용할 수 있다.
+     * 직급 정렬 시 사용할 수 있다.
      */
     private Integer positionId;
 
@@ -51,7 +58,7 @@ public class OrgEmployeeDto {
      * 직급명
      *
      * 예:
-     * 팀장, 과장, 대리, 사원
+     * 수석, 선임, 책임, 사원
      */
     private String positionName;
 
@@ -77,4 +84,9 @@ public class OrgEmployeeDto {
      * 프로필 이미지 경로
      */
     private String profileImg;
+
+    /*
+     * 입사일
+     */
+    private LocalDate hireDate;
 }

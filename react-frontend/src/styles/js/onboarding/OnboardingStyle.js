@@ -1,45 +1,58 @@
 /**
- * 온보딩 도메인 공통 디자인 시스템 (JS Style Object)
+ * @FileName : OnboardingStyle.js
+ * @Description : AI 온보딩 공통 스타일 정의
+ * @Author : 김다솜
+ * @Date : 2026. 05. 12
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.12    김다솜       최초 생성
+ * @ 2026.05.15    김다솜       사내 AI 포털 기준 온보딩 공통 색상, 카드, 배지 톤 정리
  */
 
 export const COLORS = {
-  primary: '#321fdb',
-  success: '#2eb85c',
-  warning: '#f9b115',
-  info: '#3399ff',
-  dark: '#3c4b64',
-  gray: '#f8f9fa',
-  border: '#ced4da',
+  primary: '#2563EB',
+  success: '#16A34A',
+  warning: '#F59E0B',
+  info: '#0EA5E9',
+  dark: '#111827',
+  sub: '#6B7280',
+  muted: '#94A3B8',
+  gray: '#F4F7FB',
+  softBlue: '#EEF2FF',
+  border: '#DDE3EA',
+  font: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif',
 };
 
 export const cardCore = {
-  border: 'none',
-  borderTop: `4px solid ${COLORS.primary}`,
-  boxShadow: '0 0.125rem 0.25rem rgba(0, 0, 0, 0.075)',
-  borderRadius: '0.5rem',
+  background: '#FFFFFF',
+  border: `1px solid ${COLORS.border}`,
+  boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)',
+  borderRadius: '18px',
 };
 
 export const badgeAiTag = {
-  backgroundColor: '#f8f9fa',
+  backgroundColor: COLORS.softBlue,
   color: COLORS.primary,
   fontSize: '0.7rem',
   fontWeight: '800',
-  padding: '0.15rem 0.4rem',
-  borderRadius: '4px',
+  padding: '0.2rem 0.5rem',
+  borderRadius: '999px',
   verticalAlign: 'middle',
-  border: `1px solid ${COLORS.border}`,
+  border: '1px solid rgba(37, 99, 235, 0.16)',
   display: 'inline-block',
   lineHeight: '1.2',
 };
 
 export const badgeAiSidebar = {
-  backgroundColor: '#dbe4ff',
-  color: '#1f2a56',
+  backgroundColor: COLORS.softBlue,
+  color: COLORS.primary,
   fontSize: '0.68rem',
   fontWeight: '800',
   padding: '0.2rem 0.45rem',
   borderRadius: '999px',
-  border: '1px solid rgba(255, 255, 255, 0.08)',
+  border: '1px solid rgba(37, 99, 235, 0.16)',
   lineHeight: '1.1',
 };
 

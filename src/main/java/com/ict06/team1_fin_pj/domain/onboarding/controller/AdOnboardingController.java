@@ -1,26 +1,29 @@
 /**
  * @FileName : AdOnboardingController.java
- * @Description : 온보딩 콘텐츠, 문서(RAG), 로드맵 및 교육 일정 관리를 위한 관리자 컨트롤러
+ * @Description : 관리자 온보딩 컨트롤러 - 문서 관리(RAG), 로드맵 및 일정 관리 설정 등을 처리
  * @Author : 김다솜
  * @Date : 2026. 04. 24
  * @Modification_History
  * @
  * @ 수정일자        수정자        수정내용
  * @ ----------    ---------    -----------------------------------------------
- * @ 2026.04.24    김다솜        최초 생성 및 온보딩 기본 구조 설계
- * @ 2026.05.10    김다솜        온보딩 콘텐츠 및 문서 CRUD 화면 추가
+ * @ 2026.04.24    김다솜        최초 생성 및 온보딩 관리 기본 기능 구현
+ * @ 2026.05.10    김다솜        온보딩 로드맵 및 콘텐츠 CRUD 기능 추가
  * @ 2026.05.11    김다솜        문서 기반 RAG 처리 로직 및 로드맵 아이템 편집 기능 추가
- * @ 2026.05.12    김다솜        일정 관리 직원 목록/상세 화면 분리, 복귀 경로 유지, 학습항목 알림 발송 및 문서 수정 시 RAG 재처리 흐름 분리
+ * @ 2026.05.12    김다솜        일정 관리 직원 목록/상세 화면 분리, 진행현황 통계 연동, 학습항목 알림 발송 및 문서 수정 시 RAG 재처리 흐름 분리
+ * @ 2026.05.14    김다솜        문서 등록 비동기 처리 적용 및 캘린더 연동을 위한 아이템 수정 로직 위임
+ * @ 2026.05.18    김다솜        문서/RAG 재처리 요청 대상 문서 추적값 추가, 온보딩 일정 상세 알림 발송 이력 연결, 문서 목록 주요 청크 미리보기 구성
+ * @ 2026.05.19    김다솜        문서/RAG 관리 주요 청크 미리보기에서 PDF 구조 태그 및 특수문자 비율이 높은 청크 제외
  */
-
 package com.ict06.team1_fin_pj.domain.onboarding.controller;
 
-import com.ict06.team1_fin_pj.common.dto.onboarding.AdminDocumentListDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdDocumentListDto;
 import com.ict06.team1_fin_pj.common.dto.onboarding.AdDocumentRequestDto;
-import com.ict06.team1_fin_pj.common.dto.onboarding.AdminOnboardingScheduleEmployeeDto;
-import com.ict06.team1_fin_pj.common.dto.onboarding.AdminOnboardingScheduleDto;
-import com.ict06.team1_fin_pj.common.dto.onboarding.AdminRoadItemRequestDto;
-import com.ict06.team1_fin_pj.common.dto.onboarding.AdminRoadmapRequestDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AiDocumentQuestionResponseDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdOnboardingScheduleEmployeeDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdOnboardingScheduleDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdRoadItemRequestDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdRoadmapRequestDto;
 import com.ict06.team1_fin_pj.common.dto.onboarding.DocumentProcessingResultDto;
 import com.ict06.team1_fin_pj.common.dto.onboarding.OnContentRequestDto;
 import com.ict06.team1_fin_pj.common.security.PrincipalDetails;
@@ -32,6 +35,7 @@ import com.ict06.team1_fin_pj.domain.employee.entity.PositionEntity;
 import com.ict06.team1_fin_pj.domain.employee.repository.AdDepartmentRepository;
 import com.ict06.team1_fin_pj.domain.employee.repository.AdPositionRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.AccessLevel;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.DocChunkEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.DocumentEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.DocumentStage;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.GeneratedType;
@@ -39,6 +43,7 @@ import com.ict06.team1_fin_pj.domain.onboarding.entity.OnContentEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadItemEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadProgressEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadmapEntity;
+import com.ict06.team1_fin_pj.domain.evaluation.repository.EvaluationQuestionRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.DocumentRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.OnContentRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadItemRepository;
@@ -46,6 +51,7 @@ import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadProgressRepositor
 import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadmapRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.service.DocumentProcessingAsyncService;
 import com.ict06.team1_fin_pj.domain.onboarding.service.DocumentProcessingService;
+import com.ict06.team1_fin_pj.domain.onboarding.service.DocumentQuestionAnswerService;
 import com.ict06.team1_fin_pj.domain.onboarding.service.OnboardingScheduleNotificationService;
 import com.ict06.team1_fin_pj.domain.onboarding.service.RoadmapServiceImpl;
 import jakarta.servlet.ServletException;
@@ -62,12 +68,17 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.IOException;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -76,9 +87,23 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class AdOnboardingController {
 
+    private static final List<String> PDF_STRUCTURE_MARKERS = List.of(
+            "StructElem",
+            "Table",
+            "RowSpan",
+            "ColSpan",
+            "ListNumbering",
+            "BBox",
+            "MCID",
+            "Artifact",
+            "MarkedContent",
+            "ParentTree"
+    );
+
     private final DocumentRepository documentRepository;
     private final DocumentProcessLogRepository documentProcessLogRepository;
     private final OnContentRepository onContentRepository;
+    private final EvaluationQuestionRepository evaluationQuestionRepository;
     private final RoadmapRepository roadmapRepository;
     private final RoadItemRepository roadItemRepository;
     private final RoadProgressRepository roadProgressRepository;
@@ -88,6 +113,7 @@ public class AdOnboardingController {
     private final RoadmapServiceImpl roadmapService;
     private final DocumentProcessingService documentProcessingService;
     private final DocumentProcessingAsyncService documentProcessingAsyncService;
+    private final DocumentQuestionAnswerService documentQuestionAnswerService;
     private final OnboardingScheduleNotificationService onboardingScheduleNotificationService;
 
     @RequestMapping("/main")
@@ -101,15 +127,17 @@ public class AdOnboardingController {
     public String scheduleList(Model model) {
         System.out.println("[AdOnboardingController] - scheduleList()");
 
+        // 모든 사원의 진행 정보를 한 번에 조회하되, 아이템이 연결된 유효한 데이터만 맵핑
         Map<Integer, RoadProgressEntity> progressByItemId = roadProgressRepository.findAll().stream()
+                .filter(progress -> progress.getItem() != null)
                 .collect(Collectors.toMap(
                         progress -> progress.getItem().getItemId(),
                         Function.identity(),
                         (left, right) -> left
                 ));
 
-        List<AdminOnboardingScheduleDto> schedules = roadItemRepository.findAllByOrderByRoadmap_Employee_EmpNoAscOrderNoAsc().stream()
-                .map(item -> toScheduleDto(item, progressByItemId.get(item.getItemId())))
+        List<AdOnboardingScheduleDto> schedules = roadItemRepository.findAllByOrderByRoadmap_Employee_EmpNoAscOrderNoAsc().stream()
+                .map(item -> toScheduleDto(item, progressByItemId.get(item.getItemId()), false))
                 .toList();
 
         model.addAttribute("employeeSchedules", toScheduleEmployeeDtos(schedules));
@@ -126,7 +154,7 @@ public class AdOnboardingController {
 
         List<RoadItemEntity> items = roadItemRepository.findByRoadmap_Employee_EmpNoOrderByOrderNoAsc(empNo);
         if (items.isEmpty()) {
-            redirectAttributes.addFlashAttribute("errorMessage", "해당 직원의 온보딩 일정이 없습니다.");
+            redirectAttributes.addFlashAttribute("errorMessage", "해당 사원의 온보딩 일정 정보가 없습니다.");
             return "redirect:/admin/onboarding/schedules";
         }
 
@@ -137,11 +165,11 @@ public class AdOnboardingController {
                         (left, right) -> left
                 ));
 
-        List<AdminOnboardingScheduleDto> schedules = items.stream()
-                .map(item -> toScheduleDto(item, progressByItemId.get(item.getItemId())))
+        List<AdOnboardingScheduleDto> schedules = items.stream()
+                .map(item -> toScheduleDto(item, progressByItemId.get(item.getItemId()), true))
                 .toList();
 
-        AdminOnboardingScheduleDto firstSchedule = schedules.get(0);
+        AdOnboardingScheduleDto firstSchedule = schedules.get(0);
         model.addAttribute("empNo", empNo);
         model.addAttribute("employeeName", firstSchedule.getEmployeeName());
         model.addAttribute("roadmapTitle", firstSchedule.getRoadmapTitle());
@@ -160,9 +188,9 @@ public class AdOnboardingController {
 
         try {
             onboardingScheduleNotificationService.sendManualItemNotification(itemId);
-            redirectAttributes.addFlashAttribute("successMessage", "학습항목 알림을 발송했습니다.");
+            redirectAttributes.addFlashAttribute("successMessage", "수동 알림이 발송되었습니다.");
         } catch (Exception e) {
-            redirectAttributes.addFlashAttribute("errorMessage", "알림 발송에 실패했습니다: " + e.getMessage());
+            redirectAttributes.addFlashAttribute("errorMessage", "알림 발송 중 오류가 발생했습니다: " + e.getMessage());
         }
 
         return "redirect:/admin/onboarding/schedules/" + empNo;
@@ -176,6 +204,38 @@ public class AdOnboardingController {
                 .map(this::toDocumentListDto)
                 .toList());
         return "admin/onboarding/documentList";
+    }
+
+    @GetMapping("/documents/status")
+    @ResponseBody
+    public List<AdDocumentListDto> documentStatus() {
+        System.out.println("[AdOnboardingController] - documentStatus()");
+
+        return documentRepository.findAllByOrderByCreatedAtDesc().stream()
+                .map(this::toDocumentListDto)
+                .toList();
+    }
+
+    @PostMapping("/documents/{docId}/answer")
+    @ResponseBody
+    public Map<String, Object> answerDocumentQuestion(
+            @PathVariable Integer docId,
+            @RequestParam String question
+    ) {
+        System.out.println("[AdOnboardingController] - answerDocumentQuestion()");
+
+        Map<String, Object> response = new LinkedHashMap<>();
+        try {
+            AiDocumentQuestionResponseDto result = documentQuestionAnswerService.answerQuestion(docId, question);
+            response.put("success", true);
+            response.put("answer", result.getAnswer());
+            response.put("usedChunkCount", result.getUsedChunkCount());
+        } catch (Exception e) {
+            response.put("success", false);
+            response.put("message", e.getMessage());
+        }
+
+        return response;
     }
 
     @GetMapping("/documents/new")
@@ -203,29 +263,34 @@ public class AdOnboardingController {
             redirectAttributes.addFlashAttribute("errorMessage", "Selected department was not found.");
             return "redirect:/admin/onboarding/documents";
         }
+        List<OnContentEntity> relatedContents = getRelatedContents(requestDto);
+        if (hasInvalidRelatedContent(requestDto, relatedContents)) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Selected related content was not found.");
+            return "redirect:/admin/onboarding/documents";
+        }
 
         DocumentEntity document = DocumentEntity.builder()
                 .title(requestDto.getTitle())
                 .filePath(requestDto.getFilePath())
+                .relatedContent(relatedContents.stream().findFirst().orElse(null))
+                .relatedContents(new LinkedHashSet<>(relatedContents))
                 .department(department)
                 .accessLevel(requestDto.getAccessLevel() != null ? requestDto.getAccessLevel() : AccessLevel.PUBLIC)
                 .currentStage(DocumentStage.UPLOADED)
                 .createdBy(principal != null ? principal.getEmp() : null)
                 .build();
 
-        documentRepository.save(document);
-        try {
-            DocumentProcessingResultDto processingResult = documentProcessingService.processDocument(
-                    document.getDocId(),
-                    principal != null ? principal.getEmp() : null
-            );
-            applyDocumentProcessFlashMessage(redirectAttributes, "Document saved successfully.", processingResult);
-        } catch (Exception e) {
-            redirectAttributes.addFlashAttribute(
-                    "errorMessage",
-                    "Document saved successfully, but automatic processing failed. " + e.getMessage()
-            );
-        }
+        documentRepository.saveAndFlush(document);
+        documentProcessingAsyncService.processDocumentAsync(
+                document.getDocId(),
+                principal != null ? principal.getEmp() : null
+        );
+        redirectAttributes.addFlashAttribute("processingDocId", document.getDocId());
+        redirectAttributes.addFlashAttribute("processingDocTitle", document.getTitle());
+        redirectAttributes.addFlashAttribute(
+                "successMessage",
+                "Document saved successfully. Automatic processing started in the background. Refresh the page later to check updated chunks and vectors."
+        );
         return "redirect:/admin/onboarding/documents";
     }
 
@@ -265,17 +330,23 @@ public class AdOnboardingController {
             redirectAttributes.addFlashAttribute("errorMessage", "Selected department was not found.");
             return "redirect:/admin/onboarding/documents";
         }
+        List<OnContentEntity> relatedContents = getRelatedContents(requestDto);
+        if (hasInvalidRelatedContent(requestDto, relatedContents)) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Selected related content was not found.");
+            return "redirect:/admin/onboarding/documents";
+        }
 
         return documentRepository.findById(docId)
                 .map(document -> {
                     document.updateDocument(
                             requestDto.getTitle(),
                             requestDto.getFilePath(),
+                            relatedContents,
                             department,
                             requestDto.getAccessLevel() != null ? requestDto.getAccessLevel() : AccessLevel.PUBLIC,
                             document.getCurrentStage()
                     );
-                    documentRepository.save(document);
+                    documentRepository.saveAndFlush(document);
                     redirectAttributes.addFlashAttribute("successMessage", "Document updated successfully. Use reprocess when RAG data needs to be refreshed.");
                     return "redirect:/admin/onboarding/documents";
                 })
@@ -317,15 +388,22 @@ public class AdOnboardingController {
     ) {
         System.out.println("[AdOnboardingController] - processDocument()");
 
-        if (!documentRepository.existsById(docId)) {
+        Optional<DocumentEntity> targetDocument = documentRepository.findById(docId);
+        if (targetDocument.isEmpty()) {
             redirectAttributes.addFlashAttribute("errorMessage", "Document was not found.");
             return "redirect:/admin/onboarding/documents";
         }
+
+        DocumentEntity document = targetDocument.get();
+        document.updateStage(DocumentStage.CHUNKING);
+        documentRepository.saveAndFlush(document);
 
         documentProcessingAsyncService.processDocumentAsync(
                 docId,
                 principal != null ? principal.getEmp() : null
         );
+        redirectAttributes.addFlashAttribute("processingDocId", document.getDocId());
+        redirectAttributes.addFlashAttribute("processingDocTitle", document.getTitle());
         redirectAttributes.addFlashAttribute(
                 "successMessage",
                 "Document reprocessing started. Refresh the page later to check updated chunks and vectors."
@@ -480,7 +558,7 @@ public class AdOnboardingController {
 
     @PostMapping("/roadmaps")
     public String createRoadmap(
-            @ModelAttribute AdminRoadmapRequestDto requestDto,
+            @ModelAttribute AdRoadmapRequestDto requestDto,
             RedirectAttributes redirectAttributes
     ) {
         System.out.println("[AdOnboardingController] - createRoadmap()");
@@ -534,7 +612,7 @@ public class AdOnboardingController {
     @PostMapping("/roadmaps/{roadmapId}/edit")
     public String updateRoadmap(
             @PathVariable Integer roadmapId,
-            @ModelAttribute AdminRoadmapRequestDto requestDto,
+            @ModelAttribute AdRoadmapRequestDto requestDto,
             RedirectAttributes redirectAttributes
     ) {
         System.out.println("[AdOnboardingController] - updateRoadmap()");
@@ -623,7 +701,7 @@ public class AdOnboardingController {
     @PostMapping("/roadmaps/{roadmapId}/items")
     public String createRoadItem(
             @PathVariable Integer roadmapId,
-            @ModelAttribute AdminRoadItemRequestDto requestDto,
+            @ModelAttribute AdRoadItemRequestDto requestDto,
             RedirectAttributes redirectAttributes
     ) {
         System.out.println("[AdOnboardingController] - createRoadItem()");
@@ -700,7 +778,7 @@ public class AdOnboardingController {
     public String updateRoadItem(
             @PathVariable Integer roadmapId,
             @PathVariable Integer itemId,
-            @ModelAttribute AdminRoadItemRequestDto requestDto,
+            @ModelAttribute AdRoadItemRequestDto requestDto,
             @RequestParam(required = false) String returnUrl,
             RedirectAttributes redirectAttributes
     ) {
@@ -724,16 +802,7 @@ public class AdOnboardingController {
             return "redirect:/admin/onboarding/roadmaps/" + roadmapId + "/items/" + itemId + "/edit" + buildReturnUrlQuery(returnUrl);
         }
 
-        item.updateRoadItem(
-                content,
-                requestDto.getItemTitle(),
-                item.getRecommendationReason(),
-                requestDto.getCategoryName(),
-                requestDto.getOrderNo(),
-                requestDto.getStartDate(),
-                requestDto.getDueDate()
-        );
-        roadItemRepository.save(item);
+        roadmapService.updateRoadItem(itemId, requestDto);
         redirectAttributes.addFlashAttribute("successMessage", "Roadmap item updated successfully.");
 
         return "redirect:" + resolveRoadItemReturnUrl(returnUrl, roadmapId);
@@ -755,7 +824,8 @@ public class AdOnboardingController {
         }
 
         try {
-            roadItemRepository.delete(item);
+            // 레포지토리 직접 삭제 대신 서비스를 통해 연관 캘린더 일정까지 삭제
+            roadmapService.deleteRoadItem(itemId);
             redirectAttributes.addFlashAttribute("successMessage", "Roadmap item deleted successfully.");
         } catch (DataIntegrityViolationException e) {
             redirectAttributes.addFlashAttribute("errorMessage", "Roadmap item is still referenced by progress data and cannot be deleted.");
@@ -832,6 +902,7 @@ public class AdOnboardingController {
 
     private void addDocumentFormOptions(Model model) {
         model.addAttribute("departments", adDepartmentRepository.findAll());
+        model.addAttribute("contents", onContentRepository.findAll());
         model.addAttribute("accessLevels", AccessLevel.values());
         model.addAttribute("documentStages", DocumentStage.values());
     }
@@ -869,6 +940,49 @@ public class AdOnboardingController {
         }
 
         return adDepartmentRepository.findById(deptId).orElse(null);
+    }
+
+    private List<OnContentEntity> getRelatedContents(AdDocumentRequestDto requestDto) {
+        Set<Integer> contentIds = new LinkedHashSet<>();
+        if (requestDto.getContentIds() != null) {
+            requestDto.getContentIds().stream()
+                    .filter(id -> id != null)
+                    .forEach(contentIds::add);
+        }
+        if (requestDto.getContentId() != null) {
+            contentIds.add(requestDto.getContentId());
+        }
+
+        if (contentIds.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, OnContentEntity> contentsById = onContentRepository.findAllById(contentIds).stream()
+                .collect(Collectors.toMap(
+                        OnContentEntity::getContentId,
+                        Function.identity(),
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+
+        return contentIds.stream()
+                .map(contentsById::get)
+                .filter(content -> content != null)
+                .toList();
+    }
+
+    private boolean hasInvalidRelatedContent(AdDocumentRequestDto requestDto, List<OnContentEntity> relatedContents) {
+        Set<Integer> requestedIds = new LinkedHashSet<>();
+        if (requestDto.getContentIds() != null) {
+            requestDto.getContentIds().stream()
+                    .filter(id -> id != null)
+                    .forEach(requestedIds::add);
+        }
+        if (requestDto.getContentId() != null) {
+            requestedIds.add(requestDto.getContentId());
+        }
+
+        return requestedIds.size() != relatedContents.size();
     }
 
     private List<Integer> getTargetPositionIds(OnContentEntity content) {
@@ -934,40 +1048,161 @@ public class AdOnboardingController {
         return employee.getName() + " Onboarding Roadmap";
     }
 
-    private AdminDocumentListDto toDocumentListDto(DocumentEntity document) {
+    private AdDocumentListDto toDocumentListDto(DocumentEntity document) {
         int chunkCount = document.getChunks() != null ? document.getChunks().size() : 0;
         int vectorCount = document.getChunks() == null ? 0 : (int) document.getChunks().stream()
                 .filter(chunk -> chunk.getVector() != null)
                 .count();
+        List<OnContentEntity> linkedContents = getExplicitRelatedContents(document);
+        int generatedQuizCount = linkedContents.stream()
+                .mapToInt(content -> (int) evaluationQuestionRepository.findByContent_ContentId(content.getContentId()).stream()
+                        .filter(question -> question.getExplanation() != null)
+                        .filter(question -> question.getExplanation().startsWith("[AI자동생성]"))
+                        .count())
+                .sum();
         String lastErrorMessage = documentProcessLogRepository
                 .findTopByDocument_DocIdAndErrorMessageIsNotNullOrderByJobIdDesc(document.getDocId())
                 .map(log -> log.getErrorMessage())
                 .orElse(null);
 
-        return AdminDocumentListDto.builder()
+        return AdDocumentListDto.builder()
                 .docId(document.getDocId())
                 .title(document.getTitle())
                 .filePath(document.getFilePath())
                 .summaryPreview(document.getSummaryPreview())
-                .departmentName(document.getDepartment() != null ? document.getDepartment().getDeptName() : "Common")
+                .keyChunkPreview(buildKeyChunkPreview(document))
+                .departmentName(document.getDepartment() != null ? document.getDepartment().getDeptName() : "공통")
                 .accessLevel(document.getAccessLevel())
                 .currentStage(document.getCurrentStage())
                 .chunkCount(chunkCount)
                 .vectorCount(vectorCount)
+                .linkedContentId(linkedContents.stream().findFirst().map(OnContentEntity::getContentId).orElse(null))
+                .linkedContentCount(linkedContents.size())
+                .generatedQuizCount(generatedQuizCount)
+                .quizGenerated(generatedQuizCount > 0)
                 .createdByName(document.getCreatedBy() != null ? document.getCreatedBy().getName() : "-")
                 .lastErrorMessage(lastErrorMessage)
                 .updatedAt(document.getUpdatedAt())
                 .build();
     }
 
+    private String buildKeyChunkPreview(DocumentEntity document) {
+        if (document.getChunks() == null || document.getChunks().isEmpty()) {
+            return null;
+        }
+
+        return document.getChunks().stream()
+                .sorted(Comparator.comparing(chunk -> chunk.getChunkNo() != null ? chunk.getChunkNo() : Integer.MAX_VALUE))
+                .map(this::toReadableChunkSnippet)
+                .filter(snippet -> snippet != null && !snippet.isBlank())
+                .limit(2)
+                .collect(Collectors.joining("\n\n"));
+    }
+
+    private String toReadableChunkSnippet(DocChunkEntity chunk) {
+        String content = normalizePreviewText(chunk.getContent());
+        String sectionTitle = normalizePreviewText(chunk.getSectionTitle());
+
+        if (content.isBlank()
+                || isPdfStructurePreview(sectionTitle + " " + content)
+                || !hasEnoughReadableText(content)) {
+            return null;
+        }
+
+        String prefix = sectionTitle.isBlank() || isPdfStructurePreview(sectionTitle)
+                ? "Chunk " + chunk.getChunkNo()
+                : sectionTitle;
+        String snippet = content.length() > 180 ? content.substring(0, 180) + "..." : content;
+        return prefix + " : " + snippet;
+    }
+
+    private String normalizePreviewText(String value) {
+        if (value == null) {
+            return "";
+        }
+
+        return value
+                .replaceAll("[\\p{Cntrl}&&[^\r\n\t]]", " ")
+                .replaceAll("[\\uFFFD]+", " ")
+                .replaceAll("[\\p{Co}\\p{Cn}]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
+    }
+
+    private boolean hasEnoughReadableText(String value) {
+        long nonSpaceCount = value.chars()
+                .filter(ch -> !Character.isWhitespace(ch))
+                .count();
+        if (nonSpaceCount == 0) {
+            return false;
+        }
+
+        long readableCount = value.chars()
+                .filter(this::isReadablePreviewChar)
+                .count();
+        long noisyCount = value.chars()
+                .filter(ch -> !Character.isWhitespace(ch) && !isAllowedPreviewChar(ch))
+                .count();
+
+        return readableCount >= 20
+                && readableCount >= nonSpaceCount * 0.55
+                && noisyCount <= nonSpaceCount * 0.25;
+    }
+
+    private boolean isReadablePreviewChar(int ch) {
+        return Character.isLetterOrDigit(ch)
+                || Character.UnicodeScript.of(ch) == Character.UnicodeScript.HANGUL;
+    }
+
+    private boolean isAllowedPreviewChar(int ch) {
+        return isReadablePreviewChar(ch)
+                || Character.isWhitespace(ch)
+                || ".,;:!?()[]{}<>-_/+%&·'\"".indexOf(ch) >= 0;
+    }
+
+    private boolean isPdfStructurePreview(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+
+        long markerCount = PDF_STRUCTURE_MARKERS.stream()
+                .filter(value::contains)
+                .count();
+        if (markerCount >= 3) {
+            return true;
+        }
+
+        long hangulCount = value.chars()
+                .filter(ch -> Character.UnicodeScript.of(ch) == Character.UnicodeScript.HANGUL)
+                .count();
+        return markerCount >= 2 && hangulCount < 10;
+    }
+
     private AdDocumentRequestDto toDocumentRequestDto(DocumentEntity document) {
         AdDocumentRequestDto dto = new AdDocumentRequestDto();
         dto.setTitle(document.getTitle());
         dto.setFilePath(document.getFilePath());
+        List<Integer> contentIds = getExplicitRelatedContents(document).stream()
+                .map(OnContentEntity::getContentId)
+                .toList();
+        dto.setContentIds(contentIds);
+        dto.setContentId(contentIds.stream().findFirst().orElse(null));
         dto.setDeptId(document.getDepartment() != null ? document.getDepartment().getDeptId() : null);
         dto.setAccessLevel(document.getAccessLevel());
         dto.setCurrentStage(document.getCurrentStage());
         return dto;
+    }
+
+    private List<OnContentEntity> getExplicitRelatedContents(DocumentEntity document) {
+        if (document.getRelatedContents() != null && !document.getRelatedContents().isEmpty()) {
+            return document.getRelatedContents().stream().toList();
+        }
+
+        if (document.getRelatedContent() != null) {
+            return List.of(document.getRelatedContent());
+        }
+
+        return List.of();
     }
 
     private void applyDocumentProcessFlashMessage(
@@ -999,7 +1234,7 @@ public class AdOnboardingController {
         );
     }
 
-    private boolean hasInvalidSchedule(AdminRoadItemRequestDto requestDto) {
+    private boolean hasInvalidSchedule(AdRoadItemRequestDto requestDto) {
         return requestDto.getStartDate() != null
                 && requestDto.getDueDate() != null
                 && requestDto.getDueDate().isBefore(requestDto.getStartDate());
@@ -1035,18 +1270,18 @@ public class AdOnboardingController {
         return "?returnUrl=" + normalizedReturnUrl;
     }
 
-    private List<AdminOnboardingScheduleEmployeeDto> toScheduleEmployeeDtos(List<AdminOnboardingScheduleDto> schedules) {
-        Map<String, List<AdminOnboardingScheduleDto>> schedulesByEmployee = schedules.stream()
+    private List<AdOnboardingScheduleEmployeeDto> toScheduleEmployeeDtos(List<AdOnboardingScheduleDto> schedules) {
+        Map<String, List<AdOnboardingScheduleDto>> schedulesByEmployee = schedules.stream()
                 .collect(Collectors.groupingBy(
-                        AdminOnboardingScheduleDto::getEmpNo,
+                        AdOnboardingScheduleDto::getEmpNo,
                         LinkedHashMap::new,
                         Collectors.toList()
                 ));
 
         return schedulesByEmployee.entrySet().stream()
                 .map(entry -> {
-                    List<AdminOnboardingScheduleDto> employeeSchedules = entry.getValue();
-                    AdminOnboardingScheduleDto firstSchedule = employeeSchedules.get(0);
+                    List<AdOnboardingScheduleDto> employeeSchedules = entry.getValue();
+                    AdOnboardingScheduleDto firstSchedule = employeeSchedules.get(0);
                     int totalCount = employeeSchedules.size();
                     int completedCount = (int) employeeSchedules.stream()
                             .filter(schedule -> "COMPLETED".equals(schedule.getStatus()))
@@ -1057,7 +1292,7 @@ public class AdOnboardingController {
                     int notStartedCount = totalCount - completedCount - inProgressCount;
                     int progressRate = totalCount > 0 ? Math.round((completedCount * 100.0f) / totalCount) : 0;
 
-                    return AdminOnboardingScheduleEmployeeDto.builder()
+                    return AdOnboardingScheduleEmployeeDto.builder()
                             .empNo(firstSchedule.getEmpNo())
                             .employeeName(firstSchedule.getEmployeeName())
                             .roadmapTitle(firstSchedule.getRoadmapTitle())
@@ -1071,11 +1306,11 @@ public class AdOnboardingController {
                 .toList();
     }
 
-    private AdminOnboardingScheduleDto toScheduleDto(RoadItemEntity item, RoadProgressEntity progress) {
+    private AdOnboardingScheduleDto toScheduleDto(RoadItemEntity item, RoadProgressEntity progress, boolean includeNotificationHistories) {
         RoadmapEntity roadmap = item.getRoadmap();
         EmpEntity employee = roadmap != null ? roadmap.getEmployee() : null;
 
-        return AdminOnboardingScheduleDto.builder()
+        return AdOnboardingScheduleDto.builder()
                 .roadmapId(roadmap != null ? roadmap.getRoadmapId() : null)
                 .itemId(item.getItemId())
                 .empNo(employee != null ? employee.getEmpNo() : "-")
@@ -1087,6 +1322,9 @@ public class AdOnboardingController {
                 .startDate(item.getStartDate())
                 .dueDate(item.getDueDate())
                 .status(progress != null && progress.getStatus() != null ? progress.getStatus().name() : "NOT_STARTED")
+                .notificationHistories(includeNotificationHistories
+                        ? onboardingScheduleNotificationService.getItemNotificationHistories(item)
+                        : List.of())
                 .build();
     }
 }

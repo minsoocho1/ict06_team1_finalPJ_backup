@@ -11,6 +11,7 @@
  * @ 2026.05.06    김다솜        최초 생성 및 온보딩 대시보드 기본 구조 작성
  * @ 2026.05.08    김다솜        체크리스트 진행률 요약 표시 추가
  * @ 2026.05.12    김다솜        전체화면에서도 카드가 과도하게 확장되지 않도록 중앙 정렬 처리
+ * @ 2026.05.15    김다솜        스타일 수정
  */
 
 import React, { useEffect, useState } from 'react';
@@ -87,7 +88,14 @@ const Dashboard = () => {
 
       <div style={{ marginBottom: '20px', textAlign: 'right' }}>
         <button
-          className="btn btn-primary btn-sm"
+          className="btn btn-sm"
+          style={{
+            borderRadius: '999px',
+            border: '1px solid #2563EB',
+            background: '#2563EB',
+            color: '#FFFFFF',
+            fontWeight: 700,
+          }}
           onClick={() => navigate(PATH.ONBOARDING.ROADMAP)}
         >
           상세 로드맵 보기
@@ -159,7 +167,7 @@ const Dashboard = () => {
                 display: 'flex',
                 justifyContent: 'space-between',
                 padding: '8px 0',
-                borderBottom: idx === 2 ? 'none' : '1px solid #f1f3f5',
+                borderBottom: idx === 2 ? 'none' : '1px solid #DDE3EA',
               }}
             >
               <span>{category.categoryName}</span>

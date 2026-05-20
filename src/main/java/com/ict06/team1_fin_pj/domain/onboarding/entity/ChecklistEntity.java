@@ -41,4 +41,8 @@ public class ChecklistEntity extends BaseTimeEntity {
 
     @Column(name = "order_no", nullable = false)
     private Integer orderNo;
+
+    public void updateRelatedContent(OnContentEntity relatedContent) {
+        this.relatedContent = relatedContent;
+    }
 }

@@ -88,4 +88,44 @@ public class AttendanceEntity {
         this.overtimeMins = overtimeMins;   // 연장근무 분
         this.status = status;               // 퇴근 상태
     }
+
+    /**
+     * [결재-근태 연동용]: 승인 완료된 "근무 결과 신청" 문서의 값을 실제 근태 기록에 덮어씁니다.
+     *
+     * 승인 완료된 전자결재 "근무 결과 신청" 내용을 근태 기록에 반영합니다.
+     *
+     * 일반 출퇴근 버튼으로 생성된 기록과 달리, 결재 기반 정정은 이미 퇴근 시간이 있는 기록도
+     * 승인된 값으로 보정할 수 있어야 하므로 checkOut()의 중복 퇴근 방지 로직과 분리했습니다.
+     */
+    public void applyApprovedWorkResult(
+            LocalDateTime checkInAt,
+            LocalDateTime checkOutAt,
+            BigDecimal workHours,
+            Integer overtimeMins,
+            AttendanceStatus status,
+            String note
+    ) {
+        this.checkInAt = checkInAt;
+        this.checkOutAt = checkOutAt;
+        this.workHours = workHours;
+        this.overtimeMins = overtimeMins;
+        this.status = status;
+        this.note = note;
+    }
+
+    /**
+     * [결재-근태 연동용]: 승인 완료된 "부재 일정" 문서의 요약 상태와 사유를 근태 기록에 남깁니다.
+     *
+     * 승인 완료된 전자결재 "부재 일정" 내용을 근태 요약 상태에 반영합니다.
+     *
+     * 현재 AttendanceStatus enum에 휴가/병가/경조사 전용 값이 없으므로, 상태는 기존 enum 안에서
+     * 표현하고 실제 부재 유형과 사유는 note에 남겨 관리자 화면에서 맥락을 확인할 수 있게 합니다.
+     */
+    public void applyApprovedAbsence(
+            AttendanceStatus status,
+            String note
+    ) {
+        this.status = status;
+        this.note = note;
+    }
 }

@@ -8,6 +8,7 @@ import com.ict06.team1_fin_pj.common.dto.approval.ApprovalFormResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalLineRequestDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalLineResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalListResponseDto;
+import com.ict06.team1_fin_pj.common.dto.approval.ApprovalEmployeeSignResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.AppLineFormDetailDto;
 import com.ict06.team1_fin_pj.common.dto.approval.AppLineFormStepDto;
 import com.ict06.team1_fin_pj.common.dto.approval.AppLineFormTargetDto;
@@ -39,6 +40,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +70,7 @@ public class ApprovalServiceImpl implements ApprovalService {
     private final AppFormRepository appFormRepository;
     private final AppLineTemplateRepository appLineTemplateRepository;
     private final EmployeeRepository employeeRepository;
+    private final ApprovalAttendanceSyncService approvalAttendanceSyncService;
 
     /**
      * 직원이 새 결재 문서를 작성할 때 선택할 수 있는 결재 서식 목록을 조회합니다.
@@ -144,6 +147,31 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .templateName(template.getTemplateName())
                 .isDefault(template.getIsDefault())
                 .steps(steps)
+                .build();
+    }
+
+    /**
+     * 결재자로 선택한 사원의 인감 이미지 경로를 조회합니다.
+     *
+     * APP_LINE에는 결재자 사번만 저장하지만, 작성 화면의 인감 미리보기와 향후 PDF 출력에서는
+     * EMPLOYEE.sign_img 경로가 필요하므로 전자결재 전용 읽기 API로 제공합니다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public ApprovalEmployeeSignResponseDto getEmployeeSign(String empNo, PrincipalDetails principal) {
+        validatePrincipal(principal);
+
+        if (empNo == null || empNo.isBlank()) {
+            throw new IllegalArgumentException("사원 번호가 필요합니다.");
+        }
+
+        EmpEntity employee = employeeRepository.findByEmpNo(empNo)
+                .orElseThrow(() -> new IllegalArgumentException("사원 정보를 찾을 수 없습니다."));
+
+        return ApprovalEmployeeSignResponseDto.builder()
+                .empNo(employee.getEmpNo())
+                .name(employee.getName())
+                .signImg(employee.getSignImg())
                 .build();
     }
 
@@ -252,12 +280,32 @@ public class ApprovalServiceImpl implements ApprovalService {
     }
 
     /**
+     * 작성자 본인의 임시저장 문서를 삭제합니다.
+     *
+     * 임시저장 문서는 아직 결재 흐름이 시작되지 않은 개인 작업물이므로 이력으로 남기지 않고 삭제합니다.
+     * 첨부파일이 있으면 DB 행 삭제 전에 실제 업로드 파일을 먼저 제거합니다.
+     */
+    @Override
+    @Transactional
+    public void deleteDraft(
+            Integer approvalId,
+            PrincipalDetails principal
+    ) {
+        ApprovalEntity approval = getEditableDraft(approvalId, principal);
+
+        approval.getFiles().forEach(this::deletePhysicalFile);
+        approvalRepository.delete(approval);
+    }
+
+    /**
      * 로그인 사용자가 작성한 결재 문서 목록을 조회합니다.
      */
     @Override
     @Transactional(readOnly = true)
     public Page<ApprovalListResponseDto> getMyDocuments(
             String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     ) {
@@ -267,6 +315,8 @@ public class ApprovalServiceImpl implements ApprovalService {
         return approvalRepository.findMyDocuments(
                 principal.getEmpNo(),
                 approvalStatus,
+                startDate,
+                endDate,
                 pageable
         );
     }
@@ -277,6 +327,8 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Override
     @Transactional(readOnly = true)
     public Page<ApprovalListResponseDto> getMyDrafts(
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     ) {
@@ -284,6 +336,8 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         return approvalRepository.findMyDrafts(
                 principal.getEmpNo(),
+                startDate,
+                endDate,
                 pageable
         );
     }
@@ -295,6 +349,8 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Transactional(readOnly = true)
     public Page<ApprovalListResponseDto> getMyReferencedDocuments(
             String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     ) {
@@ -304,6 +360,8 @@ public class ApprovalServiceImpl implements ApprovalService {
         return approvalRepository.findMyReferencedDocuments(
                 principal.getEmpNo(),
                 approvalStatus,
+                startDate,
+                endDate,
                 pageable
         );
     }
@@ -314,13 +372,44 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Override
     @Transactional(readOnly = true)
     public Page<ApprovalListResponseDto> getPendingApprovals(
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     ) {
         validatePrincipal(principal);
 
+        ApprovalStatus approvalStatus = parseStatus(status);
         return approvalRepository.findPendingApprovals(
                 principal.getEmpNo(),
+                approvalStatus,
+                startDate,
+                endDate,
+                pageable
+        );
+    }
+
+    /**
+     * 로그인 사용자가 과거에 결재 처리한 문서 목록을 조회합니다.
+     */
+    @Override
+    @Transactional(readOnly = true)
+    public Page<ApprovalListResponseDto> getProcessedApprovals(
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
+            PrincipalDetails principal,
+            Pageable pageable
+    ) {
+        validatePrincipal(principal);
+
+        ApprovalStatus approvalStatus = parseStatus(status);
+        return approvalRepository.findProcessedApprovals(
+                principal.getEmpNo(),
+                approvalStatus,
+                startDate,
+                endDate,
                 pageable
         );
     }
@@ -331,13 +420,20 @@ public class ApprovalServiceImpl implements ApprovalService {
     @Override
     @Transactional(readOnly = true)
     public Page<ApprovalListResponseDto> getUpcomingApprovals(
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     ) {
         validatePrincipal(principal);
 
+        ApprovalStatus approvalStatus = parseStatus(status);
         return approvalRepository.findUpcomingApprovals(
                 principal.getEmpNo(),
+                approvalStatus,
+                startDate,
+                endDate,
                 pageable
         );
     }
@@ -365,6 +461,8 @@ public class ApprovalServiceImpl implements ApprovalService {
             approval.moveToNextApprover(next.getApprover(), next.getStepOrder());
         } else {
             approval.complete();
+            // [결재-근태 연동용]: 마지막 결재자가 승인해 문서가 완료된 시점에만 근태 데이터 반영을 실행합니다.
+            approvalAttendanceSyncService.syncIfAttendanceForm(approval);
         }
 
         return toCreateResponse(approval);
@@ -393,8 +491,8 @@ public class ApprovalServiceImpl implements ApprovalService {
     /**
      * 작성자가 상신한 결재 문서를 취소 처리합니다.
      *
-     * 결재자가 이미 승인 또는 반려한 문서는 결재 이력이 생긴 상태이므로 취소할 수 없습니다.
-     * 아직 모든 결재선이 WAITING 상태인 진행중 문서만 CANCELED 상태로 전환합니다.
+     * 결재가 모두 완료되기 전이라면 작성자가 직접 상신 취소할 수 있습니다.
+     * 이미 처리된 결재선 이력은 그대로 남겨 두고, 문서 전체 상태만 CANCELED로 전환합니다.
      */
     @Override
     @Transactional
@@ -533,7 +631,10 @@ public class ApprovalServiceImpl implements ApprovalService {
     }
 
     /**
-     * 상신 취소가 가능한 문서를 조회하고 작성자 권한과 결재 진행 여부를 검증합니다.
+     * 상신 취소가 가능한 문서를 조회하고 작성자 권한과 문서 진행 상태를 검증합니다.
+     *
+     * COMPLETED/REJECTED/CANCELED처럼 결재 흐름이 이미 종료된 문서는 취소할 수 없고,
+     * IN_PROGRESS 상태의 문서만 작성자가 취소할 수 있게 제한합니다.
      */
     private ApprovalEntity getCancelableApproval(Integer approvalId, PrincipalDetails principal) {
         validatePrincipal(principal);
@@ -554,14 +655,6 @@ public class ApprovalServiceImpl implements ApprovalService {
 
         if (approval.getStatus() != ApprovalStatus.IN_PROGRESS) {
             throw new IllegalArgumentException("진행 중인 결재 문서만 상신 취소할 수 있습니다.");
-        }
-
-        boolean hasProcessedLine = approval.getLines().stream()
-                .anyMatch(line -> line.getStatus() == ApprovalLineStatus.APPROVED
-                        || line.getStatus() == ApprovalLineStatus.REJECTED);
-
-        if (hasProcessedLine) {
-            throw new IllegalArgumentException("이미 결재자가 처리한 문서는 상신 취소할 수 없습니다.");
         }
 
         return approval;
@@ -950,6 +1043,8 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .status(approval.getStatus())
                 .writerNo(approval.getWriter() != null ? approval.getWriter().getEmpNo() : null)
                 .writerName(approval.getWriter() != null ? approval.getWriter().getName() : null)
+                .writerDeptName(getDepartmentName(approval.getWriter()))
+                .writerPositionName(getPositionName(approval.getWriter()))
                 .currentStep(approval.getCurrentStep())
                 .maxStep(approval.getMaxStep())
                 .currentApproverNo(
@@ -962,6 +1057,8 @@ public class ApprovalServiceImpl implements ApprovalService {
                                 ? approval.getCurrentApprover().getName()
                                 : null
                 )
+                .currentApproverDeptName(getDepartmentName(approval.getCurrentApprover()))
+                .currentApproverPositionName(getPositionName(approval.getCurrentApprover()))
                 .createdAt(approval.getCreatedAt())
                 .updatedAt(approval.getUpdatedAt())
                 .lines(toLineResponses(approval))
@@ -978,20 +1075,43 @@ public class ApprovalServiceImpl implements ApprovalService {
                 .sorted(Comparator
                         .comparing(AppLineEntity::getStepOrder)
                         .thenComparing(AppLineEntity::getLineId))
-                .map(line -> ApprovalLineResponseDto.builder()
-                        .lineId(line.getLineId())
-                        .approverNo(line.getApprover() != null ? line.getApprover().getEmpNo() : null)
-                        .approverName(line.getApprover() != null ? line.getApprover().getName() : null)
-                        .stepOrder(line.getStepOrder())
-                        .status(line.getStatus())
-                        .processedAt(line.getProcessedAt())
-                        .build())
+                .map(line -> {
+                    return ApprovalLineResponseDto.builder()
+                            .lineId(line.getLineId())
+                            .approverNo(line.getApprover() != null ? line.getApprover().getEmpNo() : null)
+                            .approverName(line.getApprover() != null ? line.getApprover().getName() : null)
+                            .approverDeptName(getDepartmentName(line.getApprover()))
+                            .approverPositionName(getPositionName(line.getApprover()))
+                            .stepOrder(line.getStepOrder())
+                            .status(line.getStatus())
+                            .processedAt(line.getProcessedAt())
+                            .build();
+                })
                 .toList();
     }
 
     /**
      * 첨부파일 Entity 목록을 상세 화면용 DTO 목록으로 변환합니다.
      */
+    /**
+     * 상세 화면에서 사람을 "이름(소속, 직급, 사번)" 형태로 보여주기 위한 부서명 추출 메서드입니다.
+     * 사원이 없거나 부서가 비어 있는 과거 데이터도 상세 조회가 깨지지 않도록 null을 반환합니다.
+     */
+    private String getDepartmentName(EmpEntity employee) {
+        return employee != null && employee.getDepartment() != null
+                ? employee.getDepartment().getDeptName()
+                : null;
+    }
+
+    /**
+     * 상세 화면 표시용 직급명 추출 메서드입니다.
+     */
+    private String getPositionName(EmpEntity employee) {
+        return employee != null && employee.getPosition() != null
+                ? employee.getPosition().getPositionName()
+                : null;
+    }
+
     private List<ApprovalFileResponseDto> toFileResponses(ApprovalEntity approval) {
         return approval.getFiles().stream()
                 .sorted(Comparator.comparing(AppFileEntity::getFileId))

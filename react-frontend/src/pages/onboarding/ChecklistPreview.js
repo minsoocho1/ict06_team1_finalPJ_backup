@@ -10,6 +10,7 @@
  * @ 수정일         수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.29    김다솜        최초 생성 및 체크리스트 미리보기 기능 구현
+ * @ 2026.05.15    김다솜        스타일 수정
  */
 
 import React, { useEffect, useState } from 'react';
@@ -75,7 +76,7 @@ const ChecklistPreview = ({ userInfo }) => {
                 </div>
 
                 {/* 오른쪽 버튼 */}
-                <span className='text-primary' style={previewLink}>
+                <span style={{ ...previewLink, color: '#2563EB', fontWeight: 700 }}>
                     전체 보기 →
                 </span>
             </div>

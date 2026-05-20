@@ -8,6 +8,7 @@
  * @ 수정일자        수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.12    김다솜        사용자 정보 Context 연동, 홈 피드와 통일된 카드 디자인 및 로드맵 상세 구성 적용
+ * @ 2026.05.15    김다솜        UI 조정(AI 사내 포털 기준으로 톤 맞춤)
  */
 import { CBadge, CCard, CCardBody, CCardHeader, CCol, CProgress, CProgressBar, CRow, CSpinner } from '@coreui/react';
 import React, { useEffect, useState } from 'react';
@@ -17,6 +18,7 @@ import axiosInstance from 'src/api/axiosInstance';
 import { useUser } from 'src/api/UserContext';
 import { PATH } from 'src/constants/path';
 import { userHomePageStyle, progressLabel } from 'src/styles/js/common/UserHomeStyle';
+import { cardCore, COLORS } from 'src/styles/js/onboarding/OnboardingStyle';
 
 import ChecklistPreview from './ChecklistPreview';
 
@@ -31,9 +33,9 @@ function MyRoadmap({ userInfo: propUserInfo }) {
   const [loading, setLoading] = useState(true);
   const [evaluationResults, setEvaluationResults] = useState([]);
 
-  const handleLearningClick = (contentId, title, itemId) => {
+  const handleLearningClick = (contentId, title, itemId, isCompleted = false) => {
     navigate(PATH.ONBOARDING.LEARNING(contentId), {
-      state: { title, itemId, userInfo },
+      state: { title, itemId, userInfo, isCompleted },
     });
   };
 
@@ -158,7 +160,7 @@ function MyRoadmap({ userInfo: propUserInfo }) {
     <div style={userHomePageStyle}>
       <CRow className="justify-content-center">
         <CCol lg={8} className="mb-4">
-          <CCard className="border-0 shadow-sm h-100">
+          <CCard className="h-100" style={cardCore}>
             <CCardHeader className="bg-white border-0 py-3">
               <h4 className="mb-1 fw-bold text-dark">{`${userInfo?.name || '사용자'}님의 AI 온보딩 로드맵`}</h4>
               <div className="small text-muted">카테고리별 학습을 진행하고, 완료 후 평가에 응시할 수 있습니다.</div>
@@ -166,12 +168,12 @@ function MyRoadmap({ userInfo: propUserInfo }) {
             <CCardBody className="py-4">
               <div className="d-flex justify-content-between align-items-end mb-2">
                 <span style={progressLabel}>전체 진행률</span>
-                <span className="h4 mb-0 fw-bold text-primary">
+                <span className="h4 mb-0 fw-bold" style={{ color: COLORS.primary }}>
                   {totalProgress.completed}/{totalProgress.total} · {totalProgress.percent}%
                 </span>
               </div>
               <CProgress height={12} className="bg-light">
-                <CProgressBar color="primary" value={totalProgress.percent} animated={totalProgress.percent < 100} />
+                <CProgressBar style={{ backgroundColor: COLORS.primary }} value={totalProgress.percent} animated={totalProgress.percent < 100} />
               </CProgress>
             </CCardBody>
           </CCard>
@@ -190,7 +192,7 @@ function MyRoadmap({ userInfo: propUserInfo }) {
           </p>
         </div>
       ) : roadmapGroups.length === 0 ? (
-        <CCard className="border-0 shadow-sm">
+        <CCard style={cardCore}>
           <CCardBody className="text-center text-muted py-5">
             추천 로드맵이 없습니다. 잠시 후 다시 시도해 주세요.
           </CCardBody>
@@ -207,7 +209,7 @@ function MyRoadmap({ userInfo: propUserInfo }) {
             const isPassed = evaluationResult?.passed;
 
             return (
-              <CCard key={idx} id={`roadmap-category-${idx}`} className="border-0 shadow-sm">
+              <CCard key={idx} id={`roadmap-category-${idx}`} style={cardCore}>
                 <CCardBody>
                   <button
                     type="button"
@@ -248,14 +250,18 @@ function MyRoadmap({ userInfo: propUserInfo }) {
                             key={itemId || i}
                             type="button"
                             className="list-group-item list-group-item-action w-100 px-3 py-3 border-0 rounded-3 mb-2"
-                            style={{ background: '#f8f9fa', textAlign: 'left' }}
+                            style={{
+                              background: '#F4F7FB',
+                              border: '1px solid #DDE3EA',
+                              textAlign: 'left',
+                            }}
                             onClick={() => {
                               if (!contentId) {
                                 alert('콘텐츠 정보가 없습니다.');
                                 return;
                               }
 
-                              handleLearningClick(contentId, title, itemId);
+                              handleLearningClick(contentId, title, itemId, content.status === 'COMPLETED');
                             }}
                           >
                             <div className="d-flex justify-content-between align-items-start gap-3">
@@ -290,6 +296,25 @@ function MyRoadmap({ userInfo: propUserInfo }) {
                                   ? 'btn-warning'
                                   : 'btn-primary'
                           }`}
+                          style={{
+                            borderRadius: '999px',
+                            border: !isCategoryCompleted
+                              ? '1px solid #DDE3EA'
+                              : isPassed
+                                ? '1px solid #16A34A'
+                                : isSubmitted
+                                  ? '1px solid #F59E0B'
+                                  : `1px solid ${COLORS.primary}`,
+                            background: !isCategoryCompleted
+                              ? '#FFFFFF'
+                              : isPassed
+                                ? '#16A34A'
+                                : isSubmitted
+                                  ? '#F59E0B'
+                                  : COLORS.primary,
+                            color: !isCategoryCompleted ? '#6B7280' : '#FFFFFF',
+                            fontWeight: 700,
+                          }}
                           disabled={!isCategoryCompleted || isPassed}
                           onClick={() => navigate(PATH.EVALUATION.QUIZ(group.category_name))}
                         >

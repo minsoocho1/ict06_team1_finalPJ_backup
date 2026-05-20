@@ -8,6 +8,7 @@
  * @ 수정일자        수정자       수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.10    김다솜        관리자 문서/RAG 데이터 수정 처리를 위한 update 메서드 추가
+ * @ 2026.05.18    김다솜        문서와 온보딩 콘텐츠 여러 건의 연결 매핑 추가
  */
 package com.ict06.team1_fin_pj.domain.onboarding.entity;
 
@@ -18,7 +19,10 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "DOCUMENT")
@@ -41,6 +45,19 @@ public class DocumentEntity extends BaseTimeEntity {
 
     @Column(name = "summary_preview", columnDefinition = "TEXT")
     private String summaryPreview;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "related_content_id")
+    private OnContentEntity relatedContent;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+            name = "DOCUMENT_ON_CONTENT",
+            joinColumns = @JoinColumn(name = "doc_id"),
+            inverseJoinColumns = @JoinColumn(name = "content_id")
+    )
+    @Builder.Default
+    private Set<OnContentEntity> relatedContents = new LinkedHashSet<>();
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "dept_id")
@@ -84,12 +101,18 @@ public class DocumentEntity extends BaseTimeEntity {
     public void updateDocument(
             String title,
             String filePath,
+            Collection<OnContentEntity> relatedContents,
             DepartmentEntity department,
             AccessLevel accessLevel,
             DocumentStage currentStage
     ) {
         this.title = title;
         this.filePath = filePath;
+        this.relatedContents.clear();
+        if (relatedContents != null) {
+            this.relatedContents.addAll(relatedContents);
+        }
+        this.relatedContent = this.relatedContents.stream().findFirst().orElse(null);
         this.department = department;
         this.accessLevel = accessLevel;
         this.currentStage = currentStage;

@@ -16,6 +16,8 @@ const sidebarSlice = createSlice({
     },
 })
 
+export const { set: setSidebarState } = sidebarSlice.actions
+
 //2. 스토어 생성
 const store = configureStore({
     reducer: sidebarSlice.reducer,

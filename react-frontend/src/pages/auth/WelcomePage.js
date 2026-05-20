@@ -1,147 +1,263 @@
 /**
  * @FileName : WelcomePage.js
  * @Description : 로그인 성공 후 진입하는 웰컴 페이지
- *                - 사용자 기본 정보 표시
- *                - 대시보드 이동 및 로그아웃 기능 제공
+ *                - 로그인 사용자 기본 정보 표시
+ *                - 관리자/사용자 권한별 안내 문구 및 진입 경로 분리
  * @Author : 김다솜
  * @Date : 2026. 04. 17
  * @Modification_History
  * @
- * @ 수정일         수정자        수정내용
+ * @ 수정일자        수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.17    김다솜        최초 생성
  * @ 2026.04.30    김다솜        스타일 코드 분리(LoginStyle.js) 및 UI 정리
- * @ 2026.05.07    김다솜        관리자도 동일 로그인 페이지 사용하도록, 대시보드 입장 시 백엔드 세션 로그인(/admin/login-process) 브릿지 처리 추가
- * @ 2026.05.08    김다솜        관리자 세션 브릿지 실패 시 관리자 전용 로그인 대신 공용 로그인 페이지로 이동하도록 수정
+ * @ 2026.05.07    김다솜        관리자 대시보드 입장 시 백엔드 세션 로그인 브릿지 처리 추가
+ * @ 2026.05.08    김다솜        관리자 세션 브릿지 실패 시 공용 로그인 페이지로 이동하도록 수정
+ * @ 2026.05.15    김다솜        사용자 홈 톤에 맞춘 웰컴 화면 스타일 및 소속/직급 표시 보완
+ * @ 2026.05.18    김다솜        웰컴 화면 부서/직급 표시 보강 및 관리자 권한 정규화 개선
+ * @ 2026.05.19    김다솜        관리자/사용자 계정 구분에 따른 웰컴 화면 안내 문구 분기
  */
 
-import React from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useUser } from 'src/api/UserContext';
-import { PATH } from 'src/constants/path';
-import { containerStyle, primaryButton, secondaryButton, userInfoBox, welcomeCard, welcomeTitle } from 'src/styles/js/auth/LoginStyle';
+import React from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useUser } from 'src/api/UserContext'
+import { PATH } from 'src/constants/path'
+import {
+  brandEyebrow,
+  brandFeatureCard,
+  brandFeatureGrid,
+  brandFeatureLabel,
+  brandFeatureValue,
+  brandPanel,
+  brandSubtitle,
+  brandTitle,
+  cardBadge,
+  cardDescription,
+  containerStyle,
+  pageShell,
+  primaryButton,
+  secondaryButton,
+  userInfoBox,
+  userInfoRow,
+  welcomeCard,
+  welcomeTitle,
+} from 'src/styles/js/auth/LoginStyle'
 
 const normalizeRole = (roleValue) => {
-  if (typeof roleValue === 'string') return roleValue.toUpperCase();
-  if (Array.isArray(roleValue) && roleValue.length > 0) return normalizeRole(roleValue[0]);
-  if (roleValue && typeof roleValue === 'object') {
-    const candidate = roleValue.roleName || roleValue.authority || roleValue.name;
-    return typeof candidate === 'string' ? candidate.toUpperCase() : '';
+  if (typeof roleValue === 'string') {
+    const normalized = roleValue.trim().toUpperCase()
+    if (normalized.includes('ADMIN') || normalized.includes('관리자')) return 'ROLE_ADMIN'
+    if (normalized.includes('TEAM_LEADER') || normalized.includes('TEAM LEADER') || normalized.includes('팀장')) {
+      return 'ROLE_TEAM_LEADER'
+    }
+    if (normalized.includes('USER') || normalized.includes('사원')) return 'ROLE_USER'
+    return normalized.startsWith('ROLE_') ? normalized : ''
   }
-  return '';
-};
+
+  if (Array.isArray(roleValue) && roleValue.length > 0) return normalizeRole(roleValue[0])
+
+  if (roleValue && typeof roleValue === 'object') {
+    const candidate = roleValue.roleName || roleValue.authority || roleValue.name
+    return normalizeRole(candidate)
+  }
+
+  return ''
+}
+
+const getWelcomeCopy = (role) => {
+  const isAdmin = role === 'ROLE_ADMIN'
+
+  if (isAdmin) {
+    return {
+      eyebrow: 'ADMIN ACCESS',
+      badge: '시스템 관리자',
+      heroTitle: (
+        <>
+          관리자 페이지로
+          <br />
+          안전하게 연결합니다
+        </>
+      ),
+      heroSubtitle:
+        '시스템 관리자 권한이 확인되었습니다. 온보딩, 평가, 통계, 직원 현황을 관리할 수 있는 관리자 대시보드로 이동합니다.',
+      features: [
+        { label: 'ACCOUNT', value: '관리자 세션 연결 준비 완료' },
+        { label: 'DASHBOARD', value: '직원 현황과 온보딩 운영 지표 확인' },
+        { label: 'MANAGEMENT', value: '콘텐츠, 평가, 일정, 알림 관리' },
+      ],
+      titleSuffix: ' 관리자님, 환영합니다',
+      description:
+        '시스템 관리자 계정으로 로그인되었습니다. 아래 계정 정보를 확인한 뒤 관리자 대시보드로 입장할 수 있습니다.',
+      entryButton: '관리자 대시보드로 입장',
+    }
+  }
+
+  return {
+    eyebrow: 'WELCOME BACK',
+    badge: '사용자',
+    heroTitle: (
+      <>
+        오늘의 업무 흐름이
+        <br />
+        다시 준비되었습니다
+      </>
+    ),
+    heroSubtitle:
+      '로그인한 계정에 맞는 사용자 홈과 온보딩 진행 상태를 이어서 확인할 수 있습니다.',
+    features: [
+      { label: 'ACCOUNT', value: '사용자 계정 연결 완료' },
+      { label: 'NEXT STEP', value: '오늘의 업무와 학습 진행 상태 확인' },
+      { label: 'AI FLOW', value: '문서 기반 학습 도우미와 평가 흐름 연결' },
+    ],
+    titleSuffix: '님, 환영합니다',
+    description:
+      '로그인 정보가 정상적으로 확인되었습니다. 아래 정보를 확인한 뒤 사용자 홈으로 이동할 수 있습니다.',
+    entryButton: '사용자 홈으로 입장',
+  }
+}
 
 function WelcomePage() {
-    const navigate = useNavigate();
-    const { userInfo, logout } = useUser();
+  const navigate = useNavigate()
+  const { userInfo, logout } = useUser()
 
-    console.log("[WelcomePage] userInfo 전체:", userInfo);
-    console.log("[WelcomePage] empNo:", userInfo?.empNo);
-    console.log("[WelcomePage] role:", userInfo?.role);
+  const handleLogout = () => {
+    logout()
+    navigate(PATH.AUTH.LOGIN)
+  }
 
-    //로그아웃 요청 핸들러
-    const handleLogout = () => {
-      logout();
-      navigate(PATH.AUTH.LOGIN);
-    };
-
-    // 2. 대시보드 입장 핸들러(권한별 분기)
-    // 관리자 계정은 사용자용 JWT API(`/user/me`, `/user/welcome`) 조회 대상이 아니므로
-    // 로그인 성공 후 role 값에 따라 인증 흐름과 이동 경로 분기
-    // ROLE_ADMIN(시스템 관리자): JWT API 호출 생략하고 관리자 홈으로 이동
-    // ROLE_USER(일반 사원), ROLE_TEAM_LEADER(팀 리더): accessToken/refreshToken 기반 JWT API 호출 후 사용자 홈으로 이동
-    const handleEntry = () => {
-      console.log("[WelcomePage] handleEntry userInfo:", userInfo);
-      if(!userInfo || !userInfo.role) {
-        alert('사용자 권한을 확인할 수 없습니다. 다시 로그인해주세요.');
-        return;
-      }
-
-      const userRole = normalizeRole(userInfo.role);
-
-      if(userRole === 'ROLE_ADMIN') {
-        // 시스템 관리자는 백엔드 세션 로그인 처리 후 관리자 홈으로 진입
-        const serverOrigin = PATH.API.BASE.replace('/api', '');
-        const bridgeRaw = sessionStorage.getItem('adminLoginBridge');
-
-        if (bridgeRaw) {
-          try {
-            const bridge = JSON.parse(bridgeRaw);
-            const isBridgeValid =
-              bridge?.username &&
-              bridge?.password &&
-              Date.now() - (bridge.createdAt || 0) < 3 * 60 * 1000;
-
-            if (isBridgeValid) {
-              const form = document.createElement('form');
-              form.method = 'POST';
-              form.action = `${serverOrigin}/admin/login-process`;
-
-              const usernameInput = document.createElement('input');
-              usernameInput.type = 'hidden';
-              usernameInput.name = 'username';
-              usernameInput.value = bridge.username;
-
-              const passwordInput = document.createElement('input');
-              passwordInput.type = 'hidden';
-              passwordInput.name = 'password';
-              passwordInput.value = bridge.password;
-
-              form.appendChild(usernameInput);
-              form.appendChild(passwordInput);
-              document.body.appendChild(form);
-
-              sessionStorage.removeItem('adminLoginBridge');
-              form.submit();
-              return;
-            }
-          } catch (parseError) {
-            console.error('adminLoginBridge 파싱 실패:', parseError);
-          }
-        }
-
-        // 임시 정보가 없으면 공용 로그인 페이지로 이동
-        navigate(PATH.AUTH.LOGIN);
-      } else {
-        // 그 외(일반 사원/팀 리더)인 경우 사용자 홈으로 이동
-        navigate(PATH.AUTH.USERHOME);
-      }
-    };
-
-    //userInfo 없을 경우 에러 방지용
-    if(!userInfo) {
-      return (
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh' }}>
-          <h3>정보를 불러오는 중입니다...</h3>
-        </div>
-      );
+  const handleEntry = () => {
+    if (!userInfo || !userInfo.role) {
+      alert('사용자 권한을 확인할 수 없습니다. 다시 로그인해 주세요.')
+      return
     }
 
+    const userRole = normalizeRole(userInfo.role)
+
+    if (userRole === 'ROLE_ADMIN') {
+      const serverOrigin = PATH.API.BASE.replace('/api', '')
+      const bridgeRaw = sessionStorage.getItem('adminLoginBridge')
+
+      if (bridgeRaw) {
+        try {
+          const bridge = JSON.parse(bridgeRaw)
+          const isBridgeValid =
+            bridge?.username &&
+            bridge?.password &&
+            Date.now() - (bridge.createdAt || 0) < 3 * 60 * 1000
+
+          if (isBridgeValid) {
+            const form = document.createElement('form')
+            form.method = 'POST'
+            form.action = `${serverOrigin}/admin/login-process`
+
+            const usernameInput = document.createElement('input')
+            usernameInput.type = 'hidden'
+            usernameInput.name = 'username'
+            usernameInput.value = bridge.username
+
+            const passwordInput = document.createElement('input')
+            passwordInput.type = 'hidden'
+            passwordInput.name = 'password'
+            passwordInput.value = bridge.password
+
+            form.appendChild(usernameInput)
+            form.appendChild(passwordInput)
+            document.body.appendChild(form)
+
+            sessionStorage.removeItem('adminLoginBridge')
+            form.submit()
+            return
+          }
+        } catch (parseError) {
+          console.error('adminLoginBridge 파싱 실패:', parseError)
+        }
+      }
+
+      navigate(PATH.AUTH.LOGIN)
+    } else {
+      navigate(PATH.AUTH.USERHOME)
+    }
+  }
+
+  if (!userInfo) {
     return (
-        <div style={containerStyle}>
-          <div style={welcomeCard}>
-            <h3 style={welcomeTitle}>{userInfo.name}님, 환영합니다!</h3>
+      <div style={containerStyle}>
+        <div style={welcomeCard}>
+          <h3 style={welcomeTitle}>정보를 불러오는 중입니다...</h3>
+        </div>
+      </div>
+    )
+  }
 
-              {/* 사용자 정보 확인 영역 */}
-              <div style={userInfoBox}>
-                <p><strong>사번 :</strong> {userInfo.empNo || userInfo.emp_no}</p>
-                <p><strong>이름 :</strong> {userInfo.name}</p>
+  const userRole = normalizeRole(userInfo.role)
+  const welcomeCopy = getWelcomeCopy(userRole)
+  const employeeNo = userInfo.empNo || userInfo.emp_no
+  const departmentName =
+    userInfo?.department?.deptName ||
+    userInfo?.deptName ||
+    userInfo?.dept_name ||
+    '소속 정보 없음'
+  const positionName =
+    userInfo?.position?.positionName ||
+    userInfo?.positionName ||
+    userInfo?.position_name ||
+    '직급 정보 없음'
+
+  return (
+    <div style={containerStyle}>
+      <div style={pageShell}>
+        <div style={brandPanel}>
+          <div style={brandEyebrow}>{welcomeCopy.eyebrow}</div>
+          <h1 style={brandTitle}>{welcomeCopy.heroTitle}</h1>
+          <p style={brandSubtitle}>{welcomeCopy.heroSubtitle}</p>
+
+          <div style={brandFeatureGrid}>
+            {welcomeCopy.features.map((feature) => (
+              <div key={feature.label} style={brandFeatureCard}>
+                <div style={brandFeatureLabel}>{feature.label}</div>
+                <div style={brandFeatureValue}>{feature.value}</div>
               </div>
-
-              {/* 대시보드 입장 버튼 */}
-              {/* path에서 경로 상수 불러오기 */}
-              {/* onClick={() => navigate('/auth/userhome')} */}
-              <button onClick={handleEntry} style={primaryButton}>
-                  대시보드 입장
-              </button>
-            
-              {/* 로그아웃 버튼 */}
-              <button onClick={handleLogout} style={secondaryButton}>
-                  로그아웃
-              </button>
+            ))}
           </div>
         </div>
-      );
-    }
 
-export default WelcomePage;
+        <div style={welcomeCard}>
+          <div style={cardBadge}>{welcomeCopy.badge}</div>
+          <h2 style={welcomeTitle}>
+            {userInfo.name}
+            {welcomeCopy.titleSuffix}
+          </h2>
+          <p style={cardDescription}>{welcomeCopy.description}</p>
+
+          <div style={userInfoBox}>
+            <p style={userInfoRow}>
+              <strong>아이디 :</strong> {employeeNo}
+            </p>
+            <p style={userInfoRow}>
+              <strong>이름 :</strong> {userInfo.name}
+            </p>
+            <p style={userInfoRow}>
+              <strong>부서/팀 :</strong> {departmentName}
+            </p>
+            <p style={userInfoRow}>
+              <strong>직급 :</strong> {positionName}
+            </p>
+            <p style={{ ...userInfoRow, marginBottom: 0 }}>
+              <strong>권한 :</strong> {welcomeCopy.badge}
+            </p>
+          </div>
+
+          <button onClick={handleEntry} style={primaryButton}>
+            {welcomeCopy.entryButton}
+          </button>
+
+          <button onClick={handleLogout} style={secondaryButton}>
+            로그아웃
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default WelcomePage

@@ -5,21 +5,21 @@
  * @Date : 2026. 04. 17
  * @Modification_History
  * @
- * @ 수정일         수정자        수정내용
+ * @ 수정일        수정자       수정내용
  * @ ----------    ---------    -------------------------------
- * @ 2026.04.17    김다솜        최초 생성/로그인 로직 추가
+ * @ 2026.04.17    김다솜        최초 생성 및 로그인/JWT 발급 로직 구현
  * @ 2026.04.23    김다솜        사번 기반 권한 매핑 로직 보완
- * @ 2026.05.07    김다솜        로그인 시 Refresh Token DB 저장 로직 추가
- * @ 2026.05.08    김다솜        Spring Security 표준 인증(UserDetailsService) 구현
- *                              인증 PrincipalDetails 반환, 민감 로그인 로그 제거, Refresh Token subject 기반 재발급 검증 적용
+ * @ 2026.05.07    김다솜        Refresh Token DB 저장 및 재발급 로직 추가
+ * @ 2026.05.08    김다솜        Spring Security UserDetailsService 구현 및 subject 기반 재발급 검증 적용
+ * @ 2026.05.14    김다솜        JWT 만료/재발급 테스트용 상세 로그 및 로그인 사용자 소속 응답 보강
+ * @ 2026.05.18    김다솜        로그인 응답 부서/직급 포함 및 role_name 기반 관리자 권한 판별 보강
  */
-
 package com.ict06.team1_fin_pj.domain.auth.service;
 
-import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import com.ict06.team1_fin_pj.common.security.JwtTokenProvider;
 import com.ict06.team1_fin_pj.common.security.PrincipalDetails;
 import com.ict06.team1_fin_pj.domain.auth.repository.EmpRepository;
+import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Primary;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -43,82 +43,88 @@ public class AuthServiceImpl implements UserDetailsService {
     private final JwtTokenProvider jwtTokenProvider;
 
     /**
-     * 1. Spring Security 표준 메서드 구현 (관리자 페이지 로그인용)
+     * Spring Security 사용자 인증 객체 조회
+     *
      * @param empNo 사번
-     * @return UserDetails (시큐리티 인증 객체)
+     * @return UserDetails 인증 객체
      */
     @Override
     public UserDetails loadUserByUsername(String empNo) throws UsernameNotFoundException {
         EmpEntity emp = empRepository.findByEmpNo(empNo)
                 .orElseThrow(() -> new UsernameNotFoundException("존재하지 않는 사번입니다."));
 
-        // 권한 명칭 변환
         return new PrincipalDetails(emp);
     }
 
     /**
-     * 2. 사용자 로그인 로직 (React API용 JWT 발행)
-     * * @param empNo: 사번
-     * * @param password: 사용자 비밀번호(plain text)
-     * * @return: 생성된 JWT 토큰 및 유저 정보가 담긴 Map 객체
+     * 사용자 로그인 및 Access/Refresh Token 발급
+     *
+     * @param empNo 사번
+     * @param password 사용자 비밀번호
+     * @return 토큰 및 사용자 기본 정보
      */
-
     @Transactional
     public Map<String, Object> login(String empNo, String password) {
-        // 사번(empNo)으로 사용자 확인
+        System.out.println("[AuthService] 로그인 요청 수신 - 사번: " + empNo);
+
         EmpEntity emp = empRepository.findByEmpNo(empNo)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
-        // 비밀번호 검증
         boolean match = passwordEncoder.matches(password, emp.getPassword());
-        if(!match) {
+        if (!match) {
+            System.out.println("[AuthService] 로그인 실패 - 비밀번호 불일치, 사번: " + empNo);
             throw new RuntimeException("사번 또는 비밀번호가 일치하지 않습니다.");
         }
 
-        // 권한 명칭 생성
-        String roleName = getRoleName(emp.getRole().getRoleId());
-
-        // Access, Refresh 토큰 생성 및 DB 저장 (Dirty Checking)
+        String roleName = getRoleName(emp);
         String accessToken = jwtTokenProvider.createAccessToken(emp.getEmpNo(), roleName);
         String refreshToken = jwtTokenProvider.createRefreshToken(emp.getEmpNo());
         emp.updateRefreshToken(refreshToken);
 
-        // 응답 데이터 구성
+        System.out.println("[AuthService] 로그인 성공 및 Refresh Token 저장 완료 - 사번: " + emp.getEmpNo());
+
         Map<String, Object> response = new HashMap<>();
         response.put("accessToken", accessToken);
         response.put("refreshToken", refreshToken);
         response.put("empNo", emp.getEmpNo());
         response.put("userName", emp.getName());
         response.put("role", roleName);
+        response.put("deptName", emp.getDeptName());
+        response.put("positionName", emp.getPosition() != null ? emp.getPosition().getPositionName() : null);
 
         return response;
     }
 
     /**
-     * 3. Refresh Token을 이용한 Access Token 재발급
+     * Refresh Token 기반 Access Token 재발급
+     *
+     * @param refreshToken Refresh Token
+     * @return 신규 Access Token
      */
     @Transactional
     public Map<String, String> reissue(String refreshToken) {
-        // 토큰 유효성 검증
-        if(!jwtTokenProvider.validateToken(refreshToken)) {
+        System.out.println("[AuthService] Access Token 재발급 요청 수신");
+
+        if (!jwtTokenProvider.validateToken(refreshToken)) {
+            System.out.println("[AuthService] Refresh Token 검증 실패 - 만료 또는 형식 오류");
             throw new RuntimeException("만료되거나 유효하지 않은 Refresh Token입니다.");
         }
 
         String empNo = jwtTokenProvider.getEmpNo(refreshToken);
+        System.out.println("[AuthService] Refresh Token subject 확인 - 사번: " + empNo);
 
-        // 사원 조회 및 DB에 저장된 토큰과 일치하는지 대조
         EmpEntity emp = empRepository.findByEmpNo(empNo)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
-        if(emp.getRefreshToken() == null || !emp.getRefreshToken().equals(refreshToken)) {
-            throw new RuntimeException("토큰 정보가 일치하지 않습니다. 변조 위험이 있습니다.");
+        if (emp.getRefreshToken() == null || !emp.getRefreshToken().equals(refreshToken)) {
+            System.out.println("[AuthService] Refresh Token 불일치 - 사번: " + empNo);
+            throw new RuntimeException("저장된 Refresh Token과 일치하지 않습니다.");
         }
 
-        // 새 Access Token 발급
-        String roleName = getRoleName(emp.getRole().getRoleId());
+        String roleName = getRoleName(emp);
         String newAccessToken = jwtTokenProvider.createAccessToken(emp.getEmpNo(), roleName);
+        System.out.println("[AuthService] Access Token 재발급 성공 - 사번: " + emp.getEmpNo());
 
-        // Refresh Token Rotation
         Map<String, String> tokenMap = new HashMap<>();
         tokenMap.put("accessToken", newAccessToken);
         return tokenMap;
@@ -129,12 +135,49 @@ public class AuthServiceImpl implements UserDetailsService {
         return reissue(refreshToken);
     }
 
-    // 권한 명칭 변환 공통 로직
-    private String getRoleName(int roleId) {
+    /**
+     * role_id 기반 권한명 변환
+     *
+     * @param roleId 역할 ID
+     * @return Spring Security 권한명
+     */
+    private String getRoleName(EmpEntity emp) {
+        if (emp == null || emp.getRole() == null) {
+            return "ROLE_USER";
+        }
+
+        String roleName = normalizeRoleName(emp.getRole().getRoleName());
+        if (roleName != null) {
+            return roleName;
+        }
+
+        Integer roleId = emp.getRole().getRoleId();
+        if (roleId == null) {
+            return "ROLE_USER";
+        }
+
         return switch (roleId) {
             case 1 -> "ROLE_ADMIN";
             case 2 -> "ROLE_TEAM_LEADER";
             default -> "ROLE_USER";
         };
+    }
+
+    private String normalizeRoleName(String rawRoleName) {
+        if (rawRoleName == null || rawRoleName.isBlank()) {
+            return null;
+        }
+
+        String normalized = rawRoleName.trim().toUpperCase();
+        if (normalized.contains("ADMIN") || normalized.contains("관리자")) {
+            return "ROLE_ADMIN";
+        }
+        if (normalized.contains("TEAM_LEADER") || normalized.contains("TEAM LEADER") || normalized.contains("팀장")) {
+            return "ROLE_TEAM_LEADER";
+        }
+        if (normalized.contains("USER") || normalized.contains("사원")) {
+            return "ROLE_USER";
+        }
+        return normalized.startsWith("ROLE_") ? normalized : null;
     }
 }

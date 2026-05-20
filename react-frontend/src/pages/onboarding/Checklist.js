@@ -12,6 +12,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.29    김다솜        최초 생성 및 체크리스트 조회/완료 기능 구현
  * @ 2026.05.08    김다솜        체크리스트 완료 변경 시 홈/요약 카드 갱신 이벤트 추가
+ * @ 2026.05.15    김다솜        스타일 수정
  */
 
 import React, { useEffect, useState } from 'react';
@@ -19,7 +20,38 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import axiosInstance from 'src/api/axiosInstance';
 import { useUser } from 'src/api/UserContext';
 import { PATH } from 'src/constants/path';
-import { actionButtonPending, actionButtonPrimary, actionButtonSuccess, checkDoneIcon, checklistActionRow, checklistCategory, checklistGrid, checklistItem, checklistItemCompleted, checklistItemMandatory, checklistTitle, checkTodoIcon, mandatoryBadge, optionalBadge } from 'src/styles/js/onboarding/ChecklistStyle';
+import {
+    actionButtonPending,
+    actionButtonPrimary,
+    actionButtonSuccess,
+    checkboxBox,
+    checklistContainer,
+    checklistEyebrow,
+    checklistList,
+    checklistPageDesc,
+    checklistPageHeader,
+    checklistPageTitle,
+    checklistRow,
+    checklistRowAction,
+    checklistRowMeta,
+    checklistRowTitle,
+    checklistSectionCount,
+    checklistSectionHeader,
+    checklistSectionTitle,
+    emptyChecklistCard,
+    mandatoryBadge,
+    optionalBadge,
+    progressFill,
+    progressMetaGrid,
+    progressMetaItem,
+    progressMetaLabel,
+    progressMetaValue,
+    progressSummaryCard,
+    progressSummaryLabel,
+    progressSummaryTop,
+    progressSummaryValue,
+    progressTrack,
+} from 'src/styles/js/onboarding/ChecklistStyle';
 
 const Checklist = () => {
 
@@ -94,28 +126,35 @@ const Checklist = () => {
             window.dispatchEvent(new Event('onboardingProgressUpdated'));
         } catch (err) {
             console.error("완료 처리 실패", err);
+            alert(err.response?.data || "완료 처리 중 오류가 발생했습니다.");
         }
     };
 
     //미완료 처리
-    const handleUncomplete = async (checklistId) => {
+    const handleUncomplete = async (item) => {
+        if (item.evaluationSubmitted) {
+            alert("평가를 마친 항목입니다.");
+            return;
+        }
+
         try {
             await axiosInstance.post(PATH.API.ONBOARDING.CHECKLIST_UNCOMPLETE,
                 {
                     empNo: userInfo.empNo,
-                    checklistId
+                    checklistId: item.checklistId
             });
 
             setChecklist(prev =>
-                prev.map(item =>
-                    item.checklistId === checklistId
-                        ? { ...item, status: 'NOT_STARTED' }
-                        : item
+                prev.map(prevItem =>
+                    prevItem.checklistId === item.checklistId
+                        ? { ...prevItem, status: 'NOT_STARTED' }
+                        : prevItem
                 )
             );
             window.dispatchEvent(new Event('onboardingProgressUpdated'));
         } catch (err) {
             console.error("완료 취소 실패", err);
+            alert(err.response?.data || "완료 취소 중 오류가 발생했습니다.");
         }
     };
 
@@ -137,121 +176,183 @@ const Checklist = () => {
     };
 
     const progress = calculateProgress(checklist);
+    const pendingItems = checklist.filter((item) => item.status !== 'COMPLETED');
+    const completedItems = checklist.filter((item) => item.status === 'COMPLETED');
+    const mandatoryTotal = checklist.filter((item) => item.isMandatory).length;
+    const mandatoryCompleted = checklist.filter((item) => item.isMandatory && item.status === 'COMPLETED').length;
+
+    const renderChecklistRow = (item) => {
+        const isCompleted = item.status === 'COMPLETED';
+        const hasRelatedContent = Boolean(item.relatedContentId);
+
+        const moveToLearning = () => {
+            if (!hasRelatedContent) return;
+
+            const confirmed = window.confirm("학습 콘텐츠로 이동하시겠습니까?");
+            if (!confirmed) return;
+
+            navigate(PATH.ONBOARDING.LEARNING(item.relatedContentId), {
+                state: {
+                    title: item.relatedContentTitle || item.title,
+                    checklistId: item.checklistId,
+                    userInfo,
+                    isCompleted,
+                }
+            });
+        };
+
+        const handleRowClick = () => {
+            if (hasRelatedContent) {
+                moveToLearning();
+            }
+        };
+
+        const handleCheckboxClick = (event) => {
+            event.stopPropagation();
+
+            if (hasRelatedContent) {
+                moveToLearning();
+                return;
+            }
+
+            if (isCompleted) {
+                handleUncomplete(item);
+            } else {
+                handleComplete(item.checklistId);
+            }
+        };
+
+        return (
+            <div
+                key={item.checklistId}
+                className={`checklist-card ${item.isMandatory ? 'mandatory' : ''}`}
+                style={checklistRow(isCompleted)}
+                onClick={handleRowClick}
+            >
+                <button
+                    type="button"
+                    style={{
+                        ...checkboxBox(isCompleted),
+                        cursor: 'pointer',
+                    }}
+                    onClick={handleCheckboxClick}
+                    title={isCompleted ? '완료 취소' : '완료 처리'}
+                >
+                    {isCompleted ? '✓' : ''}
+                </button>
+
+                <div style={{ minWidth: 0 }}>
+                    <div style={checklistRowTitle(isCompleted)}>{item.title}</div>
+                    <div style={checklistRowMeta}>
+                        <span>{item.category}</span>
+                        <span style={item.isMandatory ? mandatoryBadge : optionalBadge}>
+                            {item.isMandatory ? '필수' : '선택'}
+                        </span>
+                    </div>
+                </div>
+
+                <div style={checklistRowAction}>
+                    {isCompleted ? (
+                        <button
+                            className='checklist-action-btn'
+                            style={actionButtonPending}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                handleUncomplete(item);
+                            }}
+                        >
+                            완료 취소
+                        </button>
+                    ) : item.relatedContentId ? (
+                        <button
+                            className='checklist-action-btn'
+                            style={actionButtonPrimary}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                moveToLearning();
+                            }}
+                        >
+                            학습 보기
+                        </button>
+                    ) : (
+                        <button
+                            className='checklist-action-btn success'
+                            style={actionButtonSuccess}
+                            onClick={(event) => {
+                                event.stopPropagation();
+                                handleComplete(item.checklistId);
+                            }}
+                        >
+                            완료
+                        </button>
+                    )}
+                </div>
+            </div>
+        );
+    };
 
     return (
-        <div style={{ padding: '20px' }}>
-            <h2>📋 온보딩 체크리스트</h2>
-
-            {/* 1. 체크리스트 진행률 */}
-            <div style={{
-                margin: '20px 0',
-                padding: '16px',
-                backgroundColor: '#f8f9fa',
-                borderRadius: '10px'
-            }}>
-                <div className='d-flex justify-content-between mb-2'>
-                    <strong>체크리스트 진행률</strong>
-                    <span>{progress.completed}/{progress.total} 완료 · {progress.percent}%</span>
-                </div>
-
-                <div style={{
-                    height: '10px',
-                    backgroundColor: '#e9ecef',
-                    borderRadius: '5px',
-                    overflow: 'hidden'
-                }}>
-                    <div style={{
-                        width: `${progress.percent}%`,
-                        height: '100%',
-                        backgroundColor: '#321fdb',
-                        transition: 'width 0.3s ease'
-                    }} />
+        <div style={checklistContainer}>
+            <div style={checklistPageHeader}>
+                <div>
+                    <p style={checklistEyebrow}>AI ONBOARDING</p>
+                    <h2 style={checklistPageTitle}>온보딩 체크리스트</h2>
+                    <p style={checklistPageDesc}>
+                        입사 초기에 확인해야 할 항목을 한곳에서 관리합니다. 관련 학습이 있는 항목은 학습 상세 화면으로 바로 이동할 수 있습니다.
+                    </p>
                 </div>
             </div>
 
-            {/* 2. 체크리스트 리스트 섹션 */}
-            <div style={checklistGrid}>
-                {checklist.map((item) => (
-                    <div
-                        key={item.checklistId}
-                        className={`checklist-card ${item.isMandatory ? 'mandatory' : ''}`}
-                        style={item.status === 'COMPLETED'
-                            ? checklistItemCompleted
-                            : item.isMandatory
-                                ? checklistItemMandatory
-                                : checklistItem
-                        }
-                    >
-                        <div>
-                            <div style={checklistTitle}>
-                                <span style={item.status === 'COMPLETED' ? checkDoneIcon : checkTodoIcon}></span>
-                                {item.title}
-                            </div>
-
-                            {/* 필수 여부 */}
-                            <div style={checklistCategory}>
-                                {item.category}
-                                <span style={item.isMandatory ? mandatoryBadge : optionalBadge}>
-                                    {item.isMandatory ? '필수' : '선택'}
-                                </span>
-                            </div>
-                        </div>
-
-                        <div style={checklistActionRow}>
-                            {/* 상태 배지 */}
-                            <div>
-                                {item.status === 'COMPLETED' ? (
-                                    <button
-                                        className='checklist-action-btn'
-                                        style={actionButtonPending}
-                                        onClick={() => handleUncomplete(item.checklistId)}
-                                    >
-                                        되돌리기
-                                    </button>
-                                ) : (
-                                    <span style={actionButtonPending}>미완료</span>
-                                )}
-                            </div>
-
-                            {/* 액션 버튼 */}
-                            {item.status !== 'COMPLETED' && (
-                                item.relatedContentId ? (
-                                    //연관 학습 콘텐츠 있음 -> 학습하기
-                                    <button
-                                        className='checklist-action-btn'
-                                        style={actionButtonPrimary}
-                                        onClick={() => {
-                                            console.log("[Checklist] 학습 이동 item:", item);
-                                            console.log("[Checklist] 전달 checklistId:", item.checklistId);
-                                            console.log("[Checklist] 전달 contentId:", item.relatedContentId);
-
-                                            navigate(PATH.ONBOARDING.LEARNING(item.relatedContentId), {
-                                                state: {
-                                                    title: item.relatedContentTitle || item.title,
-                                                    checklistId: item.checklistId,
-                                                    userInfo
-                                                }
-                                            })
-                                        }
-                                        }
-                                    >
-                                        학습하기
-                                    </button>
-                                ) : (
-                                    //연관 학습 콘텐츠 없음 -> 바로 완료
-                                    <button
-                                        className='checklist-action-btn success'
-                                        style={actionButtonSuccess}
-                                        onClick={() => handleComplete(item.checklistId)}
-                                    >
-                                        완료하기
-                                    </button>
-                                )
-                            )}
+            <div style={progressSummaryCard}>
+                <div style={progressSummaryTop}>
+                    <div>
+                        <div style={progressSummaryLabel}>전체 진행률</div>
+                        <div style={checklistPageDesc}>
+                            {progress.completed}/{progress.total}개 완료
                         </div>
                     </div>
-                ))}
+                    <div style={progressSummaryValue}>{progress.percent}%</div>
+                </div>
+
+                <div style={progressTrack}>
+                    <div style={progressFill(progress.percent)} />
+                </div>
+
+                <div style={progressMetaGrid}>
+                    <div style={progressMetaItem}>
+                        <span style={progressMetaLabel}>남은 항목</span>
+                        <span style={progressMetaValue}> {pendingItems.length}개</span>
+                    </div>
+                    <div style={progressMetaItem}>
+                        <span style={progressMetaLabel}>필수 완료</span>
+                        <span style={progressMetaValue}> {mandatoryCompleted}/{mandatoryTotal}</span>
+                    </div>
+                </div>
             </div>
+
+            <div style={checklistSectionHeader}>
+                <h3 style={checklistSectionTitle}>진행할 항목</h3>
+                <span style={checklistSectionCount}>{pendingItems.length}개</span>
+            </div>
+
+            {pendingItems.length === 0 ? (
+                <div style={emptyChecklistCard}>진행할 체크리스트가 없습니다. 모든 항목을 완료했습니다.</div>
+            ) : (
+                <div style={checklistList}>
+                    {pendingItems.map(renderChecklistRow)}
+                </div>
+            )}
+
+            <div style={checklistSectionHeader}>
+                <h3 style={checklistSectionTitle}>완료한 항목</h3>
+                <span style={checklistSectionCount}>{completedItems.length}개</span>
+            </div>
+
+            {completedItems.length > 0 && (
+                <div style={checklistList}>
+                    {completedItems.map(renderChecklistRow)}
+                </div>
+            )}
         </div>
     );
 };

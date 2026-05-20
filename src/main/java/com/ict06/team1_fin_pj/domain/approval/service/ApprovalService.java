@@ -5,12 +5,14 @@ import com.ict06.team1_fin_pj.common.dto.approval.ApprovalCreateResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalDetailResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalFormResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalListResponseDto;
+import com.ict06.team1_fin_pj.common.dto.approval.ApprovalEmployeeSignResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.AppLineFormDetailDto;
 import com.ict06.team1_fin_pj.common.security.PrincipalDetails;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -42,6 +44,14 @@ public interface ApprovalService {
      * 직원 작성 화면에서는 관리자 URL을 직접 호출하지 않고 이 API를 통해 기본 결재선 미리보기만 사용합니다.
      */
     AppLineFormDetailDto getLineTemplateDetail(Integer templateId, PrincipalDetails principal);
+
+    /**
+     * 결재자로 선택한 사원의 인감 이미지 경로를 조회합니다.
+     *
+     * 결재선 설정 화면에서는 이 응답으로 인감 미리보기를 보여주고,
+     * signImg가 비어 있으면 사용자에게 관리자 등록 요청 안내를 띄웁니다.
+     */
+    ApprovalEmployeeSignResponseDto getEmployeeSign(String empNo, PrincipalDetails principal);
 
     /**
      * 새 결재 문서를 임시저장합니다.
@@ -86,11 +96,24 @@ public interface ApprovalService {
     );
 
     /**
+     * 작성자 본인의 임시저장 문서를 삭제합니다.
+     *
+     * 임시저장 문서는 아직 결재자에게 공유되지 않은 개인 작업물이므로,
+     * 작성자 본인이고 DRAFT 상태일 때만 실제 삭제를 허용합니다.
+     */
+    void deleteDraft(
+            Integer approvalId,
+            PrincipalDetails principal
+    );
+
+    /**
      * 로그인한 사용자가 작성한 결재 문서 목록을 조회합니다.
      * status가 null이면 임시저장을 제외한 전체 문서를 조회합니다.
      */
     Page<ApprovalListResponseDto> getMyDocuments(
             String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     );
@@ -99,6 +122,8 @@ public interface ApprovalService {
      * 로그인한 사용자의 임시저장 문서 목록을 조회합니다.
      */
     Page<ApprovalListResponseDto> getMyDrafts(
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     );
@@ -111,6 +136,8 @@ public interface ApprovalService {
      */
     Page<ApprovalListResponseDto> getMyReferencedDocuments(
             String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     );
@@ -119,6 +146,20 @@ public interface ApprovalService {
      * 현재 로그인 사용자가 지금 결재해야 하는 문서 목록을 조회합니다.
      */
     Page<ApprovalListResponseDto> getPendingApprovals(
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
+            PrincipalDetails principal,
+            Pageable pageable
+    );
+
+    /**
+     * 로그인 사용자가 과거에 승인/반려 처리한 문서 목록을 조회합니다.
+     */
+    Page<ApprovalListResponseDto> getProcessedApprovals(
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     );
@@ -127,6 +168,9 @@ public interface ApprovalService {
      * 로그인 사용자가 결재선에 포함되어 있지만 아직 차례가 오지 않은 문서 목록을 조회합니다.
      */
     Page<ApprovalListResponseDto> getUpcomingApprovals(
+            String status,
+            LocalDate startDate,
+            LocalDate endDate,
             PrincipalDetails principal,
             Pageable pageable
     );
@@ -151,7 +195,9 @@ public interface ApprovalService {
 
     /**
      * 작성자가 상신한 결재 문서를 취소 처리합니다.
-     * 아직 어떤 결재자도 승인/반려하지 않은 문서만 취소할 수 있습니다.
+     *
+     * 결재가 완료/반려되기 전 진행 중 문서라면 작성자가 취소할 수 있습니다.
+     * 취소 문서는 삭제하지 않고 CANCELED 상태로 남겨 개인 문서함에서 이력을 확인할 수 있게 합니다.
      */
     ApprovalCreateResponseDto cancelApproval(
             Integer approvalId,
@@ -164,17 +210,17 @@ public interface ApprovalService {
      * 작성자, 결재자, 참조자만 조회할 수 있으며,
      * 임시저장 문서는 작성자만 열람할 수 있습니다.
      */
+    ApprovalDetailResponseDto getApprovalDetail(
+            Integer approvalId,
+            PrincipalDetails principal
+    );
+
     /**
      * 임시저장 문서에 첨부된 파일을 삭제합니다.
      * 작성자 본인의 DRAFT 문서에 속한 파일만 삭제할 수 있습니다.
      */
     void deleteApprovalFile(
             Integer fileId,
-            PrincipalDetails principal
-    );
-
-    ApprovalDetailResponseDto getApprovalDetail(
-            Integer approvalId,
             PrincipalDetails principal
     );
 }

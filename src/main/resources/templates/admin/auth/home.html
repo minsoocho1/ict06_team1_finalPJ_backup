@@ -1,4 +1,4 @@
-﻿﻿<!--
+<!--
  * @FileName : home.html
  * @Description : 관리자 홈 대시보드 화면
  *                - KPI 카드, 차트, 최근 시스템 활동 표시
@@ -11,6 +11,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.01    김다솜         최초 생성 및 관리자 홈 기본 화면 구성
  * @ 2026.05.12    김다솜         관리자 대시보드 배지/레이아웃 정리 및 실제 최근 시스템 활동 연동
+ * @ 2026.05.13    김다솜         완료율/퀴즈 점수 차트 행 재배치 및 팀별/본부별 토글 UI 추가
  -->
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -79,13 +80,17 @@
             </div>
 
             <div class="row">
-                <div class="col-xl-4 mb-4 d-flex">
+                <div class="col-xl-6 mb-4 d-flex">
                     <div class="card shadow-sm border-0 h-100 w-100">
-                        <div class="card-header bg-white border-0 py-3">
+                        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                             <h6 class="fw-bold mb-0 text-dark">
-                                팀별 온보딩 완료율 (%)
+                                온보딩 완료율 (%)
                                 <span class="badge border ms-2" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">AI Analysis</span>
                             </h6>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="온보딩 완료율 기준">
+                                <button type="button" class="btn btn-outline-primary active" id="onboardingTeamBtn">팀별</button>
+                                <button type="button" class="btn btn-outline-primary" id="onboardingDivisionBtn">본부별</button>
+                            </div>
                         </div>
                         <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
                             <canvas id="onboardingChart" height="300"></canvas>
@@ -94,7 +99,25 @@
                     </div>
                 </div>
 
-                <div class="col-xl-4 mb-4 d-flex">
+                <div class="col-xl-6 mb-4 d-flex">
+                    <div class="card shadow-sm border-0 h-100 w-100">
+                        <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0 text-dark">평균 퀴즈 점수</h6>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="퀴즈 점수 기준">
+                                <button type="button" class="btn btn-outline-success active" id="quizTeamBtn">팀별</button>
+                                <button type="button" class="btn btn-outline-success" id="quizDivisionBtn">본부별</button>
+                            </div>
+                        </div>
+                        <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
+                            <canvas id="quizScoreChart" height="300"></canvas>
+                            <div id="quizEmpty" class="text-muted" style="display: none;">퀴즈 성적 데이터가 없습니다.</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-xl-6 mb-4 d-flex">
                     <div class="card shadow-sm border-0 h-100 w-100">
                         <div class="card-header bg-white border-0 py-3">
                             <h6 class="fw-bold mb-0 text-dark">RAG 지식베이스 처리 현황</h6>
@@ -106,7 +129,7 @@
                     </div>
                 </div>
 
-                <div class="col-xl-4 mb-4 d-flex">
+                <div class="col-xl-6 mb-4 d-flex">
                     <div class="card shadow-sm border-0 h-100 w-100">
                         <div class="card-header bg-white border-0 py-3">
                             <h6 class="fw-bold mb-0 text-dark">AI 비서 기능 활용도</h6>
@@ -123,11 +146,11 @@
                 <div class="col-xl-6 mb-4 d-flex">
                     <div class="card shadow-sm border-0 h-100 w-100">
                         <div class="card-header bg-white border-0 py-3">
-                            <h6 class="fw-bold mb-0 text-dark">부서별 평균 퀴즈 점수</h6>
+                            <h6 class="fw-bold mb-0 text-dark">평가 결과 분포</h6>
                         </div>
                         <div class="card-body d-flex align-items-center justify-content-center" style="min-height: 340px;">
-                            <canvas id="quizScoreChart" height="300"></canvas>
-                            <div id="quizEmpty" class="text-muted" style="display: none;">퀴즈 성적 데이터가 없습니다.</div>
+                            <canvas id="evaluationStatusChart" height="300"></canvas>
+                            <div id="evaluationStatusEmpty" class="text-muted" style="display: none;">평가 결과 데이터가 없습니다.</div>
                         </div>
                     </div>
                 </div>
@@ -167,20 +190,37 @@
     document.addEventListener('DOMContentLoaded', function() {
         const stats = [[${stats}]];
 
-        // 1. 온보딩 완료율 차트
-        const onboardingData = stats?.onboarding || [];
-        if (onboardingData.length === 0) {
-            document.getElementById('onboardingChart').style.display = 'none';
-            document.getElementById('onboardingEmpty').style.display = 'block';
-        } else {
-            new Chart(document.getElementById('onboardingChart'), {
+        const onboardingTeamData = stats?.onboardingTeam || [];
+        const onboardingDivisionData = stats?.onboardingDivision || [];
+        const quizTeamData = stats?.quizTeam || [];
+        const quizDivisionData = stats?.quizDivision || [];
+
+        function setActiveButton(activeButton, inactiveButton) {
+            activeButton.classList.add('active');
+            inactiveButton.classList.remove('active');
+        }
+
+        function buildBarChart(canvasId, emptyId, dataset, valueKey, color, label) {
+            const canvas = document.getElementById(canvasId);
+            const empty = document.getElementById(emptyId);
+
+            if (!dataset || dataset.length === 0) {
+                canvas.style.display = 'none';
+                empty.style.display = 'block';
+                return null;
+            }
+
+            canvas.style.display = 'block';
+            empty.style.display = 'none';
+
+            return new Chart(canvas, {
                 type: 'bar',
                 data: {
-                    labels: onboardingData.map(d => d.dept_name),
+                    labels: dataset.map(d => d.dept_name),
                     datasets: [{
-                        label: '완료율(%)',
-                        data: onboardingData.map(d => d.completion_rate),
-                        backgroundColor: '#321fdb',
+                        label: label,
+                        data: dataset.map(d => d[valueKey]),
+                        backgroundColor: color,
                         borderRadius: 5
                     }]
                 },
@@ -190,7 +230,7 @@
                     scales: {
                         y: {
                             beginAtZero: true,
-                            max: 100
+                            max: valueKey === 'completion_rate' ? 100 : undefined
                         }
                     },
                     plugins: { legend: { display: false } }
@@ -198,7 +238,46 @@
             });
         }
 
-        // 2. RAG 상태 차트
+        function updateBarChart(chart, dataset, valueKey, label) {
+            chart.data.labels = dataset.map(d => d.dept_name);
+            chart.data.datasets[0].label = label;
+            chart.data.datasets[0].data = dataset.map(d => d[valueKey]);
+            chart.update();
+        }
+
+        const onboardingChart = buildBarChart('onboardingChart', 'onboardingEmpty', onboardingTeamData, 'completion_rate', '#321fdb', '완료율(%)');
+        const quizChart = buildBarChart('quizScoreChart', 'quizEmpty', quizTeamData, 'avg_score', '#2eb85c', '평균 점수');
+
+        if (onboardingChart) {
+            const onboardingTeamBtn = document.getElementById('onboardingTeamBtn');
+            const onboardingDivisionBtn = document.getElementById('onboardingDivisionBtn');
+
+            onboardingTeamBtn.addEventListener('click', function() {
+                setActiveButton(onboardingTeamBtn, onboardingDivisionBtn);
+                updateBarChart(onboardingChart, onboardingTeamData, 'completion_rate', '완료율(%)');
+            });
+
+            onboardingDivisionBtn.addEventListener('click', function() {
+                setActiveButton(onboardingDivisionBtn, onboardingTeamBtn);
+                updateBarChart(onboardingChart, onboardingDivisionData, 'completion_rate', '완료율(%)');
+            });
+        }
+
+        if (quizChart) {
+            const quizTeamBtn = document.getElementById('quizTeamBtn');
+            const quizDivisionBtn = document.getElementById('quizDivisionBtn');
+
+            quizTeamBtn.addEventListener('click', function() {
+                setActiveButton(quizTeamBtn, quizDivisionBtn);
+                updateBarChart(quizChart, quizTeamData, 'avg_score', '평균 점수');
+            });
+
+            quizDivisionBtn.addEventListener('click', function() {
+                setActiveButton(quizDivisionBtn, quizTeamBtn);
+                updateBarChart(quizChart, quizDivisionData, 'avg_score', '평균 점수');
+            });
+        }
+
         const ragData = stats?.rag || [];
         if (ragData.length === 0) {
             document.getElementById('ragStatusChart').style.display = 'none';
@@ -221,7 +300,6 @@
             });
         }
 
-        // 3. AI 비서 활용도 차트 (기존 로직 유지 및 보강)
         const aiUsageData = stats?.ai_usage || {};
         if (Object.keys(aiUsageData).length === 0) {
             document.getElementById('aiUsageChart').style.display = 'none';
@@ -245,32 +323,25 @@
             });
         }
 
-        // 4. 퀴즈 점수 차트
-        const quizData = stats?.quiz || [];
-        if (quizData.length === 0) {
-            document.getElementById('quizScoreChart').style.display = 'none';
-            document.getElementById('quizEmpty').style.display = 'block';
+        const evaluationStatusData = stats?.evaluationStatus || [];
+        if (evaluationStatusData.length === 0) {
+            document.getElementById('evaluationStatusChart').style.display = 'none';
+            document.getElementById('evaluationStatusEmpty').style.display = 'block';
         } else {
-            new Chart(document.getElementById('quizScoreChart'), {
-                type: 'bar',
+            new Chart(document.getElementById('evaluationStatusChart'), {
+                type: 'doughnut',
                 data: {
-                    labels: quizData.map(d => d.dept_name),
+                    labels: evaluationStatusData.map(d => d.status),
                     datasets: [{
-                        label: '평균 점수',
-                        data: quizData.map(d => d.avg_score),
-                        backgroundColor: '#2eb85c',
-                        borderRadius: 5
+                        data: evaluationStatusData.map(d => d.count),
+                        backgroundColor: ['#2eb85c', '#e55353']
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    scales: {
-                        y: {
-                            beginAtZero: true
-                        }
-                    },
-                    plugins: { legend: { display: false } }
+                    cutout: '68%',
+                    plugins: { legend: { position: 'bottom' } }
                 }
             });
         }

@@ -1,18 +1,16 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
-  CContainer, CDropdown, CDropdownItem, CDropdownMenu, CDropdownToggle, CHeader, CHeaderNav, CHeaderToggler, CNavLink, CNavItem,
+  CContainer, CDropdown, CDropdownItem, CDropdownMenu, CDropdownToggle, CHeader, CHeaderNav, CHeaderToggler, CNavLink,
   CBadge, CDropdownHeader, CModal, CModalHeader, CModalTitle, CModalBody, CListGroup, CListGroupItem, CButton
 } from '@coreui/react'
-import CIcon from '@coreui/icons-react'
-import { cilBell, cilMenu, } from '@coreui/icons'
+import { CIcon } from '@coreui/icons-react'
+import { cilBell, cilMenu } from '@coreui/icons'
 
 import { useDispatch, useSelector } from 'react-redux'
-import AppBreadcrumb from './AppBreadcrumb.jsx'
 import AppHeaderDropdown from './header/AppHeaderDropdown.jsx'
-import { PATH } from 'src/constants/path.js'
-import { headerNavLink, headerQuickNav } from 'src/styles/js/common/HeaderStyle.js'
 import axiosInstance from 'src/api/axiosInstance.js'
+import { setSidebarState } from 'src/store/store.js'
 
 const notificationTypeLabels = {
   EVALUATION: '평가',
@@ -37,6 +35,10 @@ const AppHeader = () => {
   const sidebarShow = useSelector((state) => state.sidebarShow)
   const navigate = useNavigate()
   const [visible, setVisible] = useState(false)
+
+  const handleSidebarToggle = () => {
+    dispatch(setSidebarState({ sidebarShow: !sidebarShow }))
+  }
 
   //1. 읽지 않은 알림 개수, 알림 목록
   const [unreadCount, setUnreadCount] = useState(0);
@@ -152,19 +154,12 @@ const AppHeader = () => {
 
         {/* 사이드바 토글 버튼 */}
         <CHeaderToggler
-          onClick={() => dispatch({ type: 'set', sidebarShow: !sidebarShow })}
+          onClick={handleSidebarToggle}
           style={{ marginInlineStart: '-14px' }}
         >
           <CIcon icon={cilMenu} size="lg" />
         </CHeaderToggler>
 
-        <CHeaderNav className='d-none d-md-flex ms-3' style={headerQuickNav}>
-          <CNavItem>
-            <CNavLink style={headerNavLink} onClick={() => navigate(PATH.AUTH.USERHOME)}>
-              HOME
-            </CNavLink>
-          </CNavItem>
-        </CHeaderNav>
 
         {/* 우측 메뉴 */}
         <CHeaderNav className='ms-auto'>
@@ -342,9 +337,6 @@ const AppHeader = () => {
         </CModalBody>
       </CModal>
 
-      <CContainer className="px-4" fluid>
-        <AppBreadcrumb />
-      </CContainer>
     </CHeader>
   )
 }

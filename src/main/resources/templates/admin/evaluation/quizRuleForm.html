@@ -1,21 +1,20 @@
 <!--
     @FileName : quizRuleForm.html
-    @Description : 카테고리별 AI 퀴즈 출제 규칙(문항 수, 합격 점수 등) 등록 및 수정 화면
+    @Description : 카테고리별 평가 항목 설정 등록 및 수정 화면
     @Author : 김다솜
     @Date : 2026. 05. 11
     @Modification_History
     @
-    @ 수정일자        수정자        수정내용
+    @ 수정일자        수정자       수정내용
     @ ----------    ---------    -----------------------------------------------
-    @ 2026.05.11    김다솜        최초 생성 및 출제 기준 CRUD 폼 구현
+    @ 2026.05.11    김다솜        최초 생성 및 출제 기준 CRUD UI 구현
+    @ 2026.05.14    김다솜        예상 만점, 합격 기준, 가중치 미리보기 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
+<head th:replace="~{/admin/common/head.html :: common_header}">
     <meta charset="UTF-8">
-    <title id="page_title" th:text="${isEdit} ? 'AI 퀴즈 출제 기준 수정' : 'AI 퀴즈 출제 기준 등록'">
-        AI 퀴즈 출제 기준 등록
-    </title>
+    <title id="page_title" th:text="${isEdit ? '평가 항목 설정 수정' : '평가 항목 설정 등록'}">평가 항목 설정 등록</title>
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
 <div class="app-wrapper">
@@ -27,107 +26,154 @@
             <div class="container-fluid">
                 <div class="row mb-3">
                     <div class="col">
-                        <h3 th:text="${isEdit} ? 'AI 퀴즈 출제 기준 수정' : 'AI 퀴즈 출제 기준 등록'">
-                            AI 퀴즈 출제 기준 등록
-                        </h3>
-                        <p class="text-muted mb-0">
-                            카테고리별 퀴즈 출제 기준값을 관리합니다.
-                        </p>
+                        <h3 th:text="${isEdit ? '평가 항목 설정 수정' : '평가 항목 설정 등록'}">평가 항목 설정 등록</h3>
+                        <p class="text-muted mb-0">카테고리별 문항 수, 합격 기준, 가중치, 난이도를 설정해 평가 기준을 정의합니다.</p>
                     </div>
                 </div>
 
-                <form th:action="${isEdit}
-                        ? @{/admin/evaluation/quiz-rules/{id}/edit(id=${rule.ruleId})}
-                        : @{/admin/evaluation/quiz-rules}"
+                <form th:action="${isEdit ? '/admin/evaluation/quiz-rules/' + rule.ruleId + '/edit' : '/admin/evaluation/quiz-rules'}"
                       method="post">
-                    <div class="card">
-                        <div class="card-header">
-                            <strong>출제 기준 정보</strong>
+                    <div class="row g-4">
+                        <div class="col-lg-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <strong>평가 항목 정보</strong>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">카테고리</label>
+                                            <select name="categoryName" class="form-select" required>
+                                                <option value="">선택</option>
+                                                <option th:each="category : ${categories}"
+                                                        th:value="${category}"
+                                                        th:text="${category}"
+                                                        th:selected="${rule.categoryName != null and rule.categoryName == category}">
+                                                </option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">문항 유형</label>
+                                            <select name="questionType" class="form-select" id="questionTypeSelect" required>
+                                                <option value="">선택</option>
+                                                <option th:each="questionType : ${questionTypes}"
+                                                        th:value="${questionType}"
+                                                        th:text="${questionType.label}"
+                                                        th:selected="${rule.questionType != null and rule.questionType == questionType}">
+                                                </option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">문항 수</label>
+                                            <input type="number"
+                                                   name="questionCount"
+                                                   id="questionCountInput"
+                                                   class="form-control"
+                                                   min="1"
+                                                   max="50"
+                                                   th:value="${rule.questionCount}"
+                                                   required>
+                                            <div class="form-text">문항 수와 관계없이 카테고리 만점은 항상 100점입니다.</div>
+                                        </div>
+
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">합격 점수(%)</label>
+                                            <input type="number"
+                                                   name="passScore"
+                                                   id="passScoreInput"
+                                                   class="form-control"
+                                                   min="0"
+                                                   max="100"
+                                                   th:value="${rule.passScore}"
+                                                   required>
+                                        </div>
+
+                                        <div class="col-md-4 mb-3">
+                                            <label class="form-label">가중치(%)</label>
+                                            <input type="number"
+                                                   name="weightPercent"
+                                                   id="weightPercentInput"
+                                                   class="form-control"
+                                                   min="10"
+                                                   max="300"
+                                                   th:value="${rule.weightPercent}"
+                                                   required>
+                                        </div>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label">난이도</label>
+                                            <select name="difficulty" class="form-select" required>
+                                                <option value="">선택</option>
+                                                <option th:each="difficulty : ${difficulties}"
+                                                        th:value="${difficulty}"
+                                                        th:text="${difficulty.label}"
+                                                        th:selected="${rule.difficulty != null and rule.difficulty == difficulty}">
+                                                </option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6 mb-3 d-flex align-items-end">
+                                            <div class="form-check mb-0">
+                                                <input type="checkbox"
+                                                       name="isActive"
+                                                       value="true"
+                                                       class="form-check-input"
+                                                       id="isActive"
+                                                       th:checked="${rule.isActive}">
+                                                <label class="form-check-label" for="isActive">
+                                                    사용
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
-                        <div class="card-body">
-                            <div class="row">
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">카테고리</label>
-                                    <select name="categoryName" class="form-select" required>
-                                        <option value="">선택</option>
-                                        <option th:each="category : ${categories}"
-                                                th:value="${category}"
-                                                th:text="${category}"
-                                                th:selected="${rule.categoryName != null and rule.categoryName == category}">
-                                        </option>
-                                    </select>
+                        <div class="col-lg-4">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <strong>설정 미리보기</strong>
                                 </div>
-
-                                <div class="col-md-6 mb-3">
-                                    <label class="form-label">문항 유형</label>
-                                    <select name="questionType" class="form-select" required>
-                                        <option value="">선택</option>
-                                        <option th:each="questionType : ${questionTypes}"
-                                                th:value="${questionType}"
-                                                th:text="${questionType.label}"
-                                                th:selected="${rule.questionType != null and rule.questionType == questionType}">
-                                        </option>
-                                    </select>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <div class="text-muted small">예상 만점</div>
+                                        <div class="fs-4 fw-semibold" id="previewTotalScore">0점</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="text-muted small">합격 기준 점수</div>
+                                        <div class="fs-4 fw-semibold" id="previewPassThreshold">0점</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="text-muted small">가중 반영 점수</div>
+                                        <div class="fs-4 fw-semibold" id="previewWeightedScore">0점</div>
+                                    </div>
+                                    <div class="mb-3">
+                                        <div class="text-muted small">문항 유형</div>
+                                        <div id="previewQuestionType">선택 전</div>
+                                    </div>
+                                    <div class="alert alert-light border mb-0">
+                                        <div class="fw-semibold mb-2">설정 가이드</div>
+                                        <ul class="mb-0 ps-3 small text-muted">
+                                            <li>문항 수가 많을수록 해당 카테고리 이해도 측정 범위가 넓어집니다.</li>
+                                            <li>합격 점수는 해당 카테고리의 최소 통과 기준입니다.</li>
+                                            <li>가중치는 전체 이해도 통계에서 카테고리 중요도를 조정할 때 반영됩니다.</li>
+                                        </ul>
+                                    </div>
                                 </div>
-                            </div>
-
-                            <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">문항 수</label>
-                                    <input type="number"
-                                           name="questionCount"
-                                           class="form-control"
-                                           min="1"
-                                           max="50"
-                                           th:value="${rule.questionCount}"
-                                           required>
-                                </div>
-
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">합격 점수</label>
-                                    <input type="number"
-                                           name="passScore"
-                                           class="form-control"
-                                           min="0"
-                                           max="100"
-                                           th:value="${rule.passScore}"
-                                           required>
-                                </div>
-
-                                <div class="col-md-4 mb-3">
-                                    <label class="form-label">난이도</label>
-                                    <select name="difficulty" class="form-select" required>
-                                        <option value="">선택</option>
-                                        <option th:each="difficulty : ${difficulties}"
-                                                th:value="${difficulty}"
-                                                th:text="${difficulty.label}"
-                                                th:selected="${rule.difficulty != null and rule.difficulty == difficulty}">
-                                        </option>
-                                    </select>
-                                </div>
-                            </div>
-
-                            <div class="form-check mb-0">
-                                <input type="checkbox"
-                                       name="isActive"
-                                       value="true"
-                                       class="form-check-input"
-                                       id="isActive"
-                                       th:checked="${rule.isActive}">
-                                <label class="form-check-label" for="isActive">
-                                    사용
-                                </label>
                             </div>
                         </div>
                     </div>
 
                     <div class="d-flex justify-content-end gap-2 mt-3">
-                        <a th:href="@{/admin/evaluation/quiz-rules}" class="btn btn-outline-secondary">
-                            목록으로
-                        </a>
+                        <a th:href="@{/admin/evaluation/quiz-rules}" class="btn btn-outline-secondary">목록으로</a>
                         <button type="submit" class="btn btn-primary">
-                            <span th:text="${isEdit} ? '수정' : '등록'">등록</span>
+                            <span th:text="${isEdit ? '수정' : '등록'}">등록</span>
                         </button>
                     </div>
                 </form>
@@ -138,5 +184,39 @@
     <th:block th:replace="~{/admin/common/footer}"></th:block>
 </div>
 <th:block th:replace="~{/admin/common/commonJs}"></th:block>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const questionCountInput = document.getElementById('questionCountInput');
+        const passScoreInput = document.getElementById('passScoreInput');
+        const weightPercentInput = document.getElementById('weightPercentInput');
+        const questionTypeSelect = document.getElementById('questionTypeSelect');
+        const previewTotalScore = document.getElementById('previewTotalScore');
+        const previewPassThreshold = document.getElementById('previewPassThreshold');
+        const previewWeightedScore = document.getElementById('previewWeightedScore');
+        const previewQuestionType = document.getElementById('previewQuestionType');
+
+        const updatePreview = () => {
+            const questionCount = Number(questionCountInput.value || 0);
+            const passScore = Number(passScoreInput.value || 0);
+            const weightPercent = Number(weightPercentInput.value || 0);
+            const totalScore = 100;
+            const requiredScore = passScore;
+            const weightedScore = Math.round(totalScore * weightPercent / 100);
+            const selectedOption = questionTypeSelect.options[questionTypeSelect.selectedIndex];
+
+            previewTotalScore.innerText = `${totalScore}점`;
+            previewPassThreshold.innerText = `${requiredScore}점`;
+            previewWeightedScore.innerText = `${weightedScore}점`;
+            previewQuestionType.innerText = selectedOption && selectedOption.value ? selectedOption.text : '선택 전';
+        };
+
+        [questionCountInput, passScoreInput, weightPercentInput, questionTypeSelect].forEach((element) => {
+            element.addEventListener('input', updatePreview);
+            element.addEventListener('change', updatePreview);
+        });
+
+        updatePreview();
+    });
+</script>
 </body>
 </html>

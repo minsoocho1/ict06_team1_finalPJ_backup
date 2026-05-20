@@ -10,6 +10,7 @@
  * @ 2026.04.22    김다솜        최초 생성/화면 구성/로그인 계정 정보 저장 Context 구현
  * @ 2026.04.29    김다솜        새로고침 시 토큰 기반 사용자 정보 복구 로직 추가
  * @ 2026.05.07    김다솜        RefreshToken 도입에 따른 이중 토큰 저장 및 로그아웃 로직 수정
+ * @ 2026.05.19    김다솜        로그아웃 시 SSE/알림 구독 정리를 위한 전역 로그아웃 이벤트 발행
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -55,8 +56,10 @@ export const UserProvider = ({ children }) => {
 
     //로그아웃 시 토큰 삭제 및 사용자 정보 초기화
     const logout = () => {
+        window.dispatchEvent(new CustomEvent('appLogout'));
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        localStorage.removeItem('token');
         setUserInfo(null);
     };
 

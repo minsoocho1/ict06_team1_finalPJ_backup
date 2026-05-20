@@ -18,8 +18,14 @@
  * @ 2026.05.04    김다솜        RestTemplate Bean 주입으로 변경(매 요청 new 생성 제거)
  * @ 2026.05.06    김다솜        카테고리별 퀴즈 상세 결과 조회 메서드 추가 (getEvaluationDetail)
  * @ 2026.05.08    김다솜        퀴즈 제출 완료 시 알림 생성 및 SSE 실시간 전송 연동
+ * @ 2026.05.19    김다솜        평가 제출/상세 응답에 자기평가 AI 비교 피드백 추가, 학습/평가 완료 시 관리자 알림 연동
+ * @ 2026.05.19    김다솜        주관식 AI 채점 요청에 문항 문맥과 채점 기준 전달 추가
  */
 
+/*
+ * 2026-05-19
+ * 평가 제출/상세 응답에 자기평가 AI 비교 피드백 포함
+ */
 package com.ict06.team1_fin_pj.domain.evaluation.service;
 
 import com.ict06.team1_fin_pj.common.dto.evaluation.*;
@@ -28,9 +34,16 @@ import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuestionType;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizQuestionEntity;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizResultEntity;
+import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizGenerationRuleEntity;
+import com.ict06.team1_fin_pj.domain.evaluation.repository.QuizGenerationRuleRepository;
 import com.ict06.team1_fin_pj.domain.evaluation.repository.EvaluationQuestionRepository;
 import com.ict06.team1_fin_pj.domain.evaluation.repository.EvaluationResultRepository;
 import com.ict06.team1_fin_pj.domain.notification.service.NotificationServiceImpl;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.ProgressStatus;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadProgressEntity;
+import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadProgressRepository;
+import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadmapRepository;
+import com.ict06.team1_fin_pj.domain.onboarding.service.LearningSelfCheckService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -45,6 +58,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -58,6 +72,10 @@ public class EvaluationServiceImpl {
     private final EmpRepository empRepository;
     private final RestTemplate restTemplate;
     private final NotificationServiceImpl notificationService;
+    private final QuizGenerationRuleRepository quizGenerationRuleRepository;
+    private final LearningSelfCheckService learningSelfCheckService;
+    private final RoadmapRepository roadmapRepository;
+    private final RoadProgressRepository roadProgressRepository;
 
     //학습 카테고리별 퀴즈 문항 조회
     public List<EvaluationQuestionResponse> getQuizQuestionsByCategory(String categoryName) {
@@ -81,6 +99,14 @@ public class EvaluationServiceImpl {
                         .build()
                 )
                 .toList();
+    }
+
+    // 카테고리별 합격 기준 점수 가져오기 (기본값 80)
+    private int getPassScore(String categoryName) {
+        return quizGenerationRuleRepository
+                .findFirstByCategoryNameAndIsActiveTrueOrderByRuleIdDesc(categoryName)
+                .map(rule -> rule.getPassScore() != null ? rule.getPassScore() : 80)
+                .orElse(80);
     }
 
     // 채점 및 결과 저장
@@ -111,7 +137,8 @@ public class EvaluationServiceImpl {
                             : 0)
                     .sum();
 
-            boolean previouslyPassed = previousMaxScore > 0 && previousTotalScore >= (previousMaxScore * 0.8);
+            int passScore = getPassScore(request.getCategoryName());
+            boolean previouslyPassed = previousMaxScore > 0 && previousTotalScore >= (previousMaxScore * (passScore / 100.0));
 
             if (previouslyPassed) {
                 throw new RuntimeException("이미 제출한 평가입니다.");
@@ -167,15 +194,18 @@ public class EvaluationServiceImpl {
                 try {
                     String url = "http://localhost:8000/api/ai/evaluation/evaluate";
 
-                    Map<String, String> body = Map.of(
-                            "user_answer", answer.getAnswerText(),
-                            "reference_answer", question.getSampleAnswer()
-                    );
+                    Map<String, Object> body = new LinkedHashMap<>();
+                    body.put("user_answer", answer.getAnswerText() != null ? answer.getAnswerText() : "");
+                    body.put("reference_answer", question.getSampleAnswer() != null ? question.getSampleAnswer() : "");
+                    body.put("question_text", question.getQuestionText());
+                    body.put("keyword_answer", question.getKeywordAnswer());
+                    body.put("rubric", question.getRubric());
+                    body.put("explanation", question.getExplanation());
 
                     HttpHeaders headers = new HttpHeaders();
                     headers.setContentType(MediaType.APPLICATION_JSON);
 
-                    HttpEntity<Map<String, String>> requestEntity =
+                    HttpEntity<Map<String, Object>> requestEntity =
                             new HttpEntity<>(body, headers);
 
                     ResponseEntity<Map> response = restTemplate.postForEntity(
@@ -241,8 +271,14 @@ public class EvaluationServiceImpl {
 
         }
 
-        boolean passed = totalScore >= (maxScore * 0.8);
+        int passScore = getPassScore(request.getCategoryName());
+        boolean passed = totalScore >= (maxScore * (passScore / 100.0));
         sendQuizSubmitNotification(request.getEmpNo(), request.getCategoryName(), totalScore, maxScore, passed);
+
+        // [트리거] 2. 온보딩 로드맵 전체 완료 여부 체크 및 관리자 알림
+        if(passed) {
+            checkAndNotifyOnboardingCompletion(request.getEmpNo(), emp.getName());
+        }
 
         return EvaluationSubmitResponse.builder()
                 .empNo(request.getEmpNo())
@@ -250,8 +286,36 @@ public class EvaluationServiceImpl {
                 .totalScore(totalScore)
                 .maxScore(maxScore)
                 .passed(passed)
+                .selfCheckFeedback(learningSelfCheckService.getLatestSelfCheckFeedbackByCategory(
+                        request.getEmpNo(),
+                        request.getCategoryName()
+                ))
                 .results(results)
                 .build();
+    }
+
+    // 온보딩 로드맵 내 모든 항목(학습+평가) 완료 여부 확인 후 관리자에게 알림
+    private void checkAndNotifyOnboardingCompletion(String empNo, String name) {
+        // 1. 해당 사원의 모든 로드맵 아이템 진행 상태 조회 및 빈 리스트 체크
+        List<RoadProgressEntity> progressList = roadProgressRepository.findByEmployee_EmpNo(empNo);
+        if (progressList.isEmpty()) return;
+
+        boolean isAllCompleted = progressList.stream()
+                .allMatch(progress -> progress.getStatus() == ProgressStatus.COMPLETED);
+
+        if(isAllCompleted) {
+            // 2. 로드맵 엔티티의 완료 상태 업데이트
+            roadmapRepository.findFirstByEmployee_EmpNoOrderByRoadmapIdDesc(empNo).ifPresent(roadmap -> {
+                if(Boolean.FALSE.equals(roadmap.getIsCompleted())) {
+                    // 로드맵 엔티티의 상태를 완료(true)로 변경
+                    roadmap.updateCompletionStatus(true);
+                    roadmapRepository.save(roadmap);
+
+                    // 3. 관리자들에게 실시간 알림 발송
+                    notificationService.sendOnboardingCompleteNotification(empNo, name);
+                }
+            });
+        }
     }
 
     // 퀴즈 응답 제출 후 결과 알림 생성
@@ -264,7 +328,7 @@ public class EvaluationServiceImpl {
                 empNo,
                 "EVALUATION",
                 "평가 제출 완료",
-                categoryName + " 평가가 제출되었습니다. 결과: " + resultText + " (" + totalScore + "/" + maxScore + "점)",
+                categoryName + " 카테고리의 평가가 제출되었습니다. 결과: " + resultText + " (" + totalScore + "/" + maxScore + "점)",
                 url
         );
     }
@@ -303,7 +367,8 @@ public class EvaluationServiceImpl {
                             .sum();
 
                     // 3-3. 통과 여부 판단(80점 기준)
-                    boolean passed = maxScore > 0 && totalScore >= maxScore * 0.8;
+                    int passScore = getPassScore(category);
+                    boolean passed = maxScore > 0 && totalScore >= maxScore * (passScore / 100.0);
 
                     // 3-4. 결과 DTO 생성
                     return EvaluationCategoryResultResponse.builder()
@@ -371,7 +436,8 @@ public class EvaluationServiceImpl {
                         : 0)
                 .sum();
 
-        boolean passed = maxScore > 0 && totalScore >= maxScore * 0.8;
+        int passScore = getPassScore(categoryName);
+        boolean passed = maxScore > 0 && totalScore >= maxScore * (passScore / 100.0);
 
         // 3. 최종 DTO 생성 및 반환
         return EvaluationDetailResponse.builder()
@@ -380,6 +446,7 @@ public class EvaluationServiceImpl {
                 .totalScore(totalScore)
                 .maxScore(maxScore)
                 .passed(passed)
+                .selfCheckFeedback(learningSelfCheckService.getLatestSelfCheckFeedbackByCategory(empNo, categoryName))
                 .questions(questionDetails)
                 .build();
     }
@@ -404,4 +471,3 @@ public class EvaluationServiceImpl {
         return answerNo + ". " + optionText;
     }
 }
-

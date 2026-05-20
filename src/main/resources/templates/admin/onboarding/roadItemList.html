@@ -11,6 +11,7 @@
     @ 2026.05.10    김다솜        아이템 순서 조정(Move Up/Down) 및 일괄 저장 기능 추가
     @ 2026.05.11    김다솜        검색/필터 기능 추가 및 버튼 상태 제어 로직 보완
     @ 2026.05.13    김다솜        상세 화면 상단/하단 로드맵 재생성 버튼 추가 및 레이아웃 정리
+    @ 2026.05.14    김다솜        HTML 폼 중첩 제거(재생성 버튼 오류 해결) 및 필수 여부 컬럼 추가
 -->
 
 <!doctype html>
@@ -95,6 +96,7 @@
                                     <th>순서</th>
                                     <th>카테고리</th>
                                     <th>아이템 제목</th>
+                                    <th>구분</th>
                                     <th>연결 콘텐츠</th>
                                     <th>콘텐츠 유형</th>
                                     <th>관리</th>
@@ -118,6 +120,10 @@
                                     </td>
                                     <td th:text="${item.categoryName}" class="road-item-category">카테고리</td>
                                     <td th:text="${item.itemTitle}" class="road-item-title">아이템 제목</td>
+                                    <td>
+                                        <span th:if="${item.content.isMandatory}" class="badge bg-danger">필수</span>
+                                        <span th:unless="${item.content.isMandatory}" class="badge bg-info">선택</span>
+                                    </td>
                                     <td th:text="${item.content.title}" class="road-item-content">연결 콘텐츠</td>
                                     <td th:text="${item.content.type}" class="road-item-type">VIDEO</td>
                                     <td>
@@ -146,29 +152,30 @@
                             </table>
                         </div>
                     </div>
-
-                    <div class="mt-3 d-flex justify-content-between">
-                        <a th:href="@{/admin/onboarding/roadmaps}" class="btn btn-outline-secondary">
-                            로드맵 목록으로
-                        </a>
-                        <div class="d-flex gap-2">
-                            <form th:action="@{/admin/onboarding/roadmaps/{roadmapId}/regenerate(roadmapId=${roadmap.roadmapId})}"
-                                  method="post"
-                                  onsubmit="return confirm('최신 콘텐츠 기준으로 이 직원의 로드맵을 다시 생성하시겠습니까? 기존 진행 상태는 초기화됩니다.');">
-                                <button type="submit" class="btn btn-outline-success btn-sm text-nowrap d-inline-flex align-items-center">
-                                    로드맵 재생성
-                                </button>
-                            </form>
-                            <button type="submit"
-                                    class="btn btn-primary btn-sm text-nowrap d-inline-flex align-items-center"
-                                    id="saveOrderButton"
-                                    th:disabled="${#lists.isEmpty(items)}"
-                                    disabled>
-                                순서 저장
-                            </button>
-                        </div>
-                    </div>
                 </form>
+
+                <div class="mt-3 d-flex justify-content-between">
+                    <a th:href="@{/admin/onboarding/roadmaps}" class="btn btn-outline-secondary">
+                        로드맵 목록으로
+                    </a>
+                    <div class="d-flex gap-2">
+                        <form th:action="@{/admin/onboarding/roadmaps/{roadmapId}/regenerate(roadmapId=${roadmap.roadmapId})}"
+                              method="post"
+                              onsubmit="return confirm('최신 콘텐츠 기준으로 이 직원의 로드맵을 다시 생성하시겠습니까? 기존 진행 상태는 초기화됩니다.');">
+                            <button type="submit" class="btn btn-outline-success btn-sm text-nowrap d-inline-flex align-items-center">
+                                로드맵 재생성
+                            </button>
+                        </form>
+                        <button type="submit"
+                                form="reorderForm"
+                                class="btn btn-primary btn-sm text-nowrap d-inline-flex align-items-center"
+                                id="saveOrderButton"
+                                th:disabled="${#lists.isEmpty(items)}"
+                                disabled>
+                            순서 저장
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </main>

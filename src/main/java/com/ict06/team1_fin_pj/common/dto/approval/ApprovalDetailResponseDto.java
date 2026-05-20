@@ -32,7 +32,7 @@ public class ApprovalDetailResponseDto {
     // 결재 문서 본문 JSON 문자열입니다. 양식별 필드가 달라질 수 있어 JSON으로 보관합니다.
     private String content;
 
-    // 결재 문서 상태입니다. 예: DRAFT, IN_PROGRESS, COMPLETED, REJECTED
+    // 결재 문서 상태입니다. 예: DRAFT, IN_PROGRESS, COMPLETED, REJECTED, CANCELED
     private ApprovalStatus status;
 
     // 작성자 사번입니다.
@@ -40,6 +40,12 @@ public class ApprovalDetailResponseDto {
 
     // 작성자 이름입니다.
     private String writerName;
+
+    // 작성자의 소속 부서명입니다. 상세 화면에서 동명이인을 구분하기 위해 사용합니다.
+    private String writerDeptName;
+
+    // 작성자의 직급명입니다. 작성자를 "이름(소속, 직급, 사번)" 형태로 표시할 때 사용합니다.
+    private String writerPositionName;
 
     // 현재 결재 단계입니다.
     private Integer currentStep;
@@ -52,6 +58,12 @@ public class ApprovalDetailResponseDto {
 
     // 현재 결재자 이름입니다. 임시저장/완료 상태에서는 null일 수 있습니다.
     private String currentApproverName;
+
+    // 현재 결재자의 소속 부서명입니다. 현재 결재자 표시에서도 동명이인을 구분하기 위해 제공합니다.
+    private String currentApproverDeptName;
+
+    // 현재 결재자의 직급명입니다.
+    private String currentApproverPositionName;
 
     // 문서 생성 시각입니다.
     private LocalDateTime createdAt;

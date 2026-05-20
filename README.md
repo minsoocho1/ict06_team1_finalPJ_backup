@@ -101,8 +101,33 @@ AI 융합 리액트 기반 사내 그룹웨어 & 교육평가시스템 플랫폼
 
 8. **AI 서버 실행 확인**: http://127.0.0.1:8000 로 접속 -> 화면에 응답이 있으면 성공입니다.
 
+### 5. [AI서버-Ollama] 다운로드 및 설치 & 실행
+1. **파일 다운로드 및 설치**: https://ollama.com/download 에서 윈도우즈용 다운로드 후 실행
 
+2. **Ollama 모델 받기**: (VSCode의 Terminal-Powershell에서)
+   `cd ai_server > Get-ChildItem "C:\Users\ictedu\AppData\Local\Programs\Ollama" -File` -> 결과에 ollama.exe 보이면 다음 명령어 입력
+    - Ollama 모델 설치: `& "C:\Users\ictedu\AppData\Local\Programs\Ollama\ollama.exe" pull llama3.1:8b`
+    - 모델 목록 확인: `& "C:\Users\ictedu\AppData\Local\Programs\Ollama\ollama.exe" list`
 
+3. **실행 테스트**: `& "C:\Users\ictedu\AppData\Local\Programs\Ollama\ollama.exe" run llama3.1:8b "아무 질문이나 입력하기”` -> 입력한 질문에 대한 AI 답변이 나오면 성공
+
+4. **Ollama 설정 켜기**: .env 파일에서 `OLLAMA_DOC_POSTPROCESS=true`로 수정(기본값 false이면 Ollama 실행하지 않음)
+
+5. **AI서버 재시작하기**: (Terminal-git bash에서) 4-6(AI 가상 서버 띄우기)번의 명령어 실행
+
+### 6. [Redis] 다운로드 및 설치 & 실행
+1. **파일 다운로드 및 설치**: https://github.com/tporadowski/redis/releases 에서 msi파일 다운로드 후 실행
+   **설치 오류 시**: 위 경로에서 zip파일 다운로드 -> 프로젝트 폴더(...\ict06_team1_finalPJ)에 redis 폴더 생성 후 zip파일 넣어 압축 풀기 -> redis-server.exe 실행
+
+2. **Ollama 서버 연결**: (VSCode > Terminal에서) `.\redis\redis-cli.exe ping` 입력 -> 결과 `pong` 나오면 Redis 서버 연결 성공
+
+3. **확장 프로그램 설치**: (VSCode > Extension에서) `Redis` 설치
+
+4. **서버 생성 확인**: 좌측 사이드바의 Service 아이콘 -> Create Connection -> Connect to server -> 설정값 입력 후 Connect
+   -> 왼편 Service 영역에 Redis 서버 생성되었는지 확인
+   **설정값**: Host: 127.0.0.1 / Port: 6379
+
+### 로그인 테스트
 1. **테스트 계정으로 로그인**: 이제 프로젝트를 실행하면 테스트 계정의 사번/비밀번호로 로그인이 가능
    * **테스트 계정**: 사번 20209999 / 비밀번호: 1234
     ![alt text](/readme_images/login.png)

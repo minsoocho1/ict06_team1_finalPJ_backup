@@ -1,6 +1,17 @@
-import React, { useEffect, useState } from "react";
-import AppButton from "../components/AppButton";
-import AutocompleteInput from "../components/AutocompleteInput";
+/**
+ * @FileName : KnowledgeRequestScreen.js
+ * @Description : AiSecretary.js 전용 지식 추가 화면
+ * @Author : 송혜진
+ * @Date : 2026. 04. 30
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.30  송혜진       최초 생성
+ */
+
+import React, { useState } from "react";
+import Chip from "../components/Chip";
 import Field from "../components/Field";
 import TextInput from "../components/TextInput";
 import {
@@ -10,105 +21,9 @@ import {
   unwrapApiData,
 } from "../api/aiSecretaryApi";
 import { C, styles } from "../styles/aiSecretaryTheme";
-import { I, Icon } from "../constants/aiSecretaryIcons";
 
-const REQUEST_TYPE_OPTIONS = [
-  "사내 규정",
-  "업무 매뉴얼",
-  "FAQ",
-  "서비스 이용 안내",
-  "기타",
-];
-
-const CATEGORY_OPTIONS = [
-  "근태",
-  "인사",
-  "전자결재",
-  "교육",
-  "복지",
-  "시스템",
-  "기타",
-];
-
-const TEAM_OPTIONS = [
-  "경영지원팀",
-  "인사팀",
-  "개발1팀(BE)",
-  "개발2팀(FE)",
-  "디자인팀",
-];
-
-const POSITION_OPTIONS = ["전원", "사원", "주임", "선임", "책임", "수석"];
-
-const ACCESS_LEVEL_OPTIONS = [
-  { label: "전체 공개", value: "PUBLIC" },
-  { label: "조건 조합", value: "CUSTOM" },
-  { label: "관리자 전용", value: "ADMIN_ONLY" },
-];
-
-const STATUS_LABEL_MAP = {
-  PENDING: "대기중",
-  APPROVED: "승인",
-  REJECTED: "반려",
-  PUBLISHED: "반영 완료",
-};
-
-const STATUS_TONE_MAP = {
-  PENDING: { background: "#EFF6FF", color: "#1D4ED8", border: "#BFDBFE" },
-  APPROVED: { background: "#ECFDF5", color: "#047857", border: "#A7F3D0" },
-  REJECTED: { background: "#FEF2F2", color: "#B91C1C", border: "#FECACA" },
-  PUBLISHED: { background: "#F5F3FF", color: "#6D28D9", border: "#DDD6FE" },
-};
-
-const SELECT_STYLE = {
-  width: "100%",
-  minHeight: 46,
-  border: `1px solid ${C.border}`,
-  borderRadius: 10,
-  outline: "none",
-  background: "#fff",
-  color: C.text,
-  fontSize: 14,
-  padding: "0 14px",
-  boxSizing: "border-box",
-};
-
-const INFO_BOX_STYLE = {
-  border: `1px solid ${C.border}`,
-  borderRadius: 16,
-  background: "#FBFDFF",
-  padding: 16,
-};
-
-const fieldErrorStyle = {
-  marginTop: 6,
-  fontSize: 12,
-  color: "#DC2626",
-  fontWeight: 600,
-};
-
-function normalizeText(value) {
-  return value == null ? "" : String(value).trim();
-}
-
-function formatDateTime(value) {
-  const text = normalizeText(value);
-  if (!text) {
-    return "-";
-  }
-  return text.replace("T", " ").slice(0, 16);
-}
-
-function formatToday() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function buildInitialForm() {
-  return {
+export default function KnowledgeRequestScreen() {
+  const [form, setForm] = useState({
     title: "",
     requestType: "",
     category: "",
@@ -201,245 +116,23 @@ function normalizeSuggestionList(defaults, values) {
     }
   });
 
-  return Array.from(merged);
-}
-
-function KnowledgeRequestFieldError({ error }) {
-  if (!error) {
-    return null;
-  }
-
-  return <div style={fieldErrorStyle}>{error}</div>;
-}
-
-export default function KnowledgeRequestScreen({ userInfo }) {
-  const empNo = userInfo?.empNo ?? userInfo?.emp_no ?? "";
-  const requesterLabel = getRequesterLabel(userInfo, empNo);
-  const requesterName = normalizeText(userInfo?.name || userInfo?.empName || userInfo?.userName);
-
-  const [form, setForm] = useState(() => buildInitialForm());
-  const [suggestions, setSuggestions] = useState({
-    requestTypes: REQUEST_TYPE_OPTIONS,
-    categories: CATEGORY_OPTIONS,
-  });
-  const [errors, setErrors] = useState({});
-  const [feedback, setFeedback] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [loadingRequests, setLoadingRequests] = useState(false);
-  const [requests, setRequests] = useState([]);
-
-  useEffect(() => {
-    setForm(buildInitialForm());
-    setErrors({});
-  }, [userInfo]);
-
-  useEffect(() => {
-    const loadSuggestions = async () => {
-      try {
-        const response = await getKnowledgeRequestSuggestions();
-        const data = unwrapApiData(response);
-        setSuggestions({
-          requestTypes: normalizeSuggestionList(REQUEST_TYPE_OPTIONS, data?.requestTypes),
-          categories: normalizeSuggestionList(CATEGORY_OPTIONS, data?.categories),
-        });
-      } catch (error) {
-        console.error("자료 등록 요청 자동완성 후보 조회 실패", error);
-        setSuggestions({
-          requestTypes: REQUEST_TYPE_OPTIONS,
-          categories: CATEGORY_OPTIONS,
-        });
-      }
-    };
-
-    loadSuggestions();
-  }, []);
-
-  const loadMyRequests = async () => {
-    if (!empNo) {
-      setRequests([]);
-      return;
-    }
-
-    setLoadingRequests(true);
-    try {
-      const response = await getMyKnowledgeRequests(empNo);
-      const data = unwrapApiData(response);
-      setRequests(Array.isArray(data) ? data : []);
-    } catch (error) {
-      console.error("사용자 자료 등록 요청 목록 조회 실패", error);
-      setRequests([]);
-      setFeedback({
-        type: "error",
-        text: "사용자 자료 등록 요청 목록을 불러오지 못했습니다.",
-      });
-    } finally {
-      setLoadingRequests(false);
-    }
-  };
-
-  useEffect(() => {
-    loadMyRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empNo]);
-
-  const updateField = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-    setErrors((prev) => {
-      if (!prev[field]) {
-        return prev;
-      }
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  };
-
-  const validateForm = () => {
-    const nextErrors = {};
-    const requiredMap = [
-      ["title", "문서명"],
-      ["requestType", "문서 유형"],
-      ["category", "카테고리"],
-      ["reason", "요청 사유"],
-      ["sampleQuestion", "챗봇 질문 예시"],
-      ["accessLevel", "기본 열람 권한"],
-    ];
-
-    requiredMap.forEach(([field, label]) => {
-      if (!normalizeText(form[field])) {
-        nextErrors[field] = `${label}을(를) 입력해 주세요.`;
-      }
-    });
-
-    if (!normalizeText(empNo)) {
-      nextErrors.requester = "사용자 정보를 찾을 수 없습니다. 다시 로그인해 주세요.";
-    }
-
-    if (normalizeText(form.accessLevel) === "CUSTOM") {
-      if (!normalizeText(form.customDept)) {
-        nextErrors.customDept = "대상 팀을 선택해 주세요.";
-      }
-      if (!normalizeText(form.customPosition)) {
-        nextErrors.customPosition = "직책 기준을 선택해 주세요.";
-      }
-    }
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
-
-  const resetForm = () => {
-    setForm(buildInitialForm());
-    setErrors({});
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-
-    if (saving) {
-      return;
-    }
-
-    if (!validateForm()) {
-      setFeedback({
-        type: "error",
-        text: "입력한 항목을 다시 확인해 주세요.",
-      });
-      return;
-    }
-
-    const customTargetDept = buildCustomTargetDept(form);
-    const payload = {
-      requesterNo: String(empNo),
-      title: normalizeText(form.title),
-      requestType: normalizeText(form.requestType),
-      category: normalizeText(form.category),
-      targetDept: normalizeText(form.accessLevel) === "CUSTOM" ? customTargetDept : "",
-      reason: normalizeText(form.reason),
-      sampleQuestion: normalizeText(form.sampleQuestion),
-      referenceUrl: normalizeText(form.referenceUrl),
-      accessLevel: normalizeText(form.accessLevel),
-    };
-
-    setSaving(true);
-    setFeedback(null);
-
-    try {
-      await createKnowledgeRequest(payload);
-      setFeedback({
-        type: "success",
-        text: "사용자 자료 등록 요청을 제출했습니다.",
-      });
-      resetForm();
-      await loadMyRequests();
-    } catch (error) {
-      console.error("사용자 자료 등록 요청 저장 실패", error);
-      const message =
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        "사용자 자료 등록 요청 처리 중 오류가 발생했습니다.";
-      setFeedback({
-        type: "error",
-        text: message,
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const renderSelect = (field, options, placeholder) => (
-    <select
-      value={form[field]}
-      onChange={(e) => updateField(field, e.target.value)}
-      style={{
-        ...SELECT_STYLE,
-        borderColor: errors[field] ? "#DC2626" : C.border,
-      }}
-    >
-      <option value="">{placeholder}</option>
-      {options.map((option) => {
-        const optionLabel = typeof option === "string" ? option : option.label;
-        const optionValue = typeof option === "string" ? option : option.value;
-
-        return (
-          <option key={optionValue} value={optionValue}>
-            {optionLabel}
-          </option>
-        );
-      })}
-    </select>
-  );
-
-  const renderAutocompleteInput = (field, placeholder, options, helperText) => (
-    <AutocompleteInput
-      label={field === "requestType" ? "문서 유형" : "카테고리"}
-      value={form[field]}
-      onChange={(value) => updateField(field, value)}
-      suggestions={options}
-      placeholder={placeholder}
-      helperText={helperText}
-      required
-    />
-  );
-
-  const accessLevelGuide = getAccessLevelGuide(form.accessLevel);
-  const showCustomSection = form.accessLevel === "CUSTOM";
+  const scopeOptions = ["전사 공개", "부서 공개", "특정 권한"];
 
   return (
     <div style={styles.page}>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 16, color: C.sub, fontWeight: 700 }}>
-          사용자 자료 등록 요청
+          지식 추가 요청
         </div>
         <h1
           style={{
             margin: "6px 0 0",
-            fontSize: 34,
+            fontSize: 38,
             fontWeight: 900,
             letterSpacing: -1,
           }}
         >
-          새로운 AI 챗봇 지식 등록 요청
+          챗봇 지식 추가 요청
         </h1>
         <p style={{ margin: "10px 0 0", color: C.sub, fontSize: 16 }}>
           관리자 검토 후 등록이 완료되면, 챗봇이 해당 데이터를 학습하여 스마트한 답변을 제공합니다.

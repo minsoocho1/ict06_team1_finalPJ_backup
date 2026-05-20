@@ -1,18 +1,19 @@
 <!--
     @FileName : evaluationMain.html
-    @Description : 관리자 온보딩 평가 관리 메인 화면 (기준 설정, 생성, 목록 이동)
+    @Description : 관리자 온보딩 평가 관리 메인 화면
     @Author : 김다솜
     @Date : 2026. 05. 11
     @Modification_History
     @
     @ 수정일자        수정자        수정내용
     @ ----------    ---------    -----------------------------------------------
-    @ 2026.05.11    김다솜        최초 생성 및 평가 관리 메뉴 UI 구현
-    @ 2026.05.12    김다솜        온보딩 관리 메인과 동일하게 카드 폭을 줄이고 중앙 정렬되도록 레이아웃 조정
+    @ 2026.05.11    김다솜        최초 생성 및 평가 관리 메뉴 UI 구성
+    @ 2026.05.12    김다솜        카드 버튼 정렬 및 레이아웃 균형 조정
+    @ 2026.05.14    김다솜        평가 항목 설정 명칭 정리 및 평가 결과 통계 진입 카드 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head th:include="/admin/common/head.html :: common_header">
+<head th:replace="~{/admin/common/head.html :: common_header}">
     <meta charset="UTF-8">
     <title id="page_title">온보딩 평가 관리</title>
 </head>
@@ -27,7 +28,7 @@
                 <div class="row mb-3">
                     <div class="col">
                         <h3>온보딩 평가 관리</h3>
-                        <p class="text-muted mb-0">AI 퀴즈 출제 기준과 문제 자동 생성 기능을 관리합니다.</p>
+                        <p class="text-muted mb-0">평가 항목 설정, AI 문제 생성, 통계 확인 기능을 관리합니다.</p>
                     </div>
                 </div>
 
@@ -35,10 +36,10 @@
                     <div class="col-md-6 col-lg-4 col-xxl-3">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body d-flex flex-column">
-                                <h5 class="card-title">AI 퀴즈 출제 기준</h5>
+                                <h5 class="card-title">평가 항목 설정</h5>
                                 <p class="card-text text-muted flex-grow-1">
-                                    카테고리별 문항 수, 합격 점수, 난이도, 문항 유형을 설정하고
-                                    현재 운영 중인 출제 규칙을 관리합니다.
+                                    카테고리별 문항 수, 합격 점수, 난이도, 문항 유형 기준을 설정하고
+                                    현재 적용 중인 출제 규칙을 관리합니다.
                                 </p>
                                 <div class="d-inline-flex">
                                     <a th:href="@{/admin/evaluation/quiz-rules}" class="btn btn-primary btn-sm text-nowrap px-3">관리하기</a>
@@ -50,9 +51,9 @@
                     <div class="col-md-6 col-lg-4 col-xxl-3">
                         <div class="card h-100 shadow-sm">
                             <div class="card-body d-flex flex-column">
-                                <h5 class="card-title">AI 퀴즈 자동 생성</h5>
+                                <h5 class="card-title">AI 문제 생성</h5>
                                 <p class="card-text text-muted flex-grow-1">
-                                    선택한 콘텐츠를 기준으로 객관식 문제 초안을 생성하고
+                                    선택한 콘텐츠를 기준으로 객관식과 주관식 문제 초안을 생성하고
                                     검토 후 바로 저장할 수 있습니다.
                                 </p>
                                 <div class="d-inline-flex">
@@ -67,11 +68,26 @@
                             <div class="card-body d-flex flex-column">
                                 <h5 class="card-title">평가 문제 목록</h5>
                                 <p class="card-text text-muted flex-grow-1">
-                                    현재 저장된 평가 문제를 카테고리와 유형별로 확인하고
-                                    자동 생성된 문제 반영 결과도 바로 검토할 수 있습니다.
+                                    현재 등록된 평가 문제를 카테고리와 유형별로 확인하고
+                                    AI 자동생성 여부, 수정, 삭제 작업을 수행합니다.
                                 </p>
                                 <div class="d-inline-flex">
                                     <a th:href="@{/admin/evaluation/questions}" class="btn btn-outline-secondary btn-sm text-nowrap px-3">문제 목록 보기</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-md-6 col-lg-4 col-xxl-3">
+                        <div class="card h-100 shadow-sm">
+                            <div class="card-body d-flex flex-column">
+                                <h5 class="card-title">평가 결과 통계</h5>
+                                <p class="card-text text-muted flex-grow-1">
+                                    평균 점수, 통과율, 카테고리별 이해도, 문항별 취약 구간을 시각화하여
+                                    평가 결과를 빠르게 확인합니다.
+                                </p>
+                                <div class="d-inline-flex">
+                                    <a th:href="@{/admin/evaluation/results}" class="btn btn-outline-success btn-sm text-nowrap px-3">통계 보기</a>
                                 </div>
                             </div>
                         </div>

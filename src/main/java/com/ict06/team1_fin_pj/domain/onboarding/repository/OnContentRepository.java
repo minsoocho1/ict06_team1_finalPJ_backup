@@ -27,4 +27,10 @@ public interface OnContentRepository extends JpaRepository<OnContentEntity, Inte
     @Override
     @EntityGraph(attributePaths = {"targetPositions", "targetDepartments"})
     Optional<OnContentEntity> findById(Integer contentId);
+
+    @EntityGraph(attributePaths = {"targetPositions", "targetDepartments"})
+    Optional<OnContentEntity> findFirstByPath(String path);
+
+    @EntityGraph(attributePaths = {"targetPositions", "targetDepartments"})
+    Optional<OnContentEntity> findFirstByTitleIgnoreCase(String title);
 }

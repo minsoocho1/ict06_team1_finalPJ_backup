@@ -9,6 +9,7 @@
  * @ 수정일         수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.29    김다솜        최초 생성/체크리스트 조회 응답 데이터 구성
+ * @ 2026.05.15    김다솜        연결 학습/평가 완료 여부 응답 필드 추가
  */
 
 package com.ict06.team1_fin_pj.common.dto.onboarding;
@@ -30,4 +31,6 @@ public class ChecklistResponse {
     private ProgressStatus status;
     private Integer relatedContentId;
     private String relatedContentTitle;
+    private Boolean learningCompleted;
+    private Boolean evaluationSubmitted;
 }

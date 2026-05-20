@@ -72,4 +72,8 @@ public class RoadmapEntity extends BaseTimeEntity {
         this.title = title;
         this.generatedType = generatedType;
     }
+
+    public void updateCompletionStatus(Boolean isCompleted) {
+        this.isCompleted = isCompleted;
+    }
 }

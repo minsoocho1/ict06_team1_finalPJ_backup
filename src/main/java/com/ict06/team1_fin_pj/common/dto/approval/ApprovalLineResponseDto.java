@@ -25,6 +25,12 @@ public class ApprovalLineResponseDto {
     // 결재자 또는 참조자의 이름입니다.
     private String approverName;
 
+    // 결재자 또는 참조자의 소속 부서명입니다. 상세 화면에서 "이름(부서, 직급)" 형태로 표시할 때 사용합니다.
+    private String approverDeptName;
+
+    // 결재자 또는 참조자의 직급명입니다. 소속 부서와 함께 대상자를 더 명확히 구분하기 위해 제공합니다.
+    private String approverPositionName;
+
     // 결재 순서입니다. 0은 참조자, 1 이상은 실제 결재 단계입니다.
     private Integer stepOrder;
 

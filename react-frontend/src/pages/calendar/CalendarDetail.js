@@ -1,3 +1,15 @@
+/**
+ * @FileName : CalendarDetail.js
+ * @Description : 캘린더 일정 상세 조회 및 수정/삭제 팝업
+ * @Author : 정준하
+ * @Date : 2026. 05. 01
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.01    정준하        최초 생성
+ * @ 2026.05.14    김다솜        온보딩 카테고리 대응 (색상 표시 및 라벨 추가)
+ */
 import React, { useEffect, useRef, useState } from 'react';
 
 import { request } from 'src/helpers/axios_helper';
@@ -181,6 +193,7 @@ const CalendarDetail = ({
             WORK: '업무',
             NOTICE: '공지',
             EDUCATION: '교육',
+            ONBOARDING: '온보딩',
             ETC: '기타',
         };
 
@@ -490,7 +503,7 @@ const CalendarDetail = ({
                                 width: '12px',
                                 height: '12px',
                                 borderRadius: '3px',
-                                backgroundColor: '#0D6EFD',
+                                backgroundColor: schedule.category === 'ONBOARDING' ? '#2e7d32' : '#0D6EFD',
                                 display: 'inline-block',
                             }}
                         />
