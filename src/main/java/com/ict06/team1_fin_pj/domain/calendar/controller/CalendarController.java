@@ -29,12 +29,15 @@ public class CalendarController {
     }
 
     // 일정 목록 조회
-    // 로그인 사용자 기준으로 캘린더에 표시할 일정을 내려준다.
+    // 로그인 사용자 기준 기본 일정 + 조직도에서 선택한 구성원의 공개 개인일정을 내려준다.
     @GetMapping("/list")
-    public List<ScheduleListResponseDto> getScheduleList(@RequestParam String empNo) {
+    public List<ScheduleListResponseDto> getScheduleList(
+            @RequestParam String empNo,
+            @RequestParam(required = false) List<String> selectedMemberNos
+    ) {
         System.out.println("CalendarController - getScheduleList()");
 
-        return service.getScheduleList(empNo);
+        return service.getScheduleList(empNo, selectedMemberNos);
     }
 
     // 일정 수정
@@ -62,5 +65,17 @@ public class CalendarController {
         System.out.println("CalendarController - deleteSchedule()");
 
         service.deleteSchedule(scheduleId, requesterNo);
+    }
+
+    // 참석자 응답 상태 변경
+    @PatchMapping("/{scheduleId}/participants/status")
+    public void updateParticipantStatus(
+            @PathVariable Integer scheduleId,
+            @RequestParam String empNo,
+            @RequestParam String status
+    ) {
+        System.out.println("CalendarController - updateParticipantStatus()");
+
+        service.updateParticipantStatus(scheduleId, empNo, status);
     }
 }

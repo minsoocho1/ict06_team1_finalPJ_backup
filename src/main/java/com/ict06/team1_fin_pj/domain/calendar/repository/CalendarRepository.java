@@ -30,32 +30,53 @@ public interface CalendarRepository extends JpaRepository<ScheduleEntity, Intege
     // 로그인 사용자가 조회할 수 있는 일정만 가져온다.
     // 내 일정, 같은 부서 공개 개인일정, 부서일정, 전사일정을 캘린더에 표시한다
     @Query("""
-            SELECT s
-              FROM ScheduleEntity s
-              LEFT JOIN FETCH s.creator c
-              LEFT JOIN FETCH s.department d
-              WHERE s.isDeleted = false
-                AND (
-                      c.empNo = :empNo
-                      OR (
-                           s.type = :personalType
-                           AND s.isPublic = true
-                           AND c.department.deptId = :deptId
-                      )
-                      OR (
-                          s.type = :departmentType
-                          AND d.deptId = :deptId
-                      )
-                      OR s.type = :companyType
-                )
-            ORDER BY s.startTime ASC
-            """)
+        SELECT DISTINCT s
+          FROM ScheduleEntity s
+          LEFT JOIN FETCH s.creator c
+          LEFT JOIN FETCH s.department d
+          LEFT JOIN s.participants sp
+          LEFT JOIN sp.employee pe
+          WHERE s.isDeleted = false
+            AND (
+                  c.empNo = :empNo
+                  OR pe.empNo = :empNo
+                  OR (
+                       s.type = :personalType
+                       AND s.isPublic = true
+                       AND c.department.deptId = :deptId
+                  )
+                  OR (
+                      s.type = :departmentType
+                      AND d.deptId = :deptId
+                  )
+                  OR s.type = :companyType
+            )
+        ORDER BY s.startTime ASC
+        """)
     List<ScheduleEntity> findVisibleSchedules(
             @Param("empNo") String empNo,
             @Param("deptId") Integer deptId,
             @Param("personalType") ScheduleType personalType,
             @Param("departmentType") ScheduleType departmentType,
             @Param("companyType") ScheduleType companyType
+    );
+
+    // 조직도에서 직접 선택한 구성원의 공개 개인일정만 추가로 가져온다.
+    // 다른 부서 부서일정은 권한 범위가 달라질 수 있으므로 개인 공개일정만 허용한다.
+    @Query("""
+            SELECT s
+              FROM ScheduleEntity s
+              LEFT JOIN FETCH s.creator c
+              LEFT JOIN FETCH s.department d
+              WHERE s.isDeleted = false
+                AND s.type = :personalType
+                AND s.isPublic = true
+                AND c.empNo IN :selectedMemberNos
+           ORDER BY s.startTime ASC
+           """)
+    List<ScheduleEntity> findPublicPersonalSchedulesByCreators(
+            @Param("selectedMemberNos") List<String> selectedMemberNos,
+            @Param("personalType") ScheduleType personalType
     );
 
     // 특정 사원의 특정 카테고리 일정 조회

@@ -68,6 +68,11 @@ const CalendarDetailAdd = ({
         return user?.position?.positionName || user?.positionName || user?.position_name || '';
     };
 
+    // userInfo 구조가 화면마다 달라질 수 있어서 가능한 부서 ID 필드를 모두 확인한다.
+    const getUserDeptId = (user) => {
+        return user?.department?.deptId || user?.dept?.deptId || user?.deptId || user?.dept_id || null;
+    };
+
     const userRole = normalizeRole(userInfo?.role);
     const positionName = getPositionName(userInfo);
 
@@ -128,6 +133,22 @@ const CalendarDetailAdd = ({
 
     // 참석자 선택 모달 열림/닫힘 상태 관리
     const [participantModalVisible, setParticipantModalVisible] = useState(false);
+
+    // 참석자 모달 검색/필터 상태
+    const [participantSearchKeyword, setParticipantSearchKeyword] = useState('');
+
+    // 참석자 목록 -> 기본은 같은 부서 구성원, 조직도 모드에서는 선택한 부서 구성원을 보여준다.
+    const [deptMembers, setDeptMembers] = useState([]);
+    const [participantLoading, setParticipantLoading] = useState(false);
+    const [participantLoadError, setParticipantLoadError] = useState('');
+
+    // 참석자 모달 내부에서 팀 멤버 보기와 조직도 선택 보기를 전환한다.
+    const [participantViewMode, setParticipantViewMode] = useState('TEAM');
+    const [orgDepartments, setOrgDepartments] = useState([]);
+    const [orgDeptId, setOrgDeptId] = useState('');
+    const [orgMembers, setOrgMembers] = useState([]);
+    const [orgLoading, setOrgLoading] = useState(false);
+    const [orgLoadError, setOrgLoadError] = useState('');
 
     // 종일 여부
     const [allDay, setAllDay] = useState(false);
@@ -335,12 +356,311 @@ const CalendarDetailAdd = ({
         color: '#6b7280',
     };
 
-    // 참석자 선택 테스트용 같은 부서 구성원 더미 데이터
-    const deptMembers = [
-        { empId: '20240001', name: '송창범' },
-        { empId: '20240002', name: '조민수' },
-        { empId: '20240003', name: '김재원' },
-    ];
+    const participantModalGridStyle = {
+        display: 'grid',
+        gridTemplateColumns: 'minmax(180px, 0.85fr) minmax(280px, 1.4fr)',
+        gap: '22px',
+        fontSize: '13px',
+    };
+
+    const participantSectionTitleStyle = {
+        marginBottom: '10px',
+        fontSize: '13px',
+        fontWeight: '800',
+        color: '#111827',
+    };
+
+    const participantFieldStyle = {
+        marginTop: '10px',
+        fontSize: '13px',
+    };
+
+    const participantResetButtonStyle = {
+        marginTop: '10px',
+        width: '100%',
+        height: '32px',
+        border: '1px solid #e5e7eb',
+        borderRadius: '6px',
+        backgroundColor: '#f9fafb',
+        color: '#374151',
+        fontSize: '13px',
+        fontWeight: '700',
+    };
+
+    const participantListStyle = {
+        marginTop: '10px',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        height: '240px',
+        overflowY: 'auto',
+        paddingRight: '4px',
+    };
+
+    const getParticipantCardStyle = (isSelected) => ({
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px',
+        padding: '9px 10px',
+        borderRadius: '8px',
+        border: isSelected ? '1px solid #5b8def' : '1px solid #e5e7eb',
+        backgroundColor: isSelected ? '#5b8def' : '#ffffff',
+        color: isSelected ? '#ffffff' : '#111827',
+        cursor: 'pointer',
+        transition: 'all 0.12s ease',
+    });
+
+    const getParticipantSubTextStyle = (isSelected) => ({
+        marginTop: '2px',
+        fontSize: '12px',
+        color: isSelected ? '#dbeafe' : '#6b7280',
+    });
+
+    const selectedParticipantTagStyle = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '5px 9px',
+        borderRadius: '999px',
+        backgroundColor: '#5b8def',
+        color: '#ffffff',
+        fontSize: '12px',
+        fontWeight: '700',
+    };
+
+    // 참석자 선택 모달이 열릴 때 같은 부서 구성원을 실제 조직도 API에서 불러온다.
+    useEffect(() => {
+        if (!participantModalVisible) {
+            return;
+        }
+
+        const deptId = getUserDeptId(userInfo);
+
+        if (!deptId) {
+            setDeptMembers([]);
+            setParticipantLoadError('소속 부서 정보를 확인할 수 없습니다.');
+            return;
+        }
+
+        const fetchDeptMembers = async () => {
+            setParticipantLoading(true);
+            setParticipantLoadError('');
+
+            try {
+                const response = await request('GET', '/api/organization/employees', { deptId });
+
+                const members = (response.data || [])
+                    .filter((employee) => String(employee.empNo) !== String(userInfo?.empNo))
+                    .map((employee) => ({
+                        empId: employee.empNo,
+                        name: employee.name,
+                        deptId: employee.deptId,
+                        deptName: employee.deptName,
+                        positionName: employee.positionName,
+                        profileImg: employee.profileImg,
+                    }));
+
+                setDeptMembers(members);
+            } catch (error) {
+                console.error('참석자 목록 조회 실패:', error);
+                setDeptMembers([]);
+                setParticipantLoadError('참석자 목록을 불러오지 못했습니다.');
+            } finally {
+                setParticipantLoading(false);
+            }
+        };
+
+        fetchDeptMembers();
+    }, [participantModalVisible, userInfo]);
+
+    // 참석자 선택은 같은 부서 멤버를 기본 범위로 두고, 현재 단계에서는 이름/사번 검색만 제공한다.
+    const filteredDeptMembers = deptMembers.filter((member) => {
+        const keyword = participantSearchKeyword.trim().toLowerCase();
+
+        return (
+            !keyword ||
+            member.name.toLowerCase().includes(keyword) ||
+            String(member.empId).toLowerCase().includes(keyword)
+        );
+    });
+
+    // 참석자 선택값은 유지하고, 모달을 닫을 때 검색/조직도 화면 상태만 초기화한다.
+    const closeParticipantModal = () => {
+        setParticipantModalVisible(false);
+        setParticipantSearchKeyword('');
+        setParticipantViewMode('TEAM');
+        setOrgDeptId('');
+        setOrgMembers([]);
+        setOrgLoadError('');
+    };
+
+    // 조직도 선택 모드로 전환한다. 같은 모달 안에서 화면만 바꿔 이중 모달을 피한다.
+    const openParticipantOrgMode = () => {
+        setParticipantViewMode('ORG');
+        setParticipantSearchKeyword('');
+    };
+
+    // 팀 멤버 모드로 돌아간다.
+    const openParticipantTeamMode = () => {
+        setParticipantViewMode('TEAM');
+        setOrgLoadError('');
+    };
+
+    // 조직도 모드가 열리면 부서 트리를 불러온다.
+    useEffect(() => {
+        if (!participantModalVisible || participantViewMode !== 'ORG') {
+            return;
+        }
+
+        const fetchOrgDepartments = async () => {
+            setOrgLoading(true);
+            setOrgLoadError('');
+
+            try {
+                const response = await request('GET', '/api/organization/departments/tree');
+                setOrgDepartments(response.data || []);
+            } catch (error) {
+                console.error('조직도 부서 목록 조회 실패:', error);
+                setOrgDepartments([]);
+                setOrgLoadError('조직도 부서 목록을 불러오지 못했습니다.');
+            } finally {
+                setOrgLoading(false);
+            }
+        };
+
+        fetchOrgDepartments();
+    }, [participantModalVisible, participantViewMode]);
+
+    // 조직도에서 부서를 선택하면 해당 부서 구성원을 불러온다.
+    useEffect(() => {
+        if (!participantModalVisible || participantViewMode !== 'ORG' || !orgDeptId) {
+            return;
+        }
+
+        const fetchOrgMembers = async () => {
+            setOrgLoading(true);
+            setOrgLoadError('');
+
+            try {
+                const response = await request('GET', '/api/organization/employees', {
+                    deptId: orgDeptId,
+                });
+
+                const members = (response.data || [])
+                    .filter((employee) => String(employee.empNo) !== String(userInfo?.empNo))
+                    .map((employee) => ({
+                        empId: employee.empNo,
+                        name: employee.name,
+                        deptId: employee.deptId,
+                        deptName: employee.deptName,
+                        positionName: employee.positionName,
+                        profileImg: employee.profileImg,
+                    }));
+
+                setOrgMembers(members);
+            } catch (error) {
+                console.error('조직도 구성원 목록 조회 실패:', error);
+                setOrgMembers([]);
+                setOrgLoadError('조직도 구성원 목록을 불러오지 못했습니다.');
+            } finally {
+                setOrgLoading(false);
+            }
+        };
+
+        fetchOrgMembers();
+    }, [participantModalVisible, participantViewMode, orgDeptId, userInfo?.empNo]);
+
+    // 조직도 부서 트리를 같은 모달 안에 렌더링한다.
+    // 부서 버튼 안에 하위 부서 버튼이 들어가지 않도록 div로 감싸서 클릭 꼬임을 막는다.
+    const renderParticipantOrgDepartments = (departments, depth = 0) => {
+        return departments.map((department) => (
+            <div key={department.deptId}>
+                <button
+                    type="button"
+                    onClick={() => setOrgDeptId(String(department.deptId))}
+                    style={{
+                        width: '100%',
+                        padding: '7px 8px',
+                        paddingLeft: `${8 + depth * 14}px`,
+                        border: 'none',
+                        borderRadius: '7px',
+                        backgroundColor: String(orgDeptId) === String(department.deptId) ? '#eef2ff' : '#fff',
+                        color: String(orgDeptId) === String(department.deptId) ? '#4f46e5' : '#374151',
+                        fontSize: '12px',
+                        fontWeight: String(orgDeptId) === String(department.deptId) ? '800' : '600',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                    }}
+                >
+                    {department.children?.length > 0 ? '▾ ' : '• '}
+                    {department.deptName}
+                </button>
+
+                {department.children?.length > 0 && renderParticipantOrgDepartments(department.children, depth + 1)}
+            </div>
+        ));
+    };
+
+    // 조직도 모드에서도 멤버 검색어를 적용한다.
+    const filteredOrgMembers = orgMembers.filter((member) => {
+        const keyword = participantSearchKeyword.trim().toLowerCase();
+
+        return (
+            !keyword ||
+            member.name.toLowerCase().includes(keyword) ||
+            String(member.empId).toLowerCase().includes(keyword)
+        );
+    });
+
+    // 현재 모드에 따라 오른쪽 목록에 보여줄 참석자 후보를 정한다.
+    const visibleParticipantMembers =
+        participantViewMode === 'ORG'
+            ? filteredOrgMembers
+            : filteredDeptMembers;
+
+    const participantListLoading =
+        participantViewMode === 'ORG'
+            ? orgLoading
+            : participantLoading;
+
+    const participantListError =
+        participantViewMode === 'ORG'
+            ? orgLoadError
+            : participantLoadError;
+
+    // 팀 멤버/조직도 멤버 모두 같은 방식으로 현재 목록 전체 선택을 처리한다.
+    const handleSelectAllVisibleParticipants = (checked) => {
+        setFormData((prev) => {
+            const visibleIds = new Set(visibleParticipantMembers.map((member) => member.empId));
+
+            if (!checked) {
+                return {
+                    ...prev,
+                    participants: prev.participants.filter(
+                        (participant) => !visibleIds.has(participant.empId)
+                    ),
+                };
+            }
+
+            const selectedIds = new Set(prev.participants.map((participant) => participant.empId));
+            const nextParticipants = [...prev.participants];
+
+            visibleParticipantMembers.forEach((member) => {
+                if (!selectedIds.has(member.empId)) {
+                    nextParticipants.push(member);
+                }
+            });
+
+            return {
+                ...prev,
+                participants: nextParticipants,
+                visibility:
+                    prev.type === 'PERSONAL' && nextParticipants.length > 0
+                        ? 'COMPANY'
+                        : prev.visibility,
+            };
+        });
+    };
 
     // 입력값이 변경될 때마다 formData의 해당 항목만 갱신
     const handleChange = (e) => {
@@ -444,17 +764,25 @@ const CalendarDetailAdd = ({
     };
 
 
-    // 참석자 선택 토글 처리: 선택된 사람은 제거, 선택 안 된 사람은 추가
     const handleParticipantChange = (member) => {
-        const isSelected = formData.participants.some(
-            (participant) => participant.empId === member.empId
-        );
+        setFormData((prev) => {
+            const isSelected = prev.participants.some(
+                (participant) => participant.empId === member.empId
+            );
 
-        setFormData({
-            ...formData,
-            participants: isSelected
-                ? formData.participants.filter((participant) => participant.empId !== member.empId)
-                : [...formData.participants, member],
+            const nextParticipants = isSelected
+                ? prev.participants.filter((participant) => participant.empId !== member.empId)
+                : [...prev.participants, member];
+
+            return {
+                ...prev,
+                participants: nextParticipants,
+                // 참석자가 있으면 초대받은 사람이 볼 수 있어야 하므로 화면의 공개 범위도 공개로 맞춘다.
+                visibility:
+                    prev.type === 'PERSONAL' && nextParticipants.length > 0
+                        ? 'COMPANY'
+                        : prev.visibility,
+            };
         });
     };
 
@@ -487,8 +815,10 @@ const CalendarDetailAdd = ({
             category: formData.category,
             location: formData.location,
             isAllDay: allDay,
-            isPublic: formData.visibility !== 'PRIVATE',
+            // 참석자가 있으면 초대받은 사람이 볼 수 있어야 하므로 공개로 저장한다.
+            isPublic: formData.participants.length > 0 || formData.visibility !== 'PRIVATE',
             repeatRule: formData.type === 'PERSONAL' && formData.repeatRule ? formData.repeatRule : null,
+            participantNos: formData.participants.map((participant) => participant.empId),
         };
 
         try {
@@ -714,10 +1044,10 @@ const CalendarDetailAdd = ({
 
                             {/* 참석자는 직접 입력하지 않고 모달에서 선택 */}
                             <div style={{ marginTop: '16px' }}>
-                                <strong>참석자</strong>
+                                <strong style={{ fontSize: '13px', fontWeight: '700' }}>참석자</strong>
 
                                 {/* 선택된 참석자가 있으면 이름을 표시하고, 없으면 안내문구 표시 */}
-                                <div style={{ marginTop: '8px', marginBottom: '8px' }}>
+                                <div style={{ marginTop: '8px', marginBottom: '8px', fontSize: '13px' }}>
                                     {formData.participants.length === 0 ? (
                                         <span style={{ color: '#777' }}>선택된 참석자가 없습니다.</span>
                                     ) : (
@@ -821,74 +1151,177 @@ const CalendarDetailAdd = ({
 
             {/* 참석자 선택 모달 */}
             <CModal
+                alignment="center"
                 visible={participantModalVisible}
-                onClose={() => setParticipantModalVisible(false)}
+                onClose={closeParticipantModal}
                 size="lg"
             >
                 <CModalHeader>
-                    <CModalTitle>멤버 초대하기</CModalTitle>
+                    <CModalTitle style={{ fontSize: '16px', fontWeight: '800' }}>
+                        멤버 초대하기
+                    </CModalTitle>
                 </CModalHeader>
 
                 <CModalBody>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '24px' }}>
-                        {/* 왼쪽 : 검색/필터 영역, 현재는 화면 확인용 */}
+                    <div style={participantModalGridStyle}>
                         <div>
-                            <h6>검색 조건</h6>
-
-                            <CFormInput
-                                placeholder="멤버 검색"
-                                style={{ marginTop: '12px' }}
-                            />
-
-                            <CFormSelect style={{ marginTop: '12px' }}>
-                                <option>부서 전체</option>
-                                <option>개발팀</option>
-                                <option>인사팀</option>
-                            </CFormSelect>
-                        </div>
-
-                        {/* 오른쪽 : 같은 부서 구성원 목록 */}
-                        <div>
-                            <h6>팀 멤버</h6>
-
-                            <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {deptMembers.map((member) => (
-                                    <label key={member.empId}>
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.participants.some(
-                                                (participant) => participant.empId === member.empId
-                                            )}
-                                            onChange={() => handleParticipantChange(member)}
-                                        />
-                                        {' '}
-                                        {member.name} ({member.empId})
-                                    </label>
-                                ))}
+                            <div style={participantSectionTitleStyle}>
+                                검색 조건
                             </div>
 
-                            {/* 선택된 멤버는 아래에 태그 형태로 표시 */}
-                            <div style={{ marginTop: '16px' }}>
-                                <strong>선택된 멤버 {formData.participants.length}</strong>
+                            <CFormInput
+                                value={participantSearchKeyword}
+                                onChange={(e) => setParticipantSearchKeyword(e.target.value)}
+                                placeholder="멤버 검색"
+                                style={participantFieldStyle}
+                            />
+
+                            {/* 같은 모달 안에서 팀 멤버 보기와 조직도 선택 보기를 전환한다. */}
+                            {participantViewMode === 'TEAM' ? (
+                                <button
+                                    type="button"
+                                    onClick={openParticipantOrgMode}
+                                    style={{
+                                        ...participantResetButtonStyle,
+                                        borderColor: '#c7d2fe',
+                                        backgroundColor: '#eef2ff',
+                                        color: '#4f46e5',
+                                    }}
+                                >
+                                    조직도에서 선택
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={openParticipantTeamMode}
+                                    style={{
+                                        ...participantResetButtonStyle,
+                                        borderColor: '#d1d5db',
+                                        backgroundColor: '#ffffff',
+                                        color: '#374151',
+                                    }}
+                                >
+                                    팀 멤버로 돌아가기
+                                </button>
+                            )}
+
+                            {participantViewMode === 'ORG' && (
+                                <div style={{ marginTop: '12px' }}>
+                                    <div style={{ marginBottom: '8px', fontSize: '12px', fontWeight: '800', color: '#374151' }}>
+                                        부서 선택
+                                    </div>
+
+                                    <div style={{ height: '210px', overflowY: 'auto', paddingRight: '4px' }}>
+                                        {orgLoading && orgDepartments.length === 0 ? (
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                                                조직도를 불러오는 중입니다.
+                                            </div>
+                                        ) : orgDepartments.length === 0 ? (
+                                            <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                                                표시할 부서가 없습니다.
+                                            </div>
+                                        ) : (
+                                            renderParticipantOrgDepartments(orgDepartments)
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <div style={participantSectionTitleStyle}>
+                                {participantViewMode === 'ORG' ? '조직도 멤버' : '팀 멤버'}
+                            </div>
+
+                            {participantViewMode === 'ORG' && !orgDeptId ? (
+                                <div style={{ color: '#777', fontSize: '13px' }}>
+                                    부서를 선택해주세요.
+                                </div>
+                            ) : (
+                                <>
+                                    <label
+                                        style={{
+                                            display: 'flex',
+                                            alignItems: 'center',
+                                            gap: '8px',
+                                            fontSize: '13px',
+                                            color: '#374151',
+                                            cursor: 'pointer',
+                                        }}
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            checked={
+                                                visibleParticipantMembers.length > 0 &&
+                                                visibleParticipantMembers.every((member) =>
+                                                    formData.participants.some((participant) => participant.empId === member.empId)
+                                                )
+                                            }
+                                            onChange={(e) => handleSelectAllVisibleParticipants(e.target.checked)}
+                                        />
+                                        현재 목록 멤버 전체 선택
+                                    </label>
+
+                                    <div style={participantListStyle}>
+                                        {participantListLoading ? (
+                                            <div style={{ color: '#777', fontSize: '13px' }}>
+                                                멤버 목록을 불러오는 중입니다.
+                                            </div>
+                                        ) : participantListError ? (
+                                            <div style={{ color: '#dc3545', fontSize: '13px' }}>
+                                                {participantListError}
+                                            </div>
+                                        ) : visibleParticipantMembers.length === 0 ? (
+                                            <div style={{ color: '#777', fontSize: '13px' }}>
+                                                조건에 맞는 멤버가 없습니다.
+                                            </div>
+                                        ) : (
+                                            visibleParticipantMembers.map((member) => {
+                                                const isSelected = formData.participants.some(
+                                                    (participant) => participant.empId === member.empId
+                                                );
+
+                                                return (
+                                                    <label
+                                                        key={member.empId}
+                                                        style={getParticipantCardStyle(isSelected)}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={() => handleParticipantChange(member)}
+                                                        />
+
+                                                        <div>
+                                                            <div style={{ fontWeight: '800' }}>
+                                                                {member.name}
+                                                            </div>
+                                                            <div style={getParticipantSubTextStyle(isSelected)}>
+                                                                {member.deptName ? `${member.deptName} · ` : ''}
+                                                                {member.positionName || '직급 없음'} · {member.empId}
+                                                            </div>
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
+                            <div style={{ marginTop: '14px' }}>
+                                <strong style={{ fontSize: '13px' }}>
+                                    선택된 멤버 {formData.participants.length}
+                                </strong>
 
                                 <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                                     {formData.participants.length === 0 ? (
-                                        <span style={{ color: '#777' }}>선택된 멤버가 없습니다.</span>
+                                        <span style={{ color: '#777', fontSize: '13px' }}>
+                                            선택된 멤버가 없습니다.
+                                        </span>
                                     ) : (
                                         formData.participants.map((participant) => (
-                                            <span
-                                                key={participant.empId}
-                                                style={{
-                                                    display: 'inline-flex',
-                                                    alignItems: 'center',
-                                                    gap: '6px',
-                                                    padding: '6px 10px',
-                                                    borderRadius: '6px',
-                                                    backgroundColor: '#0D6EFD',
-                                                    color: '#fff',
-                                                    fontWeight: 'bold',
-                                                }}
-                                            >
+                                            <span key={participant.empId} style={selectedParticipantTagStyle}>
                                                 {participant.name}
                                                 <button
                                                     type="button"
@@ -899,6 +1332,7 @@ const CalendarDetailAdd = ({
                                                         color: '#fff',
                                                         fontWeight: 'bold',
                                                         cursor: 'pointer',
+                                                        padding: 0,
                                                     }}
                                                 >
                                                     ×
@@ -908,7 +1342,6 @@ const CalendarDetailAdd = ({
                                     )}
                                 </div>
                             </div>
-
                         </div>
                     </div>
                 </CModalBody>
@@ -917,17 +1350,19 @@ const CalendarDetailAdd = ({
                     <CButton
                         color="secondary"
                         variant="outline"
+                        size="sm"
                         type="button"
-                        onClick={() => setParticipantModalVisible(false)}
+                        onClick={closeParticipantModal}
                     >
                         닫기
                     </CButton>
 
-                    {/* 선택은 체크박스 클릭 시 바로 반영되고, 선택완료는 모달만 닫음 */}
+                    {/* 선택은 체크박스 클릭 시 바로 반영되고, 선택완료는 모달만 닫는다. */}
                     <CButton
                         color="primary"
+                        size="sm"
                         type="button"
-                        onClick={() => setParticipantModalVisible(false)}
+                        onClick={closeParticipantModal}
                     >
                         선택완료
                     </CButton>

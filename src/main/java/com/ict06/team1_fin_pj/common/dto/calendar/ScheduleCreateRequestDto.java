@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 일정 간단 등록 요청 DTO
@@ -41,4 +42,7 @@ public class ScheduleCreateRequestDto {
     private Boolean isPublic;
 
     private String repeatRule;
+
+    // 참석자로 선택된 사원 번호 목록
+    private List<String> participantNos;
 }
