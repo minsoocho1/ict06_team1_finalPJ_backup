@@ -49,6 +49,12 @@ $(document).ready(function () {
     // 계산결과 캐시
     let previewResult = null;
 
+    // 계산 미리보기 모달에 임시로 담아두는 결과
+    let previewModalResult = null;
+
+    // 마지막으로 메인에 실제 반영된 계산결과 snapshot
+    let lastAppliedPreviewResultJson = '';
+
     // 지급/공제항목 설정 모달 원본 상태
     let originalPayItemSettingJson = '';
     let currentPayItemSettingRows = [];
@@ -66,6 +72,9 @@ $(document).ready(function () {
 
     // 현재 화면에 표시 중인 지급/공제항목
     let currentPayrollItems = [];
+
+    // 마지막으로 조회/저장된 급여대장 화면 상태 - DRAFT에서 변경 없이 저장하는 것을 막기 위해 사용
+    let lastSavedPayrollSnapshotJson = '';
 
     /**
      * 작성년월 선택 제어용 상태값
@@ -168,27 +177,59 @@ $(document).ready(function () {
         box.empty();
 
         if (!employeeList || employeeList.length === 0) {
-
             box.addClass('d-none');
-
             return;
         }
 
+        const keyword = $('#employeeSearchInput').val().trim();
+        const isEmpNoSearch = /^\d+$/.test(keyword);
+
         employeeList.forEach(employee => {
 
-            /**
-             * 표시 형식
-             * 홍길동 (20209999 / 개발팀 / 사원)
-             */
+            const isAvailable = employee.payrollAvailable !== false;
+
+            const itemClass = isAvailable
+                ? ''
+                : 'list-group-item-warning text-dark fw-semibold disabled';
+
+            let displayText = '';
+
+            if (isAvailable) {
+
+                const deptText = employee.parentDeptName
+                    ? `${employee.deptName}(${employee.parentDeptName})`
+                    : employee.deptName;
+
+                if (isEmpNoSearch) {
+                    displayText = `${employee.empNo} (${employee.empName} / ${deptText} / ${employee.positionName})`;
+                } else {
+                    displayText = `${employee.empName} (${employee.empNo} / ${deptText} / ${employee.positionName})`;
+                }
+
+            } else {
+
+                 if (isEmpNoSearch) {
+
+                     displayText =
+                         `[조회불가] ${employee.empNo}
+                         (${employee.empName} / ${employee.deptName} / ${employee.positionName})`;
+
+                 } else {
+
+                     displayText =
+                         `[조회불가] ${employee.empName}
+                         (${employee.empNo} / ${employee.deptName} / ${employee.positionName})`;
+                 }
+             }
+
             const item = `
                 <button type="button"
-                        class="list-group-item list-group-item-action employee-autocomplete-item"
+                        class="list-group-item list-group-item-action employee-autocomplete-item ${itemClass}"
                         data-emp-no="${employee.empNo}"
-                        data-emp-name="${employee.empName}">
-
-                    ${employee.empName}
-                    (${employee.empNo} / ${employee.deptName} / ${employee.positionName})
-
+                        data-emp-name="${employee.empName}"
+                        data-payroll-available="${isAvailable}"
+                        data-unavailable-reason="${employee.payrollUnavailableReason || ''}">
+                    ${displayText}
                 </button>
             `;
 
@@ -208,6 +249,11 @@ $(document).ready(function () {
 
         const empNo = $(this).data('emp-no');
         const empName = $(this).data('emp-name');
+        const payrollAvailable = $(this).data('payroll-available');
+
+        if (payrollAvailable === false || payrollAvailable === 'false') {
+            return;
+        }
 
         /**
          * 실제 업무 처리에는 사번이 필요하므로
@@ -577,7 +623,28 @@ $(document).ready(function () {
 
         currentPayMonth = `${payYear}-${String(payMonth).padStart(2, '0')}`;
 
-        resetPreviewResult();
+        previewCompleted = false;
+
+        previewResult = null;
+        previewModalResult = null;
+
+        lastAppliedPreviewResultJson = '';
+
+        clearInsuranceFields();
+
+        /**
+         * 이전 계산 미리보기 화면 초기화
+         */
+        $('#previewSummaryArea').empty();
+        $('#previewAllowanceArea').empty();
+        $('#previewDeductionArea').empty();
+        $('#previewInsuranceArea').empty();
+        $('#previewWithholdingTaxArea').empty();
+
+        $('#previewStateBadge')
+            .removeClass('text-bg-success')
+            .addClass('text-bg-secondary')
+            .text('계산 필요');
 
         $.ajax({
             url: '/admin/payroll/main/status',
@@ -667,12 +734,30 @@ $(document).ready(function () {
            },
            success: function (result) {
 
-               currentBaseSalaryInfo = result;
+              currentBaseSalaryInfo = result;
+              if (result.salarySource === 'MANUAL') {
 
-               $('#baseSalaryInput').val(numberFormat(result.baseSalary));
+                  $('#baseSalaryInput').val('');
 
+              } else if (result.baseSalary
+                          && Number(result.baseSalary) !== 0) {
+
+                  $('#baseSalaryInput')
+                      .val(numberFormat(result.baseSalary));
+
+              } else {
+
+                  $('#baseSalaryInput').val('');
+              }
+
+               /**
+                * 기본급 출처 문구 표시
+                *
+                * - NEW 상태에서만 표시
+                * - DRAFT 이상은 저장된 값이므로 출처 문구 숨김
+                */
+               renderBaseSalarySource(result);
                renderBaseSalaryWarning(result);
-
                applyButtonState(currentPayrollStatus);
            },
            error: function (xhr) {
@@ -713,6 +798,83 @@ $(document).ready(function () {
    }
 
    /**
+    * 기본급 출처 표시
+    *
+    * 역할:
+    * - 기본급 자동 로딩 결과가 어디서 왔는지 사용자에게 안내한다.
+    *
+    * 표시 조건:
+    * - 미작성(NEW) 상태에서만 표시한다.
+    *
+    * 숨김 조건:
+    * - 작성중(DRAFT)
+    * - 확정(CONFIRMED)
+    * - 지급완료(PAID)
+    *
+    * 이유:
+    * - DRAFT부터는 저장된 기본급이 연봉협상, 관리자 수정, 예외 조정 등으로
+    *   바뀌었을 수 있으므로 최초 출처를 표시하지 않는다.
+    */
+   function renderBaseSalarySource(result) {
+
+       // 기본은 항상 숨김 상태로 초기화
+       $('#salarySourceText')
+           .addClass('d-none')
+           .text('');
+
+       if (!result) {
+           return;
+       }
+
+       // NEW 상태가 아니면 출처 문구 표시하지 않음
+       if (currentPayrollStatus !== 'NEW') {
+           return;
+       }
+
+       let sourceText = '';
+
+       /**
+        * 백단에서 내려주는 salarySource 코드값을
+        * 화면에 보여줄 한글 문구로 변환한다.
+        */
+       if (result.salarySource === 'RECENT_CONFIRMED') {
+
+           sourceText = '최근 확정/지급완료 기준 기본급';
+
+       } else if (result.salarySource === 'POLICY') {
+
+           sourceText = '기본급 정책 기준 기본급';
+
+       } else if (result.salarySource === 'MANUAL') {
+
+           sourceText = '기본급 불러오기 실패 - 직접 입력';
+
+       } else if (result.salarySource === 'PROMOTION_POLICY') {
+
+           sourceText = '승진 - 기본급 정책 기준 기본급';
+
+       } else if (result.salarySource === 'PROMOTION_RECENT_HIGHER') {
+
+           sourceText = '승진 - 최근 확정/지급완료 기준 기본급';
+
+       } else if (result.salarySource === 'DEMOTION_POLICY') {
+
+           sourceText = '강등 - 기본급 정책 기준 기본급';
+       }
+
+       // 표시할 문구가 없으면 그대로 숨김
+       if (!sourceText) {
+           return;
+       }
+
+         $('#salarySourceText')
+             .text(sourceText)
+             .removeClass('d-none');
+   }
+
+
+
+   /**
     * 변경된 기본급 적용
     */
    $('#applyPolicySalaryBtn').on('click', function () {
@@ -735,19 +897,41 @@ $(document).ready(function () {
    /**
     * 기존 저장 기본급 유지
     */
-   $('#keepSavedSalaryBtn').on('click', function () {
+  $('#keepSavedSalaryBtn').on('click', function () {
 
-       if (currentBaseSalaryInfo && currentBaseSalaryInfo.savedBaseSalary != null) {
-           $('#baseSalaryInput').val(numberFormat(currentBaseSalaryInfo.savedBaseSalary));
-       }
+      if (
+          currentBaseSalaryInfo
+          && currentBaseSalaryInfo.savedBaseSalary != null
+      ) {
 
-       baseSalaryDecisionCompleted = true;
+          $('#baseSalaryInput')
+              .val(numberFormat(currentBaseSalaryInfo.savedBaseSalary));
+      }
 
-       $('#baseSalaryWarningBox').addClass('d-none');
+      baseSalaryDecisionCompleted = true;
+      baseSalaryDecisionRequired = false;
 
-       resetPreviewResult();
-       applyButtonState(currentPayrollStatus);
-   });
+      $('#baseSalaryWarningBox')
+          .addClass('d-none');
+
+      /**
+       * DRAFT에서 기존 저장값 유지 시:
+       * - 4대보험 값 유지
+       * - 계산 완료 상태 유지
+       */
+      if (currentPayrollStatus === 'DRAFT') {
+
+          previewCompleted = true;
+
+          $('#previewStateBadge')
+              .removeClass('text-bg-secondary')
+              .addClass('text-bg-success')
+              .text('계산 완료');
+      }
+
+      applyButtonState(currentPayrollStatus);
+      savePayrollTempState();
+  });
 
    /**
     * =====================================================
@@ -777,7 +961,18 @@ $(document).ready(function () {
                renderItemSettingWarning(result);
 
                applyButtonState(currentPayrollStatus);
-           },
+
+               setTimeout(function () {
+
+                   const restoredRequestData = collectPayrollRequestDataForSnapshot();
+
+                   if (restoredRequestData) {
+                       lastSavedPayrollSnapshotJson =
+                           makePayrollSnapshot(restoredRequestData);
+                   }
+
+               }, 100);
+          },
            error: function (xhr) {
                alert(xhr.responseText || '지급/공제항목 조회 중 오류가 발생했습니다.');
            }
@@ -878,6 +1073,14 @@ $(document).ready(function () {
      */
     $('#baseSalaryInput').on('input', function () {
 
+
+    if (currentPayrollStatus === 'NEW') {
+
+       $('#salarySourceText')
+           .text('관리자 직접 입력')
+           .removeClass('d-none');
+    }
+
         resetPreviewResult();
         savePayrollTempState();
     });
@@ -892,11 +1095,11 @@ $(document).ready(function () {
        savePayrollTempState();
    });
 
-    /**
-     * =====================================================
-     * 지급/공제 렌더링
-     * =====================================================
-     */
+   /**
+    * =====================================================
+    * 지급/공제 렌더링
+    * =====================================================
+    */
 
     function renderPayrollItems(items) {
 
@@ -935,25 +1138,17 @@ $(document).ready(function () {
                 typeBadge = '<span class="badge text-bg-secondary">수동</span>';
             }
 
-           /**
-            * 금액 입력칸
-            *
-            * 근태연동은 후순위 구현으로 제외했으므로
-            * 현재는 모든 지급/공제항목을 일반 금액 입력칸으로 표시한다.
+           /*
+            * 화면 표시용
+            * - 실제 금액이 0이거나 없으면 input value는 비워둔다.
+            * - 대신 placeholder="0"으로 흐리게 0을 보여준다.
+            * - 이렇게 해야 사용자가 입력한 0인지, 아직 미입력인지 구분하기 쉽다.
             */
           let amountDisplay = `
               <input type="text"
                      class="form-control payroll-amount-input text-end"
-
-                     /*
-                      * 화면 표시용
-                      * - 실제 금액이 0이거나 없으면 input value는 비워둔다.
-                      * - 대신 placeholder="0"으로 흐리게 0을 보여준다.
-                      * - 이렇게 해야 사용자가 입력한 0인지, 아직 미입력인지 구분하기 쉽다.
-                      */
                      value="${item.amount && Number(item.amount) !== 0 ? numberFormat(item.amount) : ''}"
                      placeholder="0"
-
                      data-item-id="${item.itemSettingId}">
           `;
 
@@ -993,14 +1188,14 @@ $(document).ready(function () {
             }
         });
 
-         /**
-          * 상태별 readonly 재적용
-          *
-          * - CONFIRMED
-          * - PAID
-          *
-          * 상태에서는 input 수정 불가 처리
-          */
+        /**
+         * 상태별 readonly 재적용
+         *
+         * - CONFIRMED
+         * - PAID
+         *
+         * 상태에서는 input 수정 불가 처리
+         */
         applyButtonState(currentPayrollStatus);
     }
 
@@ -1717,8 +1912,10 @@ $(document).ready(function () {
      */
     function resetPreviewResult() {
 
+        lastAppliedPreviewResultJson = '';
         previewCompleted = false;
         previewResult = null;
+        previewModalResult = null;
 
         $('#nationalPensionAmount').val('');
         $('#healthInsuranceAmount').val('');
@@ -1732,6 +1929,28 @@ $(document).ready(function () {
             .text('계산 필요');
 
         applyButtonState(currentPayrollStatus);
+    }
+
+    /**
+     * 계산 미리보기 모달 종료 시
+     * 반영 버튼 상태 초기화
+     */
+    $('#payrollPreviewModal').on('hidden.bs.modal', function () {
+
+        $('#applyPreviewBtn')
+            .prop('disabled', false)
+            .removeClass('btn-secondary')
+            .addClass('btn-primary')
+            .text('반영');
+    });
+
+    function clearInsuranceFields() {
+
+        $('#nationalPensionAmount').val('');
+        $('#healthInsuranceAmount').val('');
+        $('#longTermCareAmount').val('');
+        $('#employmentInsuranceAmount').val('');
+        $('#totalInsurance').val('');
     }
 
     /**
@@ -1775,47 +1994,209 @@ $(document).ready(function () {
             .val(numberFormat(result.totalInsurance));
     }
 
-    function renderSavedInsurance(result) {
+    /**
+     * 계산 미리보기 결과 동일 여부 비교
+     *
+     * 역할:
+     * - 모달에서 새로 계산한 결과와
+     * - 이미 메인 화면에 반영된 결과가 같은지 확인한다.
+     *
+     * 같으면 "반영" 버튼을 눌러도 실제 변경이 아니므로 막는다.
+     */
+    function isSamePreviewResult(newResult, oldResult) {
 
-       if (!result
-               || result.payrollStatus === 'NEW'
-               || result.payrollStatus === 'DRAFT') {
+        /**
+         * 둘 다 없으면 동일한 상태로 본다.
+         */
+        if (!newResult && !oldResult) {
+            return true;
+        }
+
+        /**
+         * 하나만 없으면 다른 상태
+         */
+        if (!newResult || !oldResult) {
+            return false;
+        }
+
+        /**
+         * 비교 대상 계산 필드
+         */
+        const compareFields = [
+            'nationalPensionAmount',
+            'healthInsuranceAmount',
+            'longTermCareAmount',
+            'employmentInsuranceAmount',
+            'totalInsurance',
+
+            'incomeTax',
+            'localIncomeTax',
+
+            'totalDeduction',
+            'totalGross',
+            'netSalary'
+        ];
+
+        /**
+         * 숫자 정규화 비교
+         */
+        for (const field of compareFields) {
+
+            const newValue =
+                Number(removeComma(newResult[field] || 0));
+
+            const oldValue =
+                Number(removeComma(oldResult[field] || 0));
+
+            if (newValue !== oldValue) {
+
+                console.log('계산결과 다름:', field, newValue, oldValue);
+
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    function makePreviewResultSnapshot(result) {
+
+        if (!result) {
+            return '';
+        }
+
+        return JSON.stringify({
+
+            nationalPensionAmount:
+                Number(removeComma(result.nationalPensionAmount || 0)),
+
+            healthInsuranceAmount:
+                Number(removeComma(result.healthInsuranceAmount || 0)),
+
+            longTermCareAmount:
+                Number(removeComma(result.longTermCareAmount || 0)),
+
+            employmentInsuranceAmount:
+                Number(removeComma(result.employmentInsuranceAmount || 0)),
+
+            totalInsurance:
+                Number(removeComma(result.totalInsurance || 0)),
+
+            incomeTax:
+                Number(removeComma(result.incomeTax || 0)),
+
+            localIncomeTax:
+                Number(removeComma(result.localIncomeTax || 0)),
+
+            totalDeduction:
+                Number(removeComma(result.totalDeduction || 0)),
+
+            totalGross:
+                Number(removeComma(result.totalGross || 0)),
+
+            netSalary:
+                Number(removeComma(result.netSalary || 0))
+        });
+    }
+
+   function renderSavedInsurance(result) {
+
+      if (!result) {
+
+          clearInsuranceFields();
+
+          previewCompleted = false;
+
+          previewResult = null;
+          previewModalResult = null;
+          lastAppliedPreviewResultJson = '';
+
+          $('#previewStateBadge')
+              .removeClass('text-bg-success')
+              .addClass('text-bg-secondary')
+              .text('계산 필요');
+
+          return;
+      }
+
+       if (result.payrollStatus === 'NEW') {
+
+           clearInsuranceFields();
+
+           previewCompleted = false;
+           previewResult = null;
+           lastAppliedPreviewResultJson = '';
+
+           $('#previewStateBadge')
+               .removeClass('text-bg-success')
+               .addClass('text-bg-secondary')
+               .text('계산 필요');
+
            return;
        }
 
-        const hasInsurance =
-            result.nationalPensionAmount != null
-            || result.healthInsuranceAmount != null
-            || result.longTermCareAmount != null
-            || result.employmentInsuranceAmount != null
-            || result.totalInsurance != null;
+       const hasInsurance =
+           result.nationalPensionAmount != null
+           || result.healthInsuranceAmount != null
+           || result.longTermCareAmount != null
+           || result.employmentInsuranceAmount != null
+           || result.totalInsurance != null;
 
-        if (!hasInsurance) {
-            return;
-        }
+       if (!hasInsurance) {
 
-        $('#nationalPensionAmount')
-            .val(numberFormat(result.nationalPensionAmount));
+           clearInsuranceFields();
 
-        $('#healthInsuranceAmount')
-            .val(numberFormat(result.healthInsuranceAmount));
+           previewCompleted = false;
+           previewResult = null;
+           lastAppliedPreviewResultJson = '';
 
-        $('#longTermCareAmount')
-            .val(numberFormat(result.longTermCareAmount));
+           $('#previewStateBadge')
+               .removeClass('text-bg-success')
+               .addClass('text-bg-secondary')
+               .text('계산 필요');
 
-        $('#employmentInsuranceAmount')
-            .val(numberFormat(result.employmentInsuranceAmount));
+           return;
+       }
 
-        $('#totalInsurance')
-            .val(numberFormat(result.totalInsurance));
+       $('#nationalPensionAmount').val(numberFormat(result.nationalPensionAmount));
+       $('#healthInsuranceAmount').val(numberFormat(result.healthInsuranceAmount));
+       $('#longTermCareAmount').val(numberFormat(result.longTermCareAmount));
+       $('#employmentInsuranceAmount').val(numberFormat(result.employmentInsuranceAmount));
+       $('#totalInsurance').val(numberFormat(result.totalInsurance));
 
-        previewCompleted = true;
+       /**
+        * 저장된 계산결과 복원
+        * - 화면에만 보험값을 보여주면 다시 저장 시 null로 덮어써질 수 있음
+        * - JS 내부 계산 상태도 같이 복원한다.
+        */
+       previewCompleted = true;
 
-        $('#previewStateBadge')
-            .removeClass('text-bg-secondary')
-            .addClass('text-bg-success')
-            .text('계산 완료');
-    }
+       previewResult = {
+            nationalPensionAmount: result.nationalPensionAmount || 0,
+               healthInsuranceAmount: result.healthInsuranceAmount || 0,
+               longTermCareAmount: result.longTermCareAmount || 0,
+               employmentInsuranceAmount: result.employmentInsuranceAmount || 0,
+               totalInsurance: result.totalInsurance || 0,
+
+               incomeTax: result.incomeTax || 0,
+               localIncomeTax: result.localIncomeTax || 0,
+
+               totalDeduction: result.totalDeduction || 0,
+               totalGross: result.totalGross || 0,
+               netSalary: result.netSalary || 0,
+
+               taxableAllowance: result.taxableAllowance || 0,
+               nonTaxableAllowance: result.nonTaxableAllowance || 0,
+               otherDeduction: result.otherDeduction || 0
+       };
+
+       $('#previewStateBadge')
+           .removeClass('text-bg-secondary')
+           .addClass('text-bg-success')
+           .text('계산 완료');
+       lastAppliedPreviewResultJson =
+           makePreviewResultSnapshot(previewResult);
+   }
 
     /**
      * =====================================================
@@ -1831,9 +2212,12 @@ $(document).ready(function () {
      */
     function renderPreviewModal(result) {
 
+        $('#insuranceDetailCollapse').collapse('hide');
+        $('#withholdingTaxDetailCollapse').collapse('hide');
+
         const empName = result.empName || $('#empName').val();
         const empNo = result.empNo || currentEmpNo;
-        const deptName = result.deptName || $('#deptName').val();
+        const deptName = $('#deptName').val() || result.deptName;
         const positionName = result.positionName || $('#positionName').val();
         const payMonth = result.payMonth || currentPayMonth;
 
@@ -1866,22 +2250,22 @@ $(document).ready(function () {
 
                 <div class="col-md-4">
                     <h6 class="fw-bold text-primary">1. 지급 총액</h6>
-                    <table class="table table-bordered align-middle">
+                    <table class="table table-bordered align-middle text-center">
                         <tbody>
                         <tr>
-                            <th>기본급</th>
+                            <th class="text-center">기본급</th>
                             <td class="text-end">${numberFormat(result.baseSalary)}</td>
                         </tr>
                         <tr>
-                            <th>과세 수당 합계</th>
+                            <th class="text-center">과세 수당 합계<br><span class="small text-muted">(기본급 제외)</span></th>
                             <td class="text-end">${numberFormat(result.taxableAllowance)}</td>
                         </tr>
                         <tr>
-                            <th>비과세 수당 합계</th>
+                            <th class="text-center">비과세 수당 합계</th>
                             <td class="text-end">${numberFormat(result.nonTaxableAllowance)}</td>
                         </tr>
                         <tr class="table-light">
-                            <th class="text-primary">총 지급액</th>
+                            <th class="text-center text-primary">총 지급액</th>
                             <td class="text-end fw-bold text-primary">${numberFormat(result.totalGross)}</td>
                         </tr>
                         </tbody>
@@ -1890,7 +2274,7 @@ $(document).ready(function () {
 
                 <div class="col-md-4">
                     <h6 class="fw-bold text-primary">2. 공제 총액</h6>
-                    <table class="table table-bordered align-middle">
+                    <table class="table table-bordered align-middle text-center">
                         <tbody>
                         <tr>
                             <th>4대보험 합계</th>
@@ -1942,6 +2326,7 @@ $(document).ready(function () {
         renderPreviewAllowanceArea(result);
         renderPreviewDeductionArea(result);
         renderPreviewInsuranceArea(result);
+        renderPreviewWithholdingTaxArea(result);
     }
 
     /**
@@ -1951,22 +2336,26 @@ $(document).ready(function () {
      */
     function renderPreviewAllowanceArea(result) {
 
+        let allowanceRowCount = 0;
+
         let html = `
-            <table class="table table-bordered align-middle">
+            <table class="table table-bordered align-middle text-center">
                 <thead class="table-light">
                 <tr>
                     <th>항목명</th>
                     <th>유형</th>
-                    <th class="text-end">금액</th>
+                    <th>금액(원)</th>
                 </tr>
                 </thead>
                 <tbody>
                 <tr>
-                    <td>기본급</td>
-                    <td>과세</td>
+                    <td class="text-center">기본급</td>
+                    <td class="text-center">과세</td>
                     <td class="text-end">${numberFormat(result.baseSalary)}</td>
                 </tr>
         `;
+
+        allowanceRowCount++;
 
         $('.payroll-item-row').each(function () {
 
@@ -1982,11 +2371,13 @@ $(document).ready(function () {
 
             html += `
                 <tr>
-                    <td>${itemName}</td>
-                    <td>${taxType}</td>
+                    <td class="text-center">${itemName}</td>
+                    <td class="text-center">${taxType}</td>
                     <td class="text-end">${amount}</td>
                 </tr>
             `;
+
+            allowanceRowCount++;
         });
 
         html += `
@@ -2002,16 +2393,26 @@ $(document).ready(function () {
      */
     function renderPreviewDeductionArea(result) {
 
+        let deductionRowCount = 0;
+
         let html = `
-            <table class="table table-bordered align-middle">
+            <table class="table table-bordered align-middle text-center">
                 <thead class="table-light">
                 <tr>
                     <th>항목명</th>
-                    <th class="text-end">금액</th>
+                    <th>금액(원)</th>
                 </tr>
                 </thead>
                 <tbody>
         `;
+
+        html += `
+            <tr>
+                <td class="text-center">4대보험 합계</td>
+                <td class="text-end">${numberFormat(result.totalInsurance)}</td>
+            </tr>
+        `;
+        deductionRowCount++;
 
         $('.payroll-item-row').each(function () {
 
@@ -2026,26 +2427,46 @@ $(document).ready(function () {
 
             html += `
                 <tr>
-                    <td>${itemName}</td>
+                    <td class="text-center">${itemName}</td>
                     <td class="text-end">${amount}</td>
                 </tr>
             `;
+
+            deductionRowCount++;
         });
 
         html += `
-                <tr>
-                    <td>소득세</td>
-                    <td class="text-end">${numberFormat(result.incomeTax)}</td>
-                </tr>
-                <tr>
-                    <td>지방소득세</td>
-                    <td class="text-end">${numberFormat(result.localIncomeTax)}</td>
-                </tr>
+            <tr>
+                <td class="text-center">소득세</td>
+                <td class="text-end">${numberFormat(result.incomeTax)}</td>
+            </tr>
+            <tr>
+                <td class="text-center">지방소득세</td>
+                <td class="text-end">${numberFormat(result.localIncomeTax)}</td>
+            </tr>
+        `;
+
+       deductionRowCount += 2;
+
+        html += `
                 </tbody>
             </table>
         `;
 
         $('#previewDeductionArea').html(html);
+    }
+
+    /**
+     * 계산 미리보기 상세 테이블 실제 row 수 조회
+     *
+     * 하드코딩 금지
+     * - 현재 tbody tr 기준으로 자동 계산
+     */
+    function getPreviewRowCount(targetSelector) {
+
+        return $(targetSelector)
+            .find('tbody tr')
+            .length;
     }
 
     /**
@@ -2064,11 +2485,23 @@ $(document).ready(function () {
 
                 rowsHtml += `
                     <tr>
-                        <td>${row.name}</td>
-                        <td class="text-end">${numberFormat(row.baseAmount)}</td>
-                        <td class="text-end">${rateFormat(row.rate)}</td>
-                        <td>${row.formula || ''}</td>
-                        <td class="text-end">${numberFormat(row.amount)}</td>
+                        <td class="text-center">${row.name}</td>
+
+                        <td class="text-center">
+                            ${numberFormat(row.baseAmount)}
+                        </td>
+
+                        <td class="text-center">
+                            ${rateFormat(row.rate)}
+                        </td>
+
+                        <td class="text-center">
+                            ${row.formula || ''}
+                        </td>
+
+                        <td class="text-end">
+                            ${numberFormat(row.amount)}
+                        </td>
                     </tr>
                 `;
             });
@@ -2086,20 +2519,61 @@ $(document).ready(function () {
 
                 <div id="insuranceDetailCollapse" class="collapse">
                     <table class="table table-bordered align-middle mb-0">
-                        <thead class="table-light">
-                        <tr>
-                            <th>구분</th>
-                            <th class="text-end">기준금액</th>
-                            <th class="text-end">요율</th>
-                            <th>계산식</th>
-                            <th class="text-end">금액</th>
-                        </tr>
+                       <thead class="table-light">
+                       <tr>
+                           <th class="text-center">구분</th>
+
+                           <th class="text-center">
+                               기준금액
+                           </th>
+
+                           <th class="text-center">
+                               요율
+                           </th>
+
+                           <th class="text-center">
+                               계산식
+                           </th>
+
+                           <th class="text-center">
+                               금액(원)
+                           </th>
+                       </tr>
                         </thead>
                         <tbody>
                         ${rowsHtml}
                         <tr class="table-light">
-                            <th colspan="4" class="text-primary">4대보험 합계</th>
-                            <th class="text-end text-primary">${numberFormat(result.totalInsurance)}</th>
+
+                            <!-- 구분 -->
+                            <th class="text-center text-primary fw-bold">
+                                4대보험 합계
+                            </th>
+
+                            <!-- 기준금액 -->
+                            <td class="text-center">
+                                -
+                            </td>
+
+                            <!-- 요율 -->
+                            <td class="text-center">
+                                -
+                            </td>
+
+                            <!-- 계산식 -->
+                            <td class="text-center text-primary fw-semibold">
+
+                                ${result.insuranceRows
+                                    .map(row => numberFormat(row.amount))
+                                    .join(' + ')}
+
+                            </td>
+
+                            <!-- 최종 합계 -->
+                            <td class="text-center text-primary fw-bold">
+                                <div class="text-end">
+                                    ${numberFormat(result.totalInsurance)}
+                                </div>
+                            </td>
                         </tr>
                         </tbody>
                     </table>
@@ -2107,11 +2581,151 @@ $(document).ready(function () {
             </div>
 
             <div class="form-text mt-2">
-                계산 기준은 현재 설정된 보험요율을 기준으로 하며, 실제 처리 시 변경될 수 있습니다.
+                ※ 계산 기준은 현재 설정된 보험요율을 기준으로 하며, 실제 처리 시 변경될 수 있습니다.
             </div>
         `;
 
         $('#previewInsuranceArea').html(html);
+    }
+
+    /**
+     * =====================================================
+     * 원천징수세 계산 상세 렌더링
+     * =====================================================
+     */
+    function renderPreviewWithholdingTaxArea(result) {
+
+        const area = $('#previewWithholdingTaxArea');
+
+        area.empty();
+
+        const totalGross =
+            Number(result.totalGross || 0);
+
+        const nonTaxableAmount =
+            Number(result.nonTaxableAllowance || 0);
+
+        const taxableAmount =
+            totalGross - nonTaxableAmount;
+
+        const incomeTax =
+            Number(result.incomeTax || 0);
+
+        const localIncomeTax =
+            Number(result.localIncomeTax || 0);
+
+        const totalWithholdingTax =
+            incomeTax + localIncomeTax;
+
+        const html = `
+
+            <div class="border rounded">
+
+                <button type="button"
+                        class="btn btn-light w-100 text-start fw-bold"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#withholdingTaxDetailCollapse">
+
+                    원천징수세 계산과정 보기
+
+                </button>
+
+                <div id="withholdingTaxDetailCollapse"
+                     class="collapse">
+
+                    <table class="table table-bordered table-sm text-center align-middle mb-0">
+
+                        <thead class="table-light">
+
+                            <tr>
+                                <th style="width: 25%">구분</th>
+                                <th style="width: 25%">기준금액</th>
+                                <th style="width: 30%">계산식</th>
+                                <th style="width: 20%">금액(원)</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            <tr>
+                                <td>총 지급액</td>
+                                <td>${numberFormat(totalGross)}</td>
+                                <td>-</td>
+                                <td class="text-end">${numberFormat(totalGross)}</td>
+                            </tr>
+
+                            <tr>
+                                <td>비과세 제외금액</td>
+                                <td>${numberFormat(nonTaxableAmount)}</td>
+                                <td>총지급액 - 비과세수당</td>
+                                <td class="text-end">${numberFormat(taxableAmount)}</td>
+                            </tr>
+
+                            <tr>
+                                <td>원천징수 기준금액</td>
+                                <td>${numberFormat(taxableAmount)}</td>
+                                <td>과세대상금액 기준</td>
+                                <td class="text-end">${numberFormat(taxableAmount)}</td>
+                            </tr>
+
+                            <tr>
+                                <td>소득세</td>
+                                <td>${numberFormat(taxableAmount)}</td>
+                                <td>${numberFormat(taxableAmount)} × 0.03</td>
+                                <td class="text-end">${numberFormat(incomeTax)}</td>
+                            </tr>
+
+                            <tr>
+                                <td>지방소득세</td>
+                                <td>${numberFormat(incomeTax)}</td>
+                                <td>${numberFormat(incomeTax)} × 0.1</td>
+                                <td class="text-end">${numberFormat(localIncomeTax)}</td>
+                            </tr>
+
+                            <tr class="table-light fw-bold">
+
+                                <td class="text-primary">
+                                    원천징수세 합계
+                                </td>
+
+                                <!--
+                                  합계 row는 기준금액 개념이 아니므로
+                                  "-" 처리
+                                -->
+                                <td class="text-primary">
+                                    -
+                                </td>
+
+                                <!--
+                                  실제 계산 흐름 표시
+                                  예:
+                                  45,000 + 4,500
+                                -->
+                                <td class="text-primary">
+
+                                    ${numberFormat(incomeTax)}
+                                    +
+                                    ${numberFormat(localIncomeTax)}
+
+                                </td>
+
+                                <td class="text-end text-primary fw-bold">
+                                    ${numberFormat(totalWithholdingTax)}
+                                </td>
+
+                            </tr>
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+        `;
+
+        area.html(html);
     }
 
     /**
@@ -2141,14 +2755,68 @@ $(document).ready(function () {
             contentType: 'application/json',
             data: JSON.stringify(requestData),
 
-            success: function (result) {
+          success: function (result) {
 
-                previewResult = result;
+              /**
+               * 계산 미리보기 결과는
+               * 모달 전용 임시 객체에만 저장한다.
+               */
+              previewModalResult = result;
 
-                renderPreviewModal(result);
+              renderPreviewModal(result);
 
-                $('#payrollPreviewModal').modal('show');
-            },
+              /**
+               * 현재 메인 화면에 이미 반영된 계산결과와
+               * 새 계산결과가 동일한지 확인한다.
+               *
+               * 동일하면:
+               * - 반영 버튼 비활성화
+               * - 버튼 문구 변경
+               */
+             const previewAppliedRequestData = collectPayrollRequestData();
+
+             if (previewAppliedRequestData) {
+
+                 previewAppliedRequestData.nationalPensionAmount = previewModalResult.nationalPensionAmount;
+                 previewAppliedRequestData.healthInsuranceAmount = previewModalResult.healthInsuranceAmount;
+                 previewAppliedRequestData.longTermCareAmount = previewModalResult.longTermCareAmount;
+                 previewAppliedRequestData.employmentInsuranceAmount = previewModalResult.employmentInsuranceAmount;
+                 previewAppliedRequestData.totalInsurance = previewModalResult.totalInsurance;
+
+                 previewAppliedRequestData.incomeTax = previewModalResult.incomeTax;
+                 previewAppliedRequestData.localIncomeTax = previewModalResult.localIncomeTax;
+                 previewAppliedRequestData.totalDeduction = previewModalResult.totalDeduction;
+                 previewAppliedRequestData.totalGross = previewModalResult.totalGross;
+                 previewAppliedRequestData.netSalary = previewModalResult.netSalary;
+             }
+
+             const sameResult =
+                 isSamePreviewResult(previewModalResult, previewResult);
+
+                 console.log('previewModalResult', previewModalResult);
+                 console.log('previewResult', previewResult);
+                 console.log('sameResult', sameResult);
+
+              $('#applyPreviewBtn').prop('disabled', sameResult);
+
+              if (sameResult) {
+
+                  $('#applyPreviewBtn')
+                      .removeClass('btn-primary')
+                      .addClass('btn-secondary')
+                      .text('이미 반영됨');
+
+              } else {
+
+                  $('#applyPreviewBtn')
+                      .prop('disabled', false)
+                      .removeClass('btn-secondary')
+                      .addClass('btn-primary')
+                      .text('반영');
+              }
+
+              $('#payrollPreviewModal').modal('show');
+          },
 
             error: function (xhr) {
                 alert(xhr.responseText || '계산 미리보기 중 오류가 발생했습니다.');
@@ -2166,26 +2834,63 @@ $(document).ready(function () {
      */
     $('#applyPreviewBtn').on('click', function () {
 
-        if (!previewResult) {
-            alert('반영할 계산 결과가 없습니다.');
-            return;
-        }
+            /**
+             * 모달에서 계산된 결과가 없으면 반영 불가
+             */
+            if (!previewModalResult) {
+                alert('반영할 계산 결과가 없습니다.');
+                return;
+            }
 
-        renderInsurance(previewResult);
+            const previewAppliedRequestData = collectPayrollRequestData();
 
-        previewCompleted = true;
+            if (previewAppliedRequestData) {
 
-        $('#previewStateBadge')
-            .removeClass('text-bg-secondary')
-            .addClass('text-bg-success')
-            .text('계산 완료');
+                previewAppliedRequestData.nationalPensionAmount = previewModalResult.nationalPensionAmount;
+                previewAppliedRequestData.healthInsuranceAmount = previewModalResult.healthInsuranceAmount;
+                previewAppliedRequestData.longTermCareAmount = previewModalResult.longTermCareAmount;
+                previewAppliedRequestData.employmentInsuranceAmount = previewModalResult.employmentInsuranceAmount;
+                previewAppliedRequestData.totalInsurance = previewModalResult.totalInsurance;
 
-        $('#payrollPreviewModal').modal('hide');
+                previewAppliedRequestData.incomeTax = previewModalResult.incomeTax;
+                previewAppliedRequestData.localIncomeTax = previewModalResult.localIncomeTax;
+                previewAppliedRequestData.totalDeduction = previewModalResult.totalDeduction;
+                previewAppliedRequestData.totalGross = previewModalResult.totalGross;
+                previewAppliedRequestData.netSalary = previewModalResult.netSalary;
+            }
 
-        applyButtonState(currentPayrollStatus);
+            if ($(this).prop('disabled')
+                    || isSamePreviewResult(previewModalResult, previewResult)) {
+                return;
+            }
+            /**
+             * 여기서부터가 실제 메인 반영이다.
+             * previewResult는 "저장/확정/지급확정에 사용할 계산결과"이다.
+             */
+              previewResult = JSON.parse(
+                  JSON.stringify(previewModalResult)
+              );
+
+              /**
+               * 실제 메인 화면에 반영된 계산결과 snapshot 저장
+               */
+              lastAppliedPreviewResultJson =
+                  makePreviewResultSnapshot(previewResult);
+
+            renderInsurance(previewResult);
+
+            previewCompleted = true;
+
+            $('#previewStateBadge')
+                .removeClass('text-bg-secondary')
+                .addClass('text-bg-success')
+                .text('계산 완료');
+
+            $('#payrollPreviewModal').modal('hide');
+
+            applyButtonState(currentPayrollStatus);
+
     });
-
-
 
     /**
      * =====================================================
@@ -2198,11 +2903,27 @@ $(document).ready(function () {
         const requestData = collectPayrollRequestData();
 
          /**
-             * 저장 요청 데이터가 유효하지 않으면 저장 중단
-             */
-            if (!requestData) {
-                return;
-            }
+         * 저장 요청 데이터가 유효하지 않으면 저장 중단
+         */
+        if (!requestData) {
+            return;
+        }
+
+        const currentSnapshotJson = makePayrollSnapshot(requestData);
+
+        /**
+         * DRAFT 상태에서 마지막 저장 상태와 현재 화면 상태가 같으면 저장하지 않는다.
+         *
+         * NEW는 아직 DB row가 없을 수 있으므로 저장 허용.
+         * DRAFT만 무변경 저장 차단.
+         */
+        if (currentPayrollStatus === 'DRAFT'
+                && lastSavedPayrollSnapshotJson
+                && currentSnapshotJson === lastSavedPayrollSnapshotJson) {
+
+            alert('변경된 내용이 없습니다.');
+            return;
+        }
 
         $.ajax({
             url: '/admin/payroll/main/save',
@@ -2210,6 +2931,9 @@ $(document).ready(function () {
             contentType: 'application/json',
             data: JSON.stringify(requestData),
             success: function () {
+
+                // 저장 성공 시 현재 화면 상태를 마지막 저장 snapshot으로 보관
+                lastSavedPayrollSnapshotJson = makePayrollSnapshot(requestData);
 
                 alert('저장되었습니다.');
 
@@ -2445,18 +3169,130 @@ $(document).ready(function () {
             baseSalary: baseSalary,
             familyCount: 1,
             items: itemList,
-            nationalPensionAmount: previewResult?.nationalPensionAmount || 0,
-            healthInsuranceAmount: previewResult?.healthInsuranceAmount || 0,
-            longTermCareAmount: previewResult?.longTermCareAmount || 0,
-            employmentInsuranceAmount: previewResult?.employmentInsuranceAmount || 0,
-            totalInsurance: previewResult?.totalInsurance || 0,
+            nationalPensionAmount: previewCompleted && previewResult ? previewResult.nationalPensionAmount : null,
+            healthInsuranceAmount: previewCompleted && previewResult ? previewResult.healthInsuranceAmount : null,
+            longTermCareAmount: previewCompleted && previewResult ? previewResult.longTermCareAmount : null,
+            employmentInsuranceAmount: previewCompleted && previewResult ? previewResult.employmentInsuranceAmount : null,
+            totalInsurance: previewCompleted && previewResult ? previewResult.totalInsurance : null,
 
-            incomeTax: previewResult?.incomeTax || 0,
-            localIncomeTax: previewResult?.localIncomeTax || 0,
-            totalDeduction: previewResult?.totalDeduction || 0,
-            totalGross: previewResult?.totalGross || 0,
-            netSalary: previewResult?.netSalary || 0
+            incomeTax: previewCompleted && previewResult ? previewResult.incomeTax : null,
+            localIncomeTax: previewCompleted && previewResult ? previewResult.localIncomeTax : null,
+            totalDeduction: previewCompleted && previewResult ? previewResult.totalDeduction : null,
+            totalGross: previewCompleted && previewResult ? previewResult.totalGross : null,
+            netSalary: previewCompleted && previewResult ? previewResult.netSalary : null
         };
+    }
+
+    function collectPayrollRequestDataForSnapshot() {
+
+        if (!currentEmpNo) {
+            return null;
+        }
+
+        const payYear = Number($('#payYear').val());
+        const payMonth = Number($('#payMonth').val());
+
+        if (!payYear || !payMonth) {
+            return null;
+        }
+
+        const baseSalary = removeComma($('#baseSalaryInput').val());
+
+        if (!baseSalary || Number(baseSalary) <= 0) {
+            return null;
+        }
+
+        const itemList = [];
+
+        $('.payroll-item-row').each(function () {
+
+            const row = $(this);
+
+            itemList.push({
+                itemSettingId: row.data('item-setting-id') || null,
+                itemNameSnapshot: row.data('item-name'),
+                itemType: row.data('item-type'),
+                amount: removeComma(row.find('.payroll-amount-input').val() || '0'),
+                taxType: row.data('tax-type') || null,
+                nonTaxCode: row.data('non-tax-code') || null,
+                linkedAttendanceType: row.data('linked-attendance-type') || null
+            });
+        });
+
+        return {
+            empNo: currentEmpNo,
+            payYear: payYear,
+            payMonth: payMonth,
+            baseSalary: baseSalary,
+            familyCount: 1,
+            items: itemList,
+
+            nationalPensionAmount: previewResult ? previewResult.nationalPensionAmount : null,
+            healthInsuranceAmount: previewResult ? previewResult.healthInsuranceAmount : null,
+            longTermCareAmount: previewResult ? previewResult.longTermCareAmount : null,
+            employmentInsuranceAmount: previewResult ? previewResult.employmentInsuranceAmount : null,
+            totalInsurance: previewResult ? previewResult.totalInsurance : null,
+
+            incomeTax: previewResult ? previewResult.incomeTax : null,
+            localIncomeTax: previewResult ? previewResult.localIncomeTax : null,
+            totalDeduction: previewResult ? previewResult.totalDeduction : null,
+            totalGross: previewResult ? previewResult.totalGross : null,
+            netSalary: previewResult ? previewResult.netSalary : null
+        };
+    }
+
+    /**
+     * 현재 화면 상태를 비교용 snapshot으로 만든다.
+     *
+     * 목적:
+     * - DRAFT 상태에서 아무 값도 바꾸지 않고 저장하는 것을 막기 위함
+     * - 무의미한 저장으로 PAYROLL.updatedAt이 바뀌면
+     *   정책 변경 감지 / 지급공제항목 변경 감지 로직이 꼬일 수 있음
+     *
+     * 비교 대상:
+     * - 기본급
+     * - 지급/공제 항목명
+     * - 지급/공제 구분
+     * - 과세유형
+     * - 비과세코드
+     * - 금액
+     * - 4대보험 / 세금 / 총액 / 실수령액
+     */
+    function makePayrollSnapshot(requestData) {
+
+        if (!requestData) {
+            return '';
+        }
+
+        const snapshot = {
+            baseSalary: String(requestData.baseSalary || '0'),
+
+            items: (requestData.items || []).map(function (item) {
+                return {
+                    itemSettingId: item.itemSettingId ? String(item.itemSettingId) : '',
+                    itemNameSnapshot: item.itemNameSnapshot || '',
+                    itemType: item.itemType || '',
+                    amount: String(item.amount || '0'),
+                    taxType: item.taxType || '',
+                    nonTaxCode: item.nonTaxCode || '',
+                    linkedAttendanceType: item.linkedAttendanceType || ''
+                };
+            }),
+
+            nationalPensionAmount: String(requestData.nationalPensionAmount || '0'),
+            healthInsuranceAmount: String(requestData.healthInsuranceAmount || '0'),
+            longTermCareAmount: String(requestData.longTermCareAmount || '0'),
+            employmentInsuranceAmount: String(requestData.employmentInsuranceAmount || '0'),
+            totalInsurance: String(requestData.totalInsurance || '0'),
+
+            incomeTax: String(requestData.incomeTax || '0'),
+            localIncomeTax: String(requestData.localIncomeTax || '0'),
+            totalDeduction: String(requestData.totalDeduction || '0'),
+            totalGross: String(requestData.totalGross || '0'),
+            netSalary: String(requestData.netSalary || '0')
+        };
+
+        return JSON.stringify(snapshot);
     }
 
     /**
@@ -2464,7 +3300,6 @@ $(document).ready(function () {
      * 버튼 상태 제어
      * =====================================================
      */
-
    function applyButtonState(status) {
 
        /**
