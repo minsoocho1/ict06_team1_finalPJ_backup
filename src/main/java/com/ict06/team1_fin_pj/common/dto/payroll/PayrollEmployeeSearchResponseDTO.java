@@ -21,6 +21,9 @@ public class PayrollEmployeeSearchResponseDTO {
     // 사원명
     private String empName;
 
+    // 부서 PK
+    private Integer deptId;
+
     // 본부/부서명
     private String deptName;
     private String parentDeptName;
@@ -30,4 +33,10 @@ public class PayrollEmployeeSearchResponseDTO {
 
     // 급여등급
     private String gradeId;
+
+    // 급여대장 조회 가능 여부
+    private Boolean payrollAvailable;
+
+    // 조회 불가 사유
+    private String payrollUnavailableReason;
 }

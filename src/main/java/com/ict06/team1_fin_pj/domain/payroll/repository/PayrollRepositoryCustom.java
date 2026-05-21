@@ -36,10 +36,6 @@ public interface PayrollRepositoryCustom {
     java.time.LocalDateTime selectLatestPayItemSettingUpdatedAt();
 
     // 선택 지급월 기준 근태연동 계산용 근태 집계
-    PayrollAttendanceSummaryDTO selectAttendanceSummary(
-            String empNo,
-            java.time.LocalDate startDate,
-            java.time.LocalDate endDate
-    );
+    PayrollAttendanceSummaryDTO selectAttendanceSummary(String empNo,  java.time.LocalDate startDate, java.time.LocalDate endDate);
 
 }

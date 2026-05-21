@@ -1,0 +1,419 @@
+<!--
+[ 관리자용 페이지 템플릿 사용 방법]
+1. 핵심 콘텐츠 작성법
+<div class="container-fluid">
+    이 사이에 넣을 핵심콘텐츠에 필요한 타임리프 코드를 작성해주세요
+</div>
+
+2. 모든 관리자용 페이지에 반드시 포함시킬 파일: header, head, sidebar, commonJs.html (이 파일들은 수정 시 반드시 팀원들과 협의해주세요)
+-->
+<!doctype html>
+<html xmlns:th="http://www.thymleaf.org">
+<!--begin::Head-->
+<head th:insert="/admin/common/head.html :: common_header">
+  <title id="page_title">새 결재 서식 생성</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
+</head>
+<!--end::Head-->
+<!--begin::Body-->
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<!--begin::App Wrapper-->
+<div class="app-wrapper">
+  <!-- 헤더 시작 -->
+  <th:block th:replace="~{/admin/common/header}"></th:block>
+  <!-- 헤더 끝 -->
+
+  <!-- 사이드바 시작-->
+  <th:block th:replace="~{/admin/common/sidebar}"></th:block>
+  <!-- 사이드바 끝-->
+
+  <!-- 메인 콘텐츠 시작 -->
+  <main class="app-main">
+    <!--begin::App Content-->
+    <div class="app-content">
+      <!--begin::Container-->
+      <div class="container-fluid">
+        <br>
+        <!-- ===================================================== -->
+        <!-- 페이지 제목 -->
+        <!-- ===================================================== -->
+        <div class="row mb-3">
+          <div class="col">
+            <h3 class="fw-bold mb-1">급여요약</h3>
+            <p class="text-muted mb-0">
+              조회월 기준 사원별 급여 지급 현황과 급여명세 정보를 확인합니다.
+            </p>
+          </div>
+        </div>
+
+        <!-- ===================================================== -->
+        <!-- 급여요약 카드 -->
+        <!-- ===================================================== -->
+        <div class="card">
+          <div class="card-body">
+
+            <!-- ===================================================== -->
+            <!-- 카드 헤더 -->
+            <!-- ===================================================== -->
+            <div class="d-flex justify-content-between align-items-start mb-4">
+              <div>
+                <h4 class="fw-bold mb-2">급여요약 전체조회</h4>
+                <p class="text-muted mb-0">
+                  선택한 조회월 기준으로 사원별 급여 요약 목록을 조회합니다.
+                </p>
+                <div class="form-text text-primary fw-semibold">
+                  ※ 팀(하위 부서) 소속 사원만 급여요약 조회 대상입니다.
+                </div>
+              </div>
+            </div>
+
+            <!-- ===================================================== -->
+            <!-- 검색 / 필터 영역 -->
+            <!--
+              중요:
+              - select 값 변경만으로는 조회하지 않는다.
+              - 조회 버튼을 눌렀을 때만 GET 요청으로 조건을 반영한다.
+              - 초기화는 /admin/payroll/summary 로 이동하여 현재월 기본조회로 돌아간다.
+            -->
+            <!-- ===================================================== -->
+            <form id="payrollSummarySearchForm"
+                  method="get"
+                  th:action="@{/admin/payroll/summary}"
+                  class="mb-4"
+                  th:data-current-year="${currentYear}"
+                  th:data-current-month="${currentMonth}"
+                  th:data-start-year="${startYear}">
+
+              <!-- 검색 시 항상 1페이지부터 조회 -->
+              <input type="hidden" name="page" value="1">
+
+              <!-- 페이지당 10개 고정이지만, 페이징 파라미터 유지를 위해 둔다. -->
+              <input type="hidden" name="size" th:value="${searchDTO.size}">
+
+              <!-- ===================================================== -->
+              <!-- 1행: 검색어 -->
+              <!-- ===================================================== -->
+              <div class="row g-3 align-items-end mb-3">
+
+                <!-- 검색어 -->
+                <div class="col-md-4">
+                  <label class="form-label">검색어</label>
+                  <input type="text"
+                         class="form-control"
+                         name="keyword"
+                         placeholder="사번 또는 이름 검색"
+                         th:value="${searchDTO.keyword}">
+                </div>
+              </div>
+
+              <!-- ===================================================== -->
+              <!-- 2행: 조회년도 / 조회월 / 정렬 -->
+              <!-- ===================================================== -->
+              <div class="row g-3 align-items-end mb-3">
+
+                <!-- 조회년도 -->
+                <div class="col-md-3">
+                  <label class="form-label">조회년도</label>
+                  <select id="payYear"
+                          name="payYear"
+                          class="form-select">
+                    <option th:each="year : ${#numbers.sequence(startYear, currentYear)}"
+                            th:value="${year}"
+                            th:text="${year + '년'}"
+                            th:selected="${searchDTO.payYear == year}">
+                    </option>
+                  </select>
+                </div>
+
+                <!-- 조회월 -->
+                <div class="col-md-3">
+                  <label class="form-label">조회월</label>
+                  <select id="payMonth"
+                          name="payMonth"
+                          class="form-select"
+                          th:data-selected-month="${searchDTO.payMonth}">
+                    <!-- 월 옵션은 payroll-summary.js에서 동적 생성 -->
+                  </select>
+                </div>
+
+                <!-- 정렬 -->
+                <div class="col-md-3">
+                  <label class="form-label">정렬</label>
+                  <select class="form-select"
+                          name="sortType">
+                    <option value="DEFAULT"
+                            th:selected="${searchDTO.sortType == null or searchDTO.sortType == 'DEFAULT'}">
+                      기본순(상태 우선)
+                    </option>
+                    <option value="EMP_NO"
+                            th:selected="${searchDTO.sortType == 'EMP_NO'}">
+                      사번순
+                    </option>
+                    <option value="NAME"
+                            th:selected="${searchDTO.sortType == 'NAME'}">
+                      이름순
+                    </option>
+                    <option value="NET_DESC"
+                            th:selected="${searchDTO.sortType == 'NET_DESC'}">
+                      실지급액 높은순
+                    </option>
+                    <option value="NET_ASC"
+                            th:selected="${searchDTO.sortType == 'NET_ASC'}">
+                      실지급액 낮은순
+                    </option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- ===================================================== -->
+              <!-- 3행: 부서 / 직급 / 상태 + 조회/초기화 버튼 -->
+              <!-- ===================================================== -->
+              <div class="row g-3 align-items-end">
+
+                <!-- 부서 -->
+                <div class="col-md-3">
+                  <label class="form-label">부서</label>
+                  <select class="form-select"
+                          name="deptId">
+                    <option value="">전체</option>
+                    <option th:each="dept : ${departmentList}"
+                            th:value="${dept.id}"
+                            th:text="${dept.description != null ? dept.name + ' (' + dept.description + ')' : dept.name}"
+                            th:selected="${searchDTO.deptId == dept.id}">
+                    </option>
+                  </select>
+                </div>
+
+                <!-- 직급 -->
+                <div class="col-md-3">
+                  <label class="form-label">직급</label>
+                  <select class="form-select"
+                          name="positionId">
+                    <option value="">전체</option>
+                    <option th:each="position : ${positionList}"
+                            th:value="${position.id}"
+                            th:text="${position.name}"
+                            th:selected="${searchDTO.positionId == position.id}">
+                    </option>
+                  </select>
+                </div>
+
+                <!-- 상태 -->
+                <div class="col-md-3">
+                  <label class="form-label">상태</label>
+                  <select class="form-select"
+                          name="status">
+                    <option value=""
+                            th:selected="${searchDTO.status == null or searchDTO.status == ''}">
+                      전체
+                    </option>
+                    <option value="NEW"
+                            th:selected="${searchDTO.status == 'NEW'}">
+                      미작성
+                    </option>
+                    <option value="DRAFT"
+                            th:selected="${searchDTO.status == 'DRAFT'}">
+                      작성중
+                    </option>
+                    <option value="CONFIRMED"
+                            th:selected="${searchDTO.status == 'CONFIRMED'}">
+                      확정
+                    </option>
+                    <option value="PAID"
+                            th:selected="${searchDTO.status == 'PAID'}">
+                      지급완료
+                    </option>
+                  </select>
+                </div>
+
+                <!-- 조회 / 초기화 버튼 -->
+                <div class="col-md-3">
+                  <div class="d-flex justify-content-end gap-2 h-100 align-items-end">
+                    <button type="submit"
+                            class="btn btn-primary"
+                            style="min-width: 110px;">
+                      조회
+                    </button>
+
+                    <a th:href="@{/admin/payroll/summary}"
+                       class="btn btn-outline-secondary"
+                       style="min-width: 110px;">
+                      초기화
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </form>
+
+            <!-- ===================================================== -->
+            <!-- 급여요약 목록 테이블 -->
+            <!-- ===================================================== -->
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover text-center align-middle">
+                <thead class="table-light">
+                <tr>
+                  <th>사번</th>
+                  <th>이름</th>
+                  <th>부서</th>
+                  <th>직급</th>
+                  <th>조회월</th>
+                  <th>총 지급액</th>
+                  <th>총 공제액</th>
+                  <th>실지급액</th>
+                  <th>상태</th>
+                </tr>
+                </thead>
+
+                <tbody>
+                <!-- 조회 결과 없음 -->
+                <tr th:if="${#lists.isEmpty(payrollSummaryList)}">
+                  <td colspan="9" class="text-muted py-4">
+                    조회된 급여요약 정보가 없습니다.
+                  </td>
+                </tr>
+
+                <!-- 급여요약 row -->
+                <tr th:each="item : ${payrollSummaryList}"
+                    class="payroll-summary-row"
+                    style="cursor: pointer;"
+                    th:data-emp-no="${item.empNo}"
+                    th:data-pay-month="${item.payMonth}"
+                    th:data-payroll-status="${item.payrollStatus}">
+
+                  <!-- 사번 -->
+                  <td th:text="${item.empNo}">사번</td>
+
+                  <!-- 이름 -->
+                  <td th:text="${item.empName}">사원명</td>
+
+                  <!-- 부서 -->
+                  <td>
+                    <div th:text="${item.deptName}">개발팀</div>
+                    <div class="text-muted small"
+                         th:if="${item.parentDeptName != null}"
+                         th:text="'(' + ${item.parentDeptName} + ')'">
+                      (개발본부)
+                    </div>
+                  </td>
+
+                  <!-- 직급 -->
+                  <td th:text="${item.positionName}">사원</td>
+
+                  <!-- 조회월 -->
+                  <td th:text="${item.payMonth}">2026-05</td>
+
+                  <!-- 총 지급액 -->
+                  <td th:text="${item.totalGross == null ? '-' : #numbers.formatInteger(item.totalGross, 3, 'COMMA')}">
+                    -
+                  </td>
+
+                  <!-- 총 공제액 -->
+                  <td th:text="${item.totalDeduction == null ? '-' : #numbers.formatInteger(item.totalDeduction, 3, 'COMMA')}">
+                    -
+                  </td>
+
+                  <!-- 실지급액 -->
+                  <td class="fw-semibold"
+                      th:text="${item.netSalary == null ? '-' : #numbers.formatInteger(item.netSalary, 3, 'COMMA')}">
+                    -
+                  </td>
+
+                  <!-- 상태 -->
+                  <td>
+                    <!--
+                      상태 배지
+                      - 실제 급여대장 상태는 기존 상태값을 그대로 사용한다.
+                      - NEW / DRAFT / CONFIRMED / PAID 상태 체계는 변경하지 않는다.
+                      - 작성중 계산 반영 여부는 아래 보조 문구로만 표시한다.
+                    -->
+                    <span class="badge"
+                          th:classappend="
+                            ${item.payrollStatus == 'NEW'} ? ' text-bg-secondary' :
+                            (${item.payrollStatus == 'DRAFT'} ? ' text-bg-warning' :
+                            (${item.payrollStatus == 'CONFIRMED'} ? ' text-bg-primary' :
+                            (${item.payrollStatus == 'PAID'} ? ' text-bg-success' : ' text-bg-secondary')))
+                          "
+                                            th:text="${item.payrollStatusName}">
+                      미작성
+                    </span>
+
+                    <!--
+                      작성중(DRAFT) 보조 상태 표시
+
+                      목적:
+                      - 상태 필터는 기존처럼 '작성중' 하나로 유지한다.
+                      - 대신 작성중 급여대장이 계산 미리보기 결과를 반영했는지
+                        리스트에서 보조 정보로만 보여준다.
+
+                      판단 기준:
+                      - totalGross, totalDeduction, netSalary가 모두 null이면 계산 반영 전
+                      - 셋 중 하나라도 값이 있으면 계산 반영
+                    -->
+                    <div class="small text-muted mt-1"
+                         th:if="${item.payrollStatus == 'DRAFT'}">
+
+                      <!--
+                        계산 반영 여부 표시
+
+                        중요:
+                        - DRAFT 상태에서도 기본급 일부 입력만 된 상태가 존재할 수 있다.
+                        - totalGross 값만 있다고 계산 완료로 보면 안 된다.
+                        - netSalary는 계산 미리보기 반영 후에만 값이 들어가는 최종 결과값이다.
+
+                        기준:
+                        - netSalary == null → 계산 반영 전
+                        - netSalary != null → 계산 반영
+                      -->
+                                            <span th:if="${item.netSalary == null}">
+                          계산 반영 전
+                      </span>
+
+                      <span th:unless="${item.netSalary == null}">
+                          계산 반영
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <!-- ===================================================== -->
+            <!-- 목록 하단 -->
+            <!-- ===================================================== -->
+            <div class="mt-3">
+              <span>전체 </span>
+              <strong th:text="${pageResponse.totalCount}">0</strong>
+              <span>건</span>
+            </div>
+
+            <!-- ===================================================== -->
+            <!-- 페이징 -->
+            <!-- 기존 salary-policy pagination fragment 재사용 -->
+            <!-- ===================================================== -->
+            <th:block th:replace="~{
+            admin/payroll/payroll-summary-pagination ::
+            pagination(${pageResponse}, ${searchDTO})
+            }">
+            </th:block>
+
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <!-- 메인 콘텐츠 끝 -->
+  <!-- 푸터 시작 -->
+  <th:block th:replace="~{/admin/common/footer}"></th:block>
+  <!-- 푸터 끝 -->
+</div>
+<!--end::App Wrapper-->
+<!--스크립트 시작-->
+<th:block th:replace="~{/admin/common/commonJs}"></th:block> <!-- 공통 사용 스크립트 불러오기-->
+
+<!-- 각 페이지 별로 필요한 스크립트 작성 혹은 임포트 -->
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script> <!-- jQuery -->
+<script src="/js/payroll/payroll-summary.js"></script>
+<!--스크립트 끝-->
+</body>
+<!--end::Body-->
+</html>
