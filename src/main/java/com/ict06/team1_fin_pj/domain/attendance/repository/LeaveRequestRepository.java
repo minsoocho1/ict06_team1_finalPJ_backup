@@ -15,4 +15,7 @@ public interface LeaveRequestRepository
     List<LeaveRequestEntity> findByEmployee_EmpNoOrderByStartDateDesc(
             String empNo
     );
+
+    // [결재-근태 연동용]: 승인 완료 이벤트가 재시도되어도 같은 결재문서로 휴가 신청 이력이 중복 생성되지 않게 확인합니다.
+    boolean existsByApproval_ApprovalId(Integer approvalId);
 }

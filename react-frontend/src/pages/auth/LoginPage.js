@@ -12,7 +12,8 @@
  * @ 2026.04.16    김다솜        최초 생성
  * @ 2026.04.30    김다솜        스타일 코드 분리(LoginStyle.js) 및 버튼 상태 처리 개선
  * @ 2026.05.07    김다솜        role 타입/형식 정규화 및 관리자 로그인 브릿지용 sessionStorage(adminLoginBridge) 저장 추가
- * @ 2026.05.15    김다솜        사용자 홈 톤에 맞춘 로그인 화면 레이아웃 및 스타일 개편
+ * @ 2026.05.15    김다솜        사용자 홈 톤에 맞춘 로그인 화면 레이아웃 및 웰컴 소속 정보 연동 보완
+ * @ 2026.05.18    김다솜        로그인 사용자 Context 보강 및 관리자 권한 정규화 개선
  */
 
 import { useEffect, useState } from 'react'
@@ -42,11 +43,19 @@ import { PATH } from 'src/constants/path'
 import axiosInstance from 'src/api/axiosInstance'
 
 const normalizeRole = (roleValue) => {
-  if (typeof roleValue === 'string') return roleValue.toUpperCase()
+  if (typeof roleValue === 'string') {
+    const normalized = roleValue.trim().toUpperCase()
+    if (normalized.includes('ADMIN') || normalized.includes('관리자')) return 'ROLE_ADMIN'
+    if (normalized.includes('TEAM_LEADER') || normalized.includes('TEAM LEADER') || normalized.includes('팀장')) {
+      return 'ROLE_TEAM_LEADER'
+    }
+    if (normalized.includes('USER') || normalized.includes('사원')) return 'ROLE_USER'
+    return normalized.startsWith('ROLE_') ? normalized : ''
+  }
   if (Array.isArray(roleValue) && roleValue.length > 0) return normalizeRole(roleValue[0])
   if (roleValue && typeof roleValue === 'object') {
     const candidate = roleValue.roleName || roleValue.authority || roleValue.name
-    return typeof candidate === 'string' ? candidate.toUpperCase() : ''
+    return normalizeRole(candidate)
   }
   return ''
 }
@@ -87,16 +96,20 @@ function LoginPage() {
         password: loginData.password,
       })
 
-      const { accessToken, refreshToken, empNo, userName, role } = response.data
+      const { accessToken, refreshToken, empNo, userName, role, deptName, positionName } = response.data
       const normalizedRole = normalizeRole(role)
 
-      login({ empNo, name: userName, role: normalizedRole || role }, accessToken, refreshToken)
+      login(
+        { empNo, name: userName, role: normalizedRole || role, deptName, positionName },
+        accessToken,
+        refreshToken,
+      )
 
       if (normalizedRole !== 'ROLE_ADMIN') {
         const empResponse = await axiosInstance.get(PATH.API.USER_ME)
         updateUserInfo(empResponse.data)
       } else {
-        updateUserInfo({ empNo, name: userName, role: normalizedRole || role })
+        updateUserInfo({ empNo, name: userName, role: normalizedRole || role, deptName, positionName })
         sessionStorage.setItem(
           'adminLoginBridge',
           JSON.stringify({

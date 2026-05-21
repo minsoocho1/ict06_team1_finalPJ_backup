@@ -9,6 +9,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.15    김다솜        최초 생성
  * @ 2026.05.15    김다솜        청크 선택 로직 및 질문 의도 기반 점수 보강
+ * @ 2026.05.19    김다솜        PDF 구조 태그 청크가 AI 답변 근거로 사용되지 않도록 필터링 보강
  */
 package com.ict06.team1_fin_pj.domain.onboarding.service;
 
@@ -43,6 +44,21 @@ public class DocumentQuestionAnswerService {
     private static final List<String> PROCEDURE_HINTS = List.of("절차", "순서", "단계", "흐름", "과정");
     private static final List<String> CAUTION_HINTS = List.of("주의", "주의사항", "유의", "실수", "오류", "예외");
     private static final List<String> CORE_HINTS = List.of("중요", "핵심", "기준", "원칙", "포인트");
+    private static final List<String> PDF_STRUCTURE_MARKERS = List.of(
+            "StructElem",
+            "StructTreeRoot",
+            "MarkedContent",
+            "MCID",
+            "RowSpan",
+            "ColSpan",
+            "ListNumbering",
+            "Table",
+            "TR",
+            "TH",
+            "TD",
+            "Pg",
+            "BBox"
+    );
 
     private final DocumentRepository documentRepository;
     private final RestTemplate restTemplate;
@@ -106,11 +122,12 @@ public class DocumentQuestionAnswerService {
      */
     private List<String> selectRelevantChunks(DocumentEntity document, String question) {
         List<DocChunkEntity> chunks = document.getChunks().stream()
+                .filter(chunk -> !isPdfStructureArtifact(chunk))
                 .sorted(Comparator.comparing(DocChunkEntity::getChunkNo))
                 .toList();
 
         if (chunks.isEmpty()) {
-            throw new IllegalArgumentException("문서 청크가 없어 질문응답을 생성할 수 없습니다. 먼저 재처리를 진행해 주세요.");
+            throw new IllegalArgumentException("본문으로 사용할 수 있는 문서 청크가 없습니다. PDF 구조 태그만 저장된 문서일 수 있으므로 재처리 또는 OCR 처리가 필요합니다.");
         }
 
         Set<String> questionTerms = extractTerms(question);
@@ -157,6 +174,10 @@ public class DocumentQuestionAnswerService {
      * @return 관련도 점수
      */
     private int scoreChunk(DocChunkEntity chunk, String question, Set<String> questionTerms) {
+        if (isPdfStructureArtifact(chunk)) {
+            return Integer.MIN_VALUE;
+        }
+
         if (questionTerms.isEmpty()) {
             return 0;
         }
@@ -272,5 +293,44 @@ public class DocumentQuestionAnswerService {
 
         context.append("\n").append(chunk.getContent());
         return context.toString();
+    }
+
+    private boolean isPdfStructureArtifact(DocChunkEntity chunk) {
+        if (chunk == null) {
+            return true;
+        }
+
+        String content = chunk.getContent() == null ? "" : chunk.getContent();
+        String sectionTitle = chunk.getSectionTitle() == null ? "" : chunk.getSectionTitle();
+        return isPdfStructureArtifact(content + "\n" + sectionTitle);
+    }
+
+    private boolean isPdfStructureArtifact(String text) {
+        String sample = text == null ? "" : text.replaceAll("\\s+", " ").trim();
+        if (sample.isBlank()) {
+            return true;
+        }
+
+        long markerHits = PDF_STRUCTURE_MARKERS.stream()
+                .filter(sample::contains)
+                .count();
+        if (markerHits >= 3) {
+            return true;
+        }
+
+        String[] words = sample.split("[^0-9A-Za-z가-힣]+");
+        long meaningfulWords = java.util.Arrays.stream(words)
+                .filter(word -> word != null && word.length() >= 2)
+                .count();
+        if (meaningfulWords == 0) {
+            return true;
+        }
+
+        long markerWords = java.util.Arrays.stream(words)
+                .filter(PDF_STRUCTURE_MARKERS::contains)
+                .count();
+        boolean hasKoreanContent = sample.matches(".*[가-힣]{2,}.*");
+        double markerRatio = markerWords / (double) meaningfulWords;
+        return markerRatio >= 0.35 && !hasKoreanContent;
     }
 }

@@ -16,6 +16,8 @@
  * @ 2026.05.12    김다솜        홈 피드 업무 허브 구성, 날씨/뉴스/체크리스트 복구, To-Do 완료 표시 유지, 온보딩 요약/추천 학습 이동 및 전체화면 중앙 정렬 처리
  * @ 2026.05.14    김다솜        홈 피드 구조 개편, 위치 기반 날씨/기온별 배경색 연동, 홈 대시보드 레이아웃 전면 개편
  * @ 2026.05.15    김다솜        UI 조정 및 위치 기반 상세 날씨 위젯 적용
+ * @ 2026.05.18    김다솜        날씨 위젯 현재 위치 구/동 단위 표시 반영
+ * @ 2026.05.19    김다솜        사내 공지사항 및 커뮤니티 소식 영역 제거
  */
 
 import React, { useEffect, useState } from 'react';
@@ -30,7 +32,7 @@ import {
   CRow,
 } from '@coreui/react';
 import CIcon from '@coreui/icons-react';
-import { cilCalendar, cilCheckCircle, cilClock, cilSun, cilCloud, cilRain, cilSnowflake, cilHappy, cilSpeaker, cilBirthdayCake, cilUserFollow } from '@coreui/icons';
+import { cilCheckCircle, cilSun, cilCloud, cilRain, cilSnowflake, cilHappy, cilSpeaker } from '@coreui/icons';
 import { useNavigate } from 'react-router-dom';
 import axiosInstance from 'src/api/axiosInstance';
 import { useUser } from 'src/api/UserContext';
@@ -102,8 +104,6 @@ const UserHome = () => {
         
         // 2. 시간대별 맞춤 인사말 생성 (랜덤성 추가로 단조로움 해소)
         const hour = new Date().getHours();
-        const name = userInfo?.name || '사용자';
-
         const greetingPool = {
           morning: ['좋은 아침이에요!', '활기찬 아침입니다!', '오늘도 힘차게 시작해봐요!'],
           afternoon: ['즐거운 오후예요!', '나른한 오후, 조금만 더 힘내세요!', '오후 업무도 화이팅입니다!'],
@@ -146,7 +146,7 @@ const UserHome = () => {
                 cloudiness: weather.clouds?.all ?? null,
                 desc: weather.weather?.[0]?.description ?? '날씨 정보 없음',
                 icon: weatherIcon,
-                city: weather.display_location || weather.name,
+                city: weather.display_location_detail || weather.display_location || weather.name,
                 locationSource: weather.location_source === 'GPS' ? '현재 위치 기준' : '',
                 newsList: crawlData.newsList || [],
                 encouragement: weather.encouragement_message,
@@ -502,55 +502,6 @@ const UserHome = () => {
                     </button>
                   ))
                 )}
-              </div>
-            </CCardBody>
-          </CCard>
-        </CCol>
-      </CRow>
-
-      {/* 3열: 사내 소식 및 커뮤니티 */}
-      <CRow className="justify-content-center">
-        <CCol lg={8} className="mb-4">
-          <CCard className="h-100" style={cardCore}>
-            <CCardHeader className="bg-white border-0 py-3 d-flex align-items-center">
-              <CIcon icon={cilSpeaker} className="me-2 text-warning" />
-              <strong>사내 공지사항</strong>
-            </CCardHeader>
-            <CCardBody>
-              <div className="text-muted small py-4 text-center">
-                등록된 공지사항이 없습니다.
-              </div>
-            </CCardBody>
-          </CCard>
-        </CCol>
-        <CCol lg={4} className="mb-4">
-          <CCard className="h-100" style={cardCore}>
-            <CCardHeader className="bg-white border-0 py-3 d-flex align-items-center">
-              <CIcon icon={cilHappy} className="me-2 text-danger" />
-              <strong>커뮤니티 소식</strong>
-            </CCardHeader>
-            <CCardBody className="p-0">
-              <div className="p-3 border-bottom">
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <CIcon icon={cilBirthdayCake} style={{ color: COLORS.primary }} />
-                  <span className="small fw-bold">오늘의 생일</span>
-                </div>
-                <div className="ps-4">
-                  <span className="small text-dark">김다솜 님, 송영은 님 축하합니다! 🎂</span>
-                </div>
-              </div>
-              <div className="p-3">
-                <div className="d-flex align-items-center gap-2 mb-2">
-                  <CIcon icon={cilUserFollow} className="text-success" />
-                  <span className="small fw-bold">새로운 가족</span>
-                </div>
-                <div className="ps-4">
-                  <div className="small text-dark mb-1">정준하 님 (인사팀)</div>
-                  <div className="small text-dark">송혜진 님 (개발본부)</div>
-                  <div className="mt-2">
-                    <small className="text-muted">따뜻하게 환영해주세요! 👋</small>
-                  </div>
-                </div>
               </div>
             </CCardBody>
           </CCard>

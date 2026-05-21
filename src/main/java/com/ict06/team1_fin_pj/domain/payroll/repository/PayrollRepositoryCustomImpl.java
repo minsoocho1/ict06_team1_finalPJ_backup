@@ -1,6 +1,7 @@
 package com.ict06.team1_fin_pj.domain.payroll.repository;
 
 import com.ict06.team1_fin_pj.common.dto.payroll.*;
+import com.ict06.team1_fin_pj.domain.employee.entity.QDepartmentEntity;
 import com.ict06.team1_fin_pj.domain.payroll.entity.PayrollStatus;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Projections;
@@ -29,6 +30,10 @@ public class PayrollRepositoryCustomImpl implements PayrollRepositoryCustom {
 
     private final JPAQueryFactory queryFactory;
 
+    // 상위 본부 조회용 별칭
+    private final QDepartmentEntity parentDepartment =
+            new QDepartmentEntity("parentDepartment");
+
     // 사원 검색 autocomplete
     @Override
     public List<PayrollEmployeeSearchResponseDTO> searchEmployees(PayrollEmployeeSearchDTO searchDTO) {
@@ -55,12 +60,14 @@ public class PayrollRepositoryCustomImpl implements PayrollRepositoryCustom {
                         empEntity.empNo.as("empNo"),
                         empEntity.name.as("empName"),
                         departmentEntity.deptName.as("deptName"),
-                        departmentEntity.parentDept.deptName.as("parentDeptName"),
+                        departmentEntity.deptId.as("deptId"),
+                        parentDepartment.deptName.as("parentDeptName"),
                         positionEntity.positionName.as("positionName"),
                         gradeCodeEntity.gradeId.as("gradeId")
                 ))
                 .from(empEntity)
                 .leftJoin(empEntity.department, departmentEntity)
+                .leftJoin(departmentEntity.parentDept, parentDepartment)
                 .leftJoin(empEntity.position, positionEntity)
                 .leftJoin(empEntity.grade, gradeCodeEntity)
                 .where(builder)
@@ -70,7 +77,26 @@ public class PayrollRepositoryCustomImpl implements PayrollRepositoryCustom {
             query.limit(searchDTO.getLimit());
         }
 
-        return query.fetch();
+        List<PayrollEmployeeSearchResponseDTO> result = query.fetch();
+
+        for (PayrollEmployeeSearchResponseDTO employee : result) {
+
+            Integer deptId = employee.getDeptId();
+
+            // deptId 1, 2는 본부로 판단
+            if (deptId != null && (deptId == 1 || deptId == 2)) {
+
+                employee.setPayrollAvailable(false);
+                employee.setPayrollUnavailableReason("조회 불가 : 부서명이 본부명임");
+
+            } else {
+
+                employee.setPayrollAvailable(true);
+                employee.setPayrollUnavailableReason(null);
+            }
+        }
+
+        return result;
     }
 
     // 사원 인사정보 조회
@@ -142,6 +168,11 @@ public class PayrollRepositoryCustomImpl implements PayrollRepositoryCustom {
                 .select(Projections.fields(
                         PayrollStatusResponseDTO.class,
 
+                        payrollEntity.incomeTax.as("incomeTax"),
+                        payrollEntity.localIncomeTax.as("localIncomeTax"),
+                        payrollEntity.totalDeduction.as("totalDeduction"),
+                        payrollEntity.totalGross.as("totalGross"),
+                        payrollEntity.netSalary.as("netSalary"),
                         payrollEntity.payrollId.longValue().as("payrollId"),
                         payrollEntity.status.stringValue().as("payrollStatus"),
                         payrollEntity.baseSalary.as("baseSalary"),

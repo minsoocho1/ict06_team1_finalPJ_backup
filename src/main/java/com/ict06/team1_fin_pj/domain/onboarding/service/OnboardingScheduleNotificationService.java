@@ -9,10 +9,13 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.12    김다솜        최초 생성 및 학습항목 수동 알림, 시작/마감 1일 전 자동 알림 처리 추가
  * @ 2026.05.14    김다솜        알림 타입 매핑 정렬 및 상수화 처리
+ * @ 2026.05.18    김다솜        로드맵 학습항목별 알림 발송 이력 조회 기능 추가
  */
 package com.ict06.team1_fin_pj.domain.onboarding.service;
 
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdOnboardingNotificationHistoryDto;
 import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
+import com.ict06.team1_fin_pj.domain.notification.entity.NotificationEntity;
 import com.ict06.team1_fin_pj.domain.notification.entity.NotificationType;
 import com.ict06.team1_fin_pj.domain.notification.repository.NotificationRepository;
 import com.ict06.team1_fin_pj.domain.notification.service.NotificationServiceImpl;
@@ -26,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -58,6 +62,22 @@ public class OnboardingScheduleNotificationService {
                 buildManualContent(item),
                 buildItemUrl(item)
         );
+    }
+
+    @Transactional(readOnly = true)
+    public List<AdOnboardingNotificationHistoryDto> getItemNotificationHistories(RoadItemEntity item) {
+        EmpEntity employee = getEmployee(item);
+        if (employee == null) {
+            return List.of();
+        }
+
+        return notificationRepository.findByEmployee_EmpNoAndNotiTypeAndUrlOrderByCreatedAtDesc(
+                        employee.getEmpNo(),
+                        NotificationType.ONBOARDING,
+                        buildItemUrl(item)
+                ).stream()
+                .map(this::toNotificationHistoryDto)
+                .toList();
     }
 
     @Scheduled(cron = "0 0 9 * * *")
@@ -145,5 +165,17 @@ public class OnboardingScheduleNotificationService {
         }
 
         return item.getContent() != null ? item.getContent().getTitle() : "온보딩 학습";
+    }
+
+    private AdOnboardingNotificationHistoryDto toNotificationHistoryDto(NotificationEntity notification) {
+        return AdOnboardingNotificationHistoryDto.builder()
+                .notiId(notification.getNotiId())
+                .title(notification.getTitle())
+                .content(notification.getContent())
+                .url(notification.getUrl())
+                .isRead(notification.getIsRead())
+                .createdAt(notification.getCreatedAt())
+                .readAt(notification.getReadAt())
+                .build();
     }
 }

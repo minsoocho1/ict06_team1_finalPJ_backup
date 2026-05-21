@@ -11,7 +11,7 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <!--begin::Head-->
 <head th:include="/admin/common/head.html :: common_header">
-  <title id="page_title">근태 관리 메인</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
+  <title id="page_title">근태 수정 이력</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
 </head>
 <!--end::Head-->
 <!--begin::Body-->
@@ -34,7 +34,366 @@
       <div class="container-fluid">
         <br>
         <!-- begin::Row-->
+        <!-- 관리자 근태 수정 이력 페이지 제목 영역 시작 -->
+        <div class="row mb-3">
+          <div class="col-sm-6">
+            <h3 class="mb-0">
+              관리자 근태 수정 이력
+            </h3>
+          </div>
+        </div>
+        <!-- 관리자 근태 수정 이력 페이지 제목 영역 끝 -->
 
+        <!-- 관리자 근태 수정 이력 카드형 목록 영역 시작 -->
+        <div class="card shadow-sm border-0 rounded-4">
+
+          <!-- 카드 헤더 -->
+          <div class="card-header bg-white py-3 border-0 rounded-top-4">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+
+              <!-- 왼쪽 제목 -->
+              <div>
+                <div class="d-flex align-items-center gap-2">
+                  <h5 class="card-title mb-0 fw-bold">
+                    근태 변경 이력 목록
+                  </h5>
+
+                  <span class="badge text-bg-light border text-muted">
+                    최신순
+                  </span>
+                </div>
+
+                <small class="text-muted d-block mt-1">
+                  최신 수정일시 기준으로 변경 이력을 확인합니다.
+                </small>
+              </div>
+
+              <!-- 오른쪽 버튼 영역 -->
+              <div class="d-flex align-items-center gap-2">
+
+                <div class="text-muted small"
+                     th:if="${changeLogPage != null}">
+
+                  총
+                  <strong th:text="${changeLogPage.totalElements}">
+                    0
+                  </strong>
+                  건
+
+                  ·
+
+                  <strong th:text="${changeLogPage.number + 1}">
+                    1
+                  </strong>
+                  /
+                  <strong th:text="${changeLogPage.totalPages}">
+                    1
+                  </strong>
+                  페이지
+
+                </div>
+
+                <!-- 목록 개수 선택 -->
+                <form method="get"
+                      th:action="@{/admin/attendance/log}"
+                      class="d-flex align-items-center gap-1">
+
+                  <select name="size"
+                          class="form-select form-select-sm"
+                          onchange="this.form.submit()">
+
+                    <option value="10"
+                            th:selected="${changeLogPage.size == 10}">
+                      10개
+                    </option>
+
+                    <option value="20"
+                            th:selected="${changeLogPage.size == 20}">
+                      20개
+                    </option>
+
+                    <option value="50"
+                            th:selected="${changeLogPage.size == 50}">
+                      50개
+                    </option>
+
+                  </select>
+
+                  <!-- size 변경 시 첫 페이지로 이동 -->
+                  <input type="hidden" name="page" value="0">
+                </form>
+
+                <a th:href="@{/admin/attendance/main}"
+                   class="btn btn-sm btn-outline-secondary">
+                  근태 현황으로 돌아가기
+                </a>
+
+                <a th:href="@{/admin/attendance/log}"
+                   class="btn btn-sm btn-primary">
+
+                  <i class="bi bi-arrow-clockwise me-1"></i>
+
+                  새로고침
+                </a>
+
+              </div>
+
+            </div>
+          </div>
+
+          <!-- 카드 바디 -->
+          <div class="card-body bg-white rounded-bottom-4">
+
+            <!-- 수정 이력이 없을 경우 -->
+            <div th:if="${changeLogList == null or #lists.isEmpty(changeLogList)}"
+                 class="text-center text-muted py-5">
+              조회된 수정 이력이 없습니다.
+            </div>
+
+            <!-- 수정 이력 반복 출력 -->
+            <div th:each="log : ${changeLogList}"
+                 class="border rounded-4 p-3 mb-3 shadow-sm bg-white">
+
+              <div class="row align-items-center g-3">
+
+                <!-- 왼쪽 기본 정보 -->
+                <div class="col-lg-2 col-md-3">
+                  <div class="small text-muted mb-1">
+                    이력 ID
+                    <strong class="text-primary ms-1"
+                            th:text="${log.changeLogId}">
+                      1
+                    </strong>
+                  </div>
+
+                  <div class="small text-muted mb-1">
+                    근태 ID
+                    <strong class="text-dark ms-1"
+                            th:text="${log.attendanceId}">
+                      70
+                    </strong>
+                  </div>
+
+                  <div class="small text-muted">
+                    근무일
+                    <strong class="text-dark ms-1"
+                            th:text="${log.workDate}">
+                      2026-04-29
+                    </strong>
+                  </div>
+                </div>
+
+                <!-- 출근 변경 -->
+                <div class="col-lg-2 col-md-3 border-start">
+                  <div class="small text-muted mb-1">
+                    출근 시간
+                  </div>
+
+                  <div class="fw-semibold">
+                    <span th:text="${log.beforeCheckIn}">09:12</span>
+                    <span class="mx-2 text-secondary">→</span>
+                    <span class="text-success"
+                          th:text="${log.afterCheckIn}">
+                      08:56
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 퇴근 변경 -->
+                <div class="col-lg-2 col-md-3 border-start">
+                  <div class="small text-muted mb-1">
+                    퇴근 시간
+                  </div>
+
+                  <div class="fw-semibold">
+                    <span th:text="${log.beforeCheckOut}">18:00</span>
+                    <span class="mx-2 text-secondary">→</span>
+                    <span class="text-success"
+                          th:text="${log.afterCheckOut}">
+                      18:00
+                    </span>
+                  </div>
+                </div>
+
+                <!-- 상태 변경 -->
+                <div class="col-lg-2 col-md-3 border-start">
+                  <div class="small text-muted mb-1">
+                    상태
+                  </div>
+
+                  <div class="d-flex align-items-center gap-2 flex-wrap">
+
+                    <!-- 수정 전 상태 -->
+                    <span th:if="${log.beforeStatus == '정상'}"
+                          class="badge text-bg-success px-3">
+                      정상
+                    </span>
+                    <span th:if="${log.beforeStatus == '지각'}"
+                          class="badge text-bg-warning px-3">
+                      지각
+                    </span>
+                    <span th:if="${log.beforeStatus == '조퇴'}"
+                          class="badge text-bg-danger px-3">
+                      조퇴
+                    </span>
+                    <span th:if="${log.beforeStatus == '결근'}"
+                          class="badge text-bg-dark px-3">
+                      결근
+                    </span>
+                    <span th:if="${log.beforeStatus == '퇴근완료'}"
+                          class="badge text-bg-primary px-3">
+                      퇴근완료
+                    </span>
+
+                    <span class="text-secondary">→</span>
+
+                    <!-- 수정 후 상태 -->
+                    <span th:if="${log.afterStatus == '정상'}"
+                          class="badge text-bg-success px-3">
+                      정상
+                    </span>
+                    <span th:if="${log.afterStatus == '지각'}"
+                          class="badge text-bg-warning px-3">
+                      지각
+                    </span>
+                    <span th:if="${log.afterStatus == '조퇴'}"
+                          class="badge text-bg-danger px-3">
+                      조퇴
+                    </span>
+                    <span th:if="${log.afterStatus == '결근'}"
+                          class="badge text-bg-dark px-3">
+                      결근
+                    </span>
+                    <span th:if="${log.afterStatus == '퇴근완료'}"
+                          class="badge text-bg-primary px-3">
+                      퇴근완료
+                    </span>
+
+                  </div>
+                </div>
+
+                <!-- 수정 사유 / 관리자 -->
+                <div class="col-lg-3 col-md-6 border-start">
+                  <div class="small text-muted mb-1">
+                    수정 사유
+                  </div>
+
+                  <div class="fw-semibold mb-2"
+                       th:text="${log.changeReason}">
+                    시스템 오류
+                  </div>
+
+                  <div class="small text-muted">
+                    수정 관리자
+                  </div>
+
+                  <div>
+                    <span th:text="${log.changedByName}">관리자</span>
+                    (
+                    <span th:text="${log.changedBy}">20209999</span>
+                    )
+                  </div>
+                </div>
+
+                <!-- 수정 일시 -->
+                <div class="col-lg-1 col-md-6 border-start">
+                  <div class="small text-muted mb-1">
+                    수정일시
+                  </div>
+
+                  <div class="fw-semibold"
+                       th:text="${log.changedAt}">
+                    2026-05-15 18:57
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+        <!-- 관리자 근태 수정 이력 카드형 목록 영역 끝 -->
+
+        <!-- 관리자 근태 수정 이력 페이징 영역 시작 -->
+        <div class="row mt-4 mb-2"
+             th:if="${changeLogPage != null and changeLogPage.totalPages > 0}">
+
+          <div class="col-12 d-flex justify-content-center">
+
+            <nav>
+              <ul class="pagination pagination-sm mb-0">
+
+                <!-- 처음 버튼 -->
+                <li class="page-item"
+                    th:classappend="${changeLogPage.first} ? ' disabled'">
+                  <a class="page-link"
+                     th:href="@{/admin/attendance/log(
+                        page=0,
+                        size=${changeLogPage.size}
+                     )}">
+                    처음
+                  </a>
+                </li>
+
+                <!-- 이전 버튼 -->
+                <li class="page-item"
+                    th:classappend="${changeLogPage.first} ? ' disabled'">
+                  <a class="page-link"
+                     th:href="@{/admin/attendance/log(
+                        page=${changeLogPage.number - 1},
+                        size=${changeLogPage.size}
+                     )}">
+                    이전
+                  </a>
+                </li>
+
+                <!-- 페이지 번호 -->
+                <li class="page-item"
+                    th:each="pageNum : ${#numbers.sequence(
+                        changeLogPage.number - 2 < 0 ? 0 : changeLogPage.number - 2,
+                        changeLogPage.number + 2 >= changeLogPage.totalPages ? changeLogPage.totalPages - 1 : changeLogPage.number + 2
+                    )}"
+                    th:classappend="${pageNum == changeLogPage.number} ? ' active'">
+                  <a class="page-link"
+                     th:text="${pageNum + 1}"
+                     th:href="@{/admin/attendance/log(
+                        page=${pageNum},
+                        size=${changeLogPage.size}
+                     )}">
+                    1
+                  </a>
+                </li>
+
+                <!-- 다음 버튼 -->
+                <li class="page-item"
+                    th:classappend="${changeLogPage.last} ? ' disabled'">
+                  <a class="page-link"
+                     th:href="@{/admin/attendance/log(
+                        page=${changeLogPage.number + 1},
+                        size=${changeLogPage.size}
+                     )}">
+                    다음
+                  </a>
+                </li>
+
+                <!-- 마지막 버튼 -->
+                <li class="page-item"
+                    th:classappend="${changeLogPage.last} ? ' disabled'">
+                  <a class="page-link"
+                     th:href="@{/admin/attendance/log(
+                        page=${changeLogPage.totalPages - 1},
+                        size=${changeLogPage.size}
+                     )}">
+                    마지막
+                  </a>
+                </li>
+
+              </ul>
+            </nav>
+
+          </div>
+        </div>
+        <!-- 관리자 근태 수정 이력 페이징 영역 끝 -->
         <!-- end::Row-->
       </div>
       <!--end::Container-->

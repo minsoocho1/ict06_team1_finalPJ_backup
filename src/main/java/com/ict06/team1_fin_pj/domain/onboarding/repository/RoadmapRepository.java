@@ -21,4 +21,5 @@ import java.util.Optional;
 public interface RoadmapRepository extends JpaRepository<RoadmapEntity, Integer> {
 
     Optional<RoadmapEntity> findFirstByEmployee_EmpNoOrderByRoadmapIdDesc(String empNo);
+
 }

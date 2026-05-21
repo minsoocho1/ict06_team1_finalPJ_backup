@@ -8,6 +8,7 @@
 #  @ 수정일자        수정자          수정내용
 #  @ ----------    ---------    -------------------------------
 #  @ 2026.05.12    김다솜        문서 처리 요청/응답 스키마 정의 및 상단 주석 보강
+#  @ 2026.05.18    김다솜        문서 처리 응답에 요청 문서 식별자 docId 추가
 #
 
 from pydantic import BaseModel, Field
@@ -30,6 +31,7 @@ class DocumentChunkResponse(BaseModel):
 
 
 class DocumentProcessResponse(BaseModel):
+    docId: int | None = None
     status: str = "SUCCESS"
     sourceType: str
     extractedTextPreview: str

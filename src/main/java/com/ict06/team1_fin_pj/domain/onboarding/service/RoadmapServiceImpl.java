@@ -16,7 +16,7 @@
 
 package com.ict06.team1_fin_pj.domain.onboarding.service;
 
-import com.ict06.team1_fin_pj.common.dto.onboarding.AdminRoadItemRequestDto;
+import com.ict06.team1_fin_pj.common.dto.onboarding.AdRoadItemRequestDto;
 import com.ict06.team1_fin_pj.common.dto.onboarding.RoadmapGroupResponse;
 import com.ict06.team1_fin_pj.common.dto.onboarding.RoadmapItemResponse;
 import com.ict06.team1_fin_pj.common.dto.onboarding.RoadmapResponse;
@@ -144,7 +144,7 @@ public class RoadmapServiceImpl {
      * 로드맵 아이템 수정 및 일정 동기화
      */
     @Transactional
-    public void updateRoadItem(Integer itemId, AdminRoadItemRequestDto requestDto) {
+    public void updateRoadItem(Integer itemId, AdRoadItemRequestDto requestDto) {
         RoadItemEntity item = roadItemRepository.findById(itemId)
                 .orElseThrow(() -> new RuntimeException("Roadmap item not found."));
 

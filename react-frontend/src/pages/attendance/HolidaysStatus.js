@@ -33,21 +33,15 @@ import {
 import { useNavigate, useOutletContext } from 'react-router-dom';
 import { PATH } from 'src/constants/path';
 
-// 시연용 이미지 파일
-import refImage from 'src/assets/images/first_demo/[Attendance]holidayStatus.png';
-
-// 1차 시연용 스타일
+// 공통 페이지 스타일
 import { containerStyle } from 'src/styles/js/demoPageStyle';
-
-// SQL 코드 하이라이터
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
 
   // [근태관리] 연차 현황 페이지
   const HolidaysStatus = () => {
     // DefaultLayout.js의 Outlet에서 보낸 userInfo 데이터 받기
     const [userInfo] = useOutletContext();
 
+    console.log('HolidaysStatus userInfo:', userInfo);
     // 페이지 이동용 함수
     // 연차 현황 페이지에서 근태 메인으로 돌아갈 때 사용
     const navigate = useNavigate();
@@ -56,8 +50,7 @@ import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
     // 1. 연차 요약 데이터
     // ==============================
     // 로그인한 사용자의 사번
-    // userInfo가 아직 없을 수 있으므로 테스트 사번을 기본값으로 사용
-    const empNo = userInfo?.empNo || '20209999';
+    const empNo = userInfo?.empNo;
 
     // 연차 요약 데이터 상태
     const [leaveSummary, setLeaveSummary] = useState({
@@ -123,9 +116,6 @@ import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
         // [{ startDate, endDate, typeName, leaveDays, status }, ...]
         setLeaveHistory(historyRes.data);
 
-        console.log('연차 요약:', summaryRes.data);
-        console.log('연차 사용 내역:', historyRes.data);
-
       } catch (error) {
         // 5. 에러 처리
         // alert 대신 화면에 에러 메시지를 보여주기 위해 상태에 저장
@@ -139,46 +129,15 @@ import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
         setLoading(false);
       }
     };
-
     // 화면이 처음 열릴 때 연차 데이터 조회
     useEffect(() => {
-    fetchLeaveData();
+      // 로그인 사용자 정보가 아직 없으면 API 호출하지 않음
+      if (!empNo) return;
+
+      fetchLeaveData();
     }, [empNo]);
-
   // ==============================
-  // 4. 발표/시연용 SQL
-  // ==============================
-  // 기존 vacation_info는 현재 ERD에 없는 테이블이라
-  // 우리 ERD 기준인 leave_occurrence, leave_request, leave_type 기준으로 변경
-  const sqlQuery = `
--- 사원의 연차 발생/사용/잔여 현황 조회
-SELECT
-    emp_no,
-    target_year,
-    SUM(occur_days) AS total_days,
-    SUM(used_days) AS used_days,
-    SUM(remain_days) AS remain_days
-FROM leave_occurrence
-WHERE emp_no = #{empNo}
-  AND target_year = #{targetYear}
-GROUP BY emp_no, target_year;
-
--- 사원의 연차 사용 내역 조회
-SELECT
-    lr.start_date,
-    lr.end_date,
-    lt.type_name,
-    lr.leave_days,
-    lr.status
-FROM leave_request lr
-JOIN leave_type lt
-  ON lr.leave_type_id = lt.type_id
-WHERE lr.emp_no = #{empNo}
-ORDER BY lr.start_date DESC;
-  `;
-
-  // ==============================
-  // 5. 상태값을 한글 배지로 변환
+  // 4. 상태값을 한글 뱃지로 변환
   // ==============================
   // DB/API에서는 APPROVED, PENDING 같은 코드값을 사용하고
   // 화면에서는 승인, 대기처럼 한글로 보여주기 위한 함수
@@ -198,7 +157,7 @@ ORDER BY lr.start_date DESC;
   };
 
   // ==============================
-  // 6. 연차 사용률에 따른 Progress 색상
+  // 5. 연차 사용률에 따른 Progress 색상
   // ==============================
   // 사용률이 높아질수록 경고 색상으로 변경
   const getProgressColor = () => {
@@ -206,6 +165,21 @@ ORDER BY lr.start_date DESC;
     if (usedRate >= 70) return 'warning';
     return 'success';
   };
+
+  // 로그인 사용자 정보가 아직 준비되지 않았을 때 화면
+  // userInfo가 늦게 들어오는 경우 API 호출 전에 안내 화면을 보여준다.
+  if (!empNo) {
+    return (
+      <div style={containerStyle}>
+        <CCard>
+          <CCardBody className="text-center py-5">
+            사용자 정보를 불러오는 중입니다...
+          </CCardBody>
+        </CCard>
+      </div>
+    );
+  }
+
 
   return (
     <div style={containerStyle}>
@@ -245,7 +219,9 @@ ORDER BY lr.start_date DESC;
       {/* 상단 제목 + 근태 메인 이동 버튼 */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 className="mb-1">{userInfo?.name}님의 연차 현황</h2>
+            <h2 className="mb-1">
+              {userInfo?.name ? `${userInfo.name}님의 연차 현황` : '연차 현황'}
+            </h2>
             <div style={{ fontSize: '14px', color: '#6c757d' }}>
             총 연차, 사용 연차, 잔여 연차를 한눈에 확인합니다.
             </div>
@@ -505,59 +481,6 @@ ORDER BY lr.start_date DESC;
               )}
             </CTableBody>
           </CTable>
-        </CCardBody>
-      </CCard>
-
-      {/* ============================== */}
-      {/* 기존 시연용 화면 영역 */}
-      {/* 실제 UI 아래로 밀려나게 배치 */}
-      {/* ============================== */}
-
-      <CCard className="mb-4">
-        <CCardHeader>
-          <strong>시연 화면 및 관련 SQL쿼리</strong>
-        </CCardHeader>
-
-        <CCardBody className="p-0 d-flex flex-column">
-          {/* 레퍼런스 이미지 영역 */}
-          <div
-            className="text-center"
-            style={{
-              backgroundColor: '#f4f4f4',
-              borderTop: '1px solid #eee',
-            }}
-          >
-            <img
-              src={refImage}
-              alt="연차 현황 시연 화면"
-              style={{
-                width: '100%',
-                height: 'auto',
-                display: 'block',
-              }}
-            />
-          </div>
-
-          {/* SQL 쿼리 영역 */}
-          <div className="text-start mt-4">
-            <h5
-              className="mb-3"
-              style={{ fontWeight: 'bold', color: '#4f5d73' }}
-            >
-              <span
-                style={{
-                  borderLeft: '4px solid #321fdb',
-                  paddingLeft: '10px',
-                }}
-              >
-                관련 SQL 쿼리
-              </span>
-            </h5>
-
-            <SyntaxHighlighter language="sql" style={coy}>
-              {sqlQuery}
-            </SyntaxHighlighter>
-          </div>
         </CCardBody>
       </CCard>
         </>

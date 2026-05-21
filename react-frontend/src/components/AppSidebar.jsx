@@ -1,3 +1,15 @@
+/**
+ * @FileName : AppSidebar.jsx
+ * @Description : 사용자 권한별 사이드바 메뉴 및 프로필 요약 영역
+ * @Author : 김다솜
+ * @Date : 2026. 05. 19
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자        수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.19    김다솜        사이드바 기본 프로필 이미지 제거
+ */
+
 import React from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 
@@ -11,12 +23,11 @@ import {
   CSidebarNav,
 } from '@coreui/react'
 import { CIcon } from '@coreui/icons-react'
-import { cilSearch } from '@coreui/icons'
+import { cilSearch, cilUser } from '@coreui/icons'
 
 import { AppSidebarNav } from './AppSidebarNav'
 import AppLogo from './AppLogo'
 import navigation from '../_nav'
-import avatar8 from 'src/assets/images/avatars/8.jpg'
 import { setSidebarState } from 'src/store/store'
 
 const normalizeRole = (roleValue) => {
@@ -78,7 +89,9 @@ const AppSidebar = ({ userInfo }) => {
           }}
         >
           <div className="d-flex align-items-center gap-3">
-            <CAvatar src={avatar8} size="lg" />
+            <CAvatar color="secondary" textColor="white" size="lg">
+              <CIcon icon={cilUser} />
+            </CAvatar>
             <div style={{ minWidth: 0 }}>
               <div className="fw-semibold text-dark text-truncate">{employeeName}</div>
               <div className="small text-muted">사번: {employeeNo}</div>

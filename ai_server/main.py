@@ -12,6 +12,9 @@
 #  @ 2026.05.12    김다솜         Spring 연동 경로에 맞춘 AI 평가/퀴즈/문서 처리 라우터 등록
 #  @ 2026.05.13    김다솜         팀별/본부별 차트 토글용 대시보드 통계 구조 확장
 #  @ 2026.05.14    김다솜         위치 기반 날씨 정보 및 독려 메시지 반환 API 추가 및 메시지 다양화 (시간대별 메시지 포함)
+#  @ 2026.05.18    김다솜         OpenWeather 설정 조회 보완 및 이탈 징후 분석 기반 LLM 개선 인사이트 API 추가
+#  @ 2026.05.19    김다솜         자기 평가 vs. AI 평가 비교 피드백 생성 API 추가
+#  @ 2026.05.19    김다솜         이탈 위험 분석 인사이트 보고서형 출력 조건 보완
 #
 
 import os
@@ -30,11 +33,22 @@ from api.documents.ai_documents import router as document_router
 from api.evaluation.ai_evaluation import router as evaluation_router
 from api.roadmap.ai_roadmap import router as roadmap_router
 from repositories import dashboard_repository
-from schemas.evaluation_schema import AiEvaluationRequest, AiEvaluationResponse, AiQuizGenerationRequest
+from schemas.evaluation_schema import (
+    AiEvaluationRequest,
+    AiEvaluationResponse,
+    AiQuizGenerationRequest,
+    AiSelfCheckFeedbackRequest,
+    AiSelfCheckFeedbackResponse,
+)
 from services import ollama_client
 from services import evaluation_service
 
-load_dotenv(dotenv_path=Path(__file__).parent / ".env")
+env_path = Path(__file__).parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+    print(f"Loaded environment from {env_path}")
+else:
+    print(f"Warning: .env file not found at {env_path}")
 
 app = FastAPI(
     title="COREWORK AI Server",
@@ -139,6 +153,14 @@ def generate_quiz(req: AiQuizGenerationRequest):
     return evaluation_service.generate_quiz_drafts(req)
 
 
+@app.post("/api/ai/evaluation/self-check-feedback", response_model=AiSelfCheckFeedbackResponse, tags=["AI Evaluation"])
+def generate_self_check_feedback(req: AiSelfCheckFeedbackRequest):
+    """
+    자기 평가와 AI 평가 결과를 바탕으로 사용자용 피드백 생성
+    """
+    return evaluation_service.generate_self_check_feedback(req)
+
+
 @app.get("/api/stats/evaluation/category-performance", tags=["Evaluation Statistics"])
 def get_category_performance_stats(level: str = Query("team", description="필터링 레벨 (team 또는 division)")):
     """
@@ -177,23 +199,115 @@ def analyze_evaluation_stats(stats_summary: dict):
         return {"analysis": "AI 서버(Ollama)로부터 응답을 받지 못했습니다. 설정 또는 모델 상태를 확인해 주세요."}
     return {"analysis": analysis}
 
-@app.get("/api/weather", tags=["External"])
-def get_current_weather(lat: float = Query(...), lon: float = Query(...)):
-    # 현재 위치 기반 실시간 날씨 정보를 조회하고 AI를 이용한 응원 메시지 생성
-    api_key = os.getenv("OPENWEATHER_API_KEY")
-    if not api_key:
-        return {"status": "error", "message": "API Key is missing in .env"}
 
-    url = f"https://api.openweathermap.org/data/2.5/weather?lat={lat}&lon={lon}&appid={api_key}&units=metric&lang=kr"
+@app.post("/api/ai/evaluation/analyze-retention", tags=["Evaluation Statistics"])
+def analyze_retention_risk(retention_summary: dict):
+    """
+    규칙 기반 이탈 징후 분석 결과를 바탕으로 관리자용 개선 인사이트 생성
+    """
+    prompt = f"""
+    당신은 기업 온보딩/교육 리텐션 컨설턴트입니다.
+    아래 데이터는 시스템이 규칙 기반으로 산출한 이탈 위험 직원과 위험 사유/개선 추천입니다.
+
+    데이터:
+    {retention_summary}
+
+    작성 조건:
+    - 한국어로 작성하세요.
+    - 위험 판단 기준을 새로 만들지 말고, 제공된 riskScore/riskReasons/recommendations를 근거로 해석하세요.
+    - 콤마로 긴 문장을 이어 쓰지 말고 보고서처럼 줄을 나누어 작성하세요.
+    - 아래 형식을 반드시 따르세요.
+      [핵심 위험 흐름]
+      - 문장 1
+      - 문장 2
+
+      [우선 조치]
+      1. 조치 1
+      2. 조치 2
+      3. 조치 3
+    - 직원 개인정보를 과도하게 반복하지 말고, 이름은 필요한 경우에만 언급하세요.
+    - 전체 8줄 이내로 간결하게 작성하세요.
+    """
+    analysis = ollama_client.chat(prompt)
+    if not analysis:
+        return {"analysis": "AI 서버(Ollama)로부터 이탈 징후 분석 응답을 받지 못했습니다. 설정 또는 모델 상태를 확인해 주세요."}
+    return {"analysis": analysis}
+
+@app.get("/api/weather", tags=["External"])
+def get_current_weather(lat: str = Query(...), lon: str = Query(...)):
+    # 현재 위치 기반 실시간 날씨 정보를 조회하고 AI를 이용한 응원 메시지 생성
+
+    # 프론트엔드에서 파라미터가 {lat} 형태로 들어오는 경우를 대비한 클렌징 로직
+    try:
+        clean_lat = float(str(lat).strip("{} "))
+        clean_lon = float(str(lon).strip("{} "))
+    except ValueError:
+        return {"status": "error", "message": "위도/경도 형식이 올바르지 않습니다."}
+
+    # 1. 먼저 .env 환경변수 확인
+    api_key = os.getenv("OPENWEATHER_API_KEY")
+
+    # 2. .env에 없다면 Spring Boot properties에서 검색 (Fallback)
+    if not api_key:
+        try:
+            resource_dir = Path(__file__).parent.parent / "src" / "main" / "resources"
+            prop_paths = [
+                resource_dir / "application.properties",
+                resource_dir / "application-local.properties",
+                resource_dir / "application-prod.properties",
+            ]
+            supported_keys = {
+                "weather.api.key",
+            }
+
+            for prop_path in prop_paths:
+                if not prop_path.exists():
+                    continue
+
+                with open(prop_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        stripped = line.strip()
+                        if not stripped or stripped.startswith("#") or "=" not in stripped:
+                            continue
+
+                        key, value = stripped.split("=", 1)
+                        if key.strip() in supported_keys:
+                            api_key = value.strip()
+                            break
+                if api_key:
+                    break
+        except Exception as e:
+            print(f"Warning: application.properties 읽기 실패: {e}")
+
+    api_key = (api_key or "").strip()
+    if not api_key:
+        return {"status": "error", "message": "OpenWeather API Key를 찾을 수 없습니다. (.env 또는 application.properties 확인)"}
+
+    url = f"https://api.openweathermap.org/data/2.5/weather?lat={clean_lat}&lon={clean_lon}&appid={api_key}&units=metric&lang=kr"
     try:
         response = requests.get(url, timeout=5)
         response.raise_for_status()
         data = response.json()
 
+        # Reverse Geocoding API를 호출하여 구(District) 단위 정보 가져오기
+        geo_url = f"http://api.openweathermap.org/geo/1.0/reverse?lat={clean_lat}&lon={clean_lon}&limit=1&appid={api_key}"
+        try:
+            geo_res = requests.get(geo_url, timeout=5)
+            if geo_res.status_code == 200:
+                geo_data = geo_res.json()
+                if geo_data:
+                    # 한국어 이름(local_names['ko'])이 있으면 사용하고, 없으면 기본 name 사용
+                    display_name = geo_data[0].get('local_names', {}).get('ko') or geo_data[0].get('name')
+                    data['name'] = display_name  # 기본 도시명(Seoul)을 상세 지명(구 단위)으로 교체
+                    data['display_location'] = display_name
+                    data['location_source'] = 'GPS'
+        except Exception as geo_e:
+            print(f"Reverse Geocoding failed: {geo_e}")
+
         # 날씨 기반 독려 메시지 생성 로직
         weather_main = data['weather'][0]['main'] # Clear, Clouds, Rain, Snow 등
         weather_desc = data['weather'][0]['description'] # 맑음, 구름 많음, 가벼운 비 등
-        temp = data['main']['temp']
+        temp = data['main'].get('temp', 0)
         current_hour = datetime.now().hour # 현재 시간 (0-23시)
         
         # 1. AI(Ollama)를 통한 실시간 메시지 생성 시도

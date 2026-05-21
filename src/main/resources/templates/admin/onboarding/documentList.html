@@ -11,6 +11,8 @@
     @ 2026.05.11    김다솜        목록 필터/정렬 및 재처리 요청 기능 추가
     @ 2026.05.13    김다솜        최종 처리 시각, 퀴즈 자동생성 상태, 백그라운드 처리 완료 안내 모달 추가
     @ 2026.05.14    김다솜        문서 기반 AI 질문응답 모달 추가 및 인코딩 정리
+    @ 2026.05.18    김다솜        재처리 요청 대상 문서만 완료 안내하도록 상태 폴링 보완, 요약 미리보기를 주요 청크 미리보기로 대체
+    @ 2026.05.19    김다솜        알림 URL 진입 시 해당 문서 행으로 이동 및 강조 표시 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -61,7 +63,7 @@
                                     <option value="">퀴즈 상태 전체</option>
                                     <option value="generated">AI 자동생성 완료</option>
                                     <option value="pending">연결됨 / 생성 전</option>
-                                    <option value="none">연결 없음</option>
+                                    <option value="none">연결 문서 없음</option>
                                 </select>
                             </div>
                             <div class="col-md-2">
@@ -93,7 +95,7 @@
                                 <th class="text-nowrap" style="min-width: 150px;">최종 처리 시각</th>
                                 <th class="text-nowrap" style="min-width: 120px;">등록자</th>
                                 <th style="min-width: 260px;">경로</th>
-                                <th style="min-width: 280px;">요약 미리보기</th>
+                                <th style="min-width: 280px;">주요 청크</th>
                                 <th style="min-width: 240px;">최근 실패 사유</th>
                                 <th class="text-nowrap" style="min-width: 260px;">관리</th>
                             </tr>
@@ -101,6 +103,7 @@
                             <tbody>
                             <tr th:each="document : ${documents}"
                                 class="document-row"
+                                th:id="${'document-' + document.docId}"
                                 th:attr="data-doc-id=${document.docId},
                                          data-title=${document.title},
                                          data-department=${document.departmentName},
@@ -124,7 +127,7 @@
                                 <td class="document-chunk-count text-nowrap" th:text="${document.chunkCount}"></td>
                                 <td class="document-vector-count text-nowrap" th:text="${document.vectorCount}"></td>
                                 <td class="document-quiz-status text-nowrap">
-                                    <span th:if="${document.linkedContentId == null}" class="badge text-bg-light border">연결 없음</span>
+                                    <span th:if="${document.linkedContentId == null}" class="badge text-bg-light border">연결 문서 없음</span>
                                     <span th:if="${document.linkedContentId != null and document.quizGenerated}" class="badge text-bg-success"
                                           th:text="${document.generatedQuizCount + '문항 생성'}"></span>
                                     <span th:if="${document.linkedContentId != null and !document.quizGenerated}" class="badge text-bg-warning">생성 전</span>
@@ -134,9 +137,9 @@
                                 <td class="document-created-by text-nowrap" th:text="${document.createdByName}"></td>
                                 <td class="text-muted small document-path" style="max-width: 320px; word-break: break-all;"
                                     th:title="${document.filePath}" th:text="${document.filePath}"></td>
-                                <td class="small text-muted document-summary" style="max-width: 320px; white-space: normal;"
-                                    th:title="${document.summaryPreview}"
-                                    th:text="${document.summaryPreview != null && !#strings.isEmpty(document.summaryPreview) ? document.summaryPreview : '-'}"></td>
+                                <td class="small text-muted document-key-chunk" style="max-width: 320px; white-space: pre-line;"
+                                    th:title="${document.keyChunkPreview}"
+                                    th:text="${document.keyChunkPreview != null && !#strings.isEmpty(document.keyChunkPreview) ? document.keyChunkPreview : '-'}"></td>
                                 <td class="small text-muted document-last-error" style="max-width: 260px; white-space: normal;"
                                     th:title="${document.lastErrorMessage}"
                                     th:text="${document.lastErrorMessage != null && !#strings.isEmpty(document.lastErrorMessage) ? document.lastErrorMessage : '-'}"></td>
@@ -224,7 +227,7 @@
     <th:block th:replace="~{/admin/common/footer}"></th:block>
 </div>
 <th:block th:replace="~{/admin/common/commonJs}"></th:block>
-<script>
+<script th:inline="javascript">
     document.addEventListener('DOMContentLoaded', function () {
         const tableBody = document.querySelector('#documentTable tbody');
         const rows = () => Array.from(document.querySelectorAll('#documentTable tbody .document-row'));
@@ -236,6 +239,8 @@
         const resetButton = document.getElementById('documentFilterReset');
         const successAlertText = (document.querySelector('.alert-success')?.innerText || '').toLowerCase();
         const processingTriggered = successAlertText.includes('processing started') || successAlertText.includes('reprocessing started');
+        const processingDocId = /*[[${processingDocId}]]*/ null;
+        const processingDocTitle = /*[[${processingDocTitle}]]*/ null;
         const statusUrl = '/admin/onboarding/documents/status';
         const answerUrlPrefix = '/admin/onboarding/documents';
         const completionNotified = new Set();
@@ -275,7 +280,7 @@
         };
 
         const buildQuizStatusHtml = (doc) => {
-            if (!doc.linkedContentId) return '<span class="badge text-bg-light border">연결 없음</span>';
+            if (!doc.linkedContentId) return '<span class="badge text-bg-light border">연결 문서 없음</span>';
             if (doc.quizGenerated) return `<span class="badge text-bg-success">${doc.generatedQuizCount || 0}문항 생성</span>`;
             return '<span class="badge text-bg-warning">생성 전</span>';
         };
@@ -362,6 +367,7 @@
 
         const notifyCompletion = (doc) => {
             if (!doc || !doc.docId || completionNotified.has(doc.docId)) return;
+            if (processingDocId && Number(doc.docId) !== Number(processingDocId)) return;
             completionNotified.add(doc.docId);
 
             if (doc.currentStage === 'PUBLISHED') {
@@ -394,8 +400,8 @@
             row.querySelector('.document-created-by').textContent = doc.createdByName || '-';
             row.querySelector('.document-path').textContent = doc.filePath || '-';
             row.querySelector('.document-path').title = doc.filePath || '';
-            row.querySelector('.document-summary').textContent = doc.summaryPreview || '-';
-            row.querySelector('.document-summary').title = doc.summaryPreview || '';
+            row.querySelector('.document-key-chunk').textContent = doc.keyChunkPreview || '-';
+            row.querySelector('.document-key-chunk').title = doc.keyChunkPreview || '';
             row.querySelector('.document-last-error').textContent = doc.lastErrorMessage || '-';
             row.querySelector('.document-last-error').title = doc.lastErrorMessage || '';
 
@@ -416,6 +422,18 @@
             } catch (error) {
                 console.error(error);
             }
+        };
+
+        const focusDocumentFromHash = () => {
+            const hash = window.location.hash || '';
+            if (!hash.startsWith('#document-')) return;
+
+            const row = document.querySelector(hash);
+            if (!row) return;
+
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('table-warning');
+            setTimeout(() => row.classList.remove('table-warning'), 3500);
         };
 
         questionSubmit.addEventListener('click', async () => {
@@ -498,8 +516,14 @@
         applyFilters();
         attachFilterEvents();
         bindQuestionButtons();
+        focusDocumentFromHash();
+        window.addEventListener('hashchange', focusDocumentFromHash);
 
         if (processingTriggered) {
+            if (processingDocId) {
+                processModalBody.textContent = `${processingDocTitle || '선택한 문서'} 문서 재처리를 요청했습니다. 해당 문서의 청크/벡터 상태만 추적합니다.`;
+                processModal.show();
+            }
             setInterval(pollStatuses, 4000);
         }
     });

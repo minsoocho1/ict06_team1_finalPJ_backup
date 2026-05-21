@@ -15,6 +15,7 @@
  * @ 2026.04.29    김다솜        학습 완료 처리 API 연동 및 로드맵 상태 반영 로직 추가
  * @ 2026.05.06    김다솜        콘텐츠 상세 요청 URL 수정 (/content → /ai/content)
  * @ 2026.05.15    김다솜        AI 학습 도우미 및 완료 학습 재수강 안내 로직 추가, UI 개선
+ * @ 2026.05.18    김다솜        AI 학습 도우미 전송 버튼과 학습 완료 버튼 겹침 방지 레이아웃 조정
  */
 import {
   CButton,
@@ -132,6 +133,15 @@ const LearningDetail = () => {
   const [assistError, setAssistError] = useState(null)
   const [questionInput, setQuestionInput] = useState('')
   const [chatHistory, setChatHistory] = useState([])
+  const [selfCheck, setSelfCheck] = useState(null)
+  const [selfCheckLoading, setSelfCheckLoading] = useState(false)
+  const [selfCheckSaving, setSelfCheckSaving] = useState(false)
+  const [selfCheckForm, setSelfCheckForm] = useState({
+    understandingScore: 3,
+    confidenceScore: 3,
+    needMoreExplanation: false,
+    memo: '',
+  })
   const [alreadyCompleted, setAlreadyCompleted] = useState(Boolean(location.state?.isCompleted))
   const chatEndRef = useRef(null)
 
@@ -181,6 +191,38 @@ const LearningDetail = () => {
 
     fetchDetail()
   }, [contentId])
+
+  useEffect(() => {
+    const fetchSelfCheck = async () => {
+      const empNo = userInfo?.empNo
+      if (!empNo || !contentId) {
+        return
+      }
+
+      try {
+        setSelfCheckLoading(true)
+        const response = await axiosInstance.get(PATH.API.ONBOARDING.CONTENT_SELF_CHECK(contentId), {
+          params: { empNo },
+        })
+        const data = response.data
+        setSelfCheck(data)
+        if (data?.submitted) {
+          setSelfCheckForm({
+            understandingScore: data.understandingScore || 3,
+            confidenceScore: data.confidenceScore || 3,
+            needMoreExplanation: Boolean(data.needMoreExplanation),
+            memo: data.memo || '',
+          })
+        }
+      } catch (err) {
+        console.error('[LearningDetail] self-check load failed:', err)
+      } finally {
+        setSelfCheckLoading(false)
+      }
+    }
+
+    fetchSelfCheck()
+  }, [contentId, userInfo?.empNo])
 
   const handleCompleteLearning = async () => {
     try {
@@ -306,6 +348,155 @@ const LearningDetail = () => {
   const handleRetryLearning = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  const handleSelfCheckChange = (field, value) => {
+    setSelfCheckForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const handleSaveSelfCheck = async () => {
+    const empNo = userInfo?.empNo
+    if (!empNo) {
+      alert('사용자 정보가 없습니다.')
+      return
+    }
+
+    try {
+      setSelfCheckSaving(true)
+      const response = await axiosInstance.post(PATH.API.ONBOARDING.CONTENT_SELF_CHECK(contentId), {
+        empNo,
+        understandingScore: Number(selfCheckForm.understandingScore),
+        confidenceScore: Number(selfCheckForm.confidenceScore),
+        needMoreExplanation: Boolean(selfCheckForm.needMoreExplanation),
+        memo: selfCheckForm.memo,
+      })
+      setSelfCheck(response.data)
+      toast.success('학습 이해도 자기 평가를 저장했습니다.')
+    } catch (err) {
+      console.error('[LearningDetail] self-check save failed:', err)
+      alert('자기 평가 저장 중 오류가 발생했습니다.')
+    } finally {
+      setSelfCheckSaving(false)
+    }
+  }
+
+  const renderLearningCompletionActions = () => (
+    <div
+      className="mt-4 d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-3"
+      style={{
+        borderTop: `1px solid ${COLORS.border}`,
+        paddingTop: '18px',
+      }}
+    >
+      {alreadyCompleted ? (
+        <>
+          <p className="text-muted small mb-0">
+            이미 학습한 콘텐츠입니다. 필요하면 다시 학습할 수 있습니다.
+          </p>
+          <CButton color="primary" onClick={handleRetryLearning}>
+            다시 학습하기
+          </CButton>
+        </>
+      ) : (
+        <>
+          <p className="text-muted small mb-0">
+            학습이 끝나면 완료 버튼을 눌러 진행 상태를 반영해 주세요.
+          </p>
+
+          <CButton color="success" onClick={handleCompleteLearning} disabled={!itemId && !checklistId}>
+            학습 완료
+          </CButton>
+        </>
+      )}
+    </div>
+  )
+
+  const renderScoreOptions = () => [1, 2, 3, 4, 5].map((score) => (
+    <option key={score} value={score}>
+      {score}점
+    </option>
+  ))
+
+  const renderSelfCheckCard = () => (
+    <CCard className="mt-4" style={cardCore}>
+      <CCardHeader className="bg-white py-3 d-flex justify-content-between align-items-center">
+        <strong>학습 이해도 자기 평가</strong>
+        {selfCheckLoading && <CSpinner size="sm" color="primary" />}
+      </CCardHeader>
+      <CCardBody>
+        <p className="text-muted small mb-3">
+          학습 직후 느낀 이해도와 자신감을 남기면, 제출한 AI 평가 결과와 비교해 피드백을 제공합니다.
+        </p>
+
+        <div className="row g-3">
+          <div className="col-md-6">
+            <label className="form-label small fw-semibold">이해도</label>
+            <select
+              className="form-select"
+              value={selfCheckForm.understandingScore}
+              onChange={(event) => handleSelfCheckChange('understandingScore', event.target.value)}
+            >
+              {renderScoreOptions()}
+            </select>
+          </div>
+          <div className="col-md-6">
+            <label className="form-label small fw-semibold">자신감</label>
+            <select
+              className="form-select"
+              value={selfCheckForm.confidenceScore}
+              onChange={(event) => handleSelfCheckChange('confidenceScore', event.target.value)}
+            >
+              {renderScoreOptions()}
+            </select>
+          </div>
+        </div>
+
+        <label className="d-flex align-items-center gap-2 mt-3 small">
+          <input
+            type="checkbox"
+            checked={selfCheckForm.needMoreExplanation}
+            onChange={(event) => handleSelfCheckChange('needMoreExplanation', event.target.checked)}
+          />
+          추가 설명이 필요해요
+        </label>
+
+        <CFormTextarea
+          className="mt-3"
+          rows={3}
+          placeholder="헷갈렸던 개념이나 다시 보고 싶은 부분을 적어 주세요."
+          value={selfCheckForm.memo}
+          onChange={(event) => handleSelfCheckChange('memo', event.target.value)}
+        />
+
+        <div className="d-flex justify-content-end mt-3">
+          <CButton color="primary" onClick={handleSaveSelfCheck} disabled={selfCheckSaving}>
+            {selfCheckSaving ? '저장 중...' : '자기 평가 저장'}
+          </CButton>
+        </div>
+
+        {selfCheck?.feedback && (
+          <div
+            className="mt-3 p-3"
+            style={{
+              background: COLORS.softBlue,
+              border: `1px solid ${COLORS.border}`,
+              borderRadius: '8px',
+            }}
+          >
+            <div className="fw-semibold mb-2">AI 평가 비교 피드백</div>
+            <div className="small" style={{ lineHeight: 1.7 }}>{selfCheck.feedback}</div>
+            <div className="d-flex flex-wrap gap-2 mt-2 small text-muted">
+              {selfCheck.selfScoreRate != null && <span>자기 평가 {selfCheck.selfScoreRate}%</span>}
+              {selfCheck.evaluationScoreRate != null && <span>AI 평가 {selfCheck.evaluationScoreRate}%</span>}
+              {selfCheck.scoreGap != null && <span>차이 {selfCheck.scoreGap > 0 ? '+' : ''}{selfCheck.scoreGap}%</span>}
+            </div>
+          </div>
+        )}
+      </CCardBody>
+    </CCard>
+  )
 
   if (userLoading) {
     return (
@@ -462,8 +653,7 @@ const LearningDetail = () => {
         <CCardBody
           className="d-flex flex-column"
           style={{
-            minHeight: '640px',
-            maxHeight: '72vh',
+            minHeight: '560px',
             paddingBottom: '12px',
           }}
         >
@@ -495,7 +685,7 @@ const LearningDetail = () => {
               disabled={assistLoading}
               style={{ resize: 'none' }}
             />
-            <div className="d-flex justify-content-end mt-2">
+            <div className="d-flex justify-content-end mt-2" style={{ position: 'relative', zIndex: 1 }}>
               <CButton color="dark" size="sm" onClick={handleAskQuestion} disabled={assistLoading}>
                 전송
               </CButton>
@@ -641,31 +831,12 @@ const LearningDetail = () => {
               )}
             </CCardBody>
           </CCard>
+
+          {renderSelfCheckCard()}
+
+          {renderLearningCompletionActions()}
         </CCol>
       </CRow>
-
-      <div className="mt-4 d-flex justify-content-between align-items-center">
-        {alreadyCompleted ? (
-          <>
-            <p className="text-muted small mb-0">
-              이미 학습한 콘텐츠입니다. 필요하면 다시 학습할 수 있습니다.
-            </p>
-            <CButton color="primary" onClick={handleRetryLearning}>
-              다시 학습하기
-            </CButton>
-          </>
-        ) : (
-          <>
-            <p className="text-muted small mb-0">
-              학습이 끝나면 완료 버튼을 눌러 진행 상태를 반영해 주세요.
-            </p>
-
-            <CButton color="success" onClick={handleCompleteLearning} disabled={!itemId && !checklistId}>
-              학습 완료
-            </CButton>
-          </>
-        )}
-      </div>
     </div>
   )
 }

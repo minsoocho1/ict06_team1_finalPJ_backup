@@ -11,6 +11,7 @@
  * @ 2026.05.10    김다솜        AI 퀴즈 출제 기준 목록/등록/수정/삭제 기능 추가
  * @ 2026.05.11    김다솜        AI 퀴즈 자동 생성, 평가 문제 목록, 문제 목록 이동 기능 추가
  * @ 2026.05.13    김다솜        평가 문제 수정/삭제 화면 및 DB 반영 기능 추가
+ * @ 2026.05.18    김다솜        AI 분석 리포트 화면 이동, LLM 이탈 분석 비동기 API 추가
  */
 package com.ict06.team1_fin_pj.domain.evaluation.controller;
 
@@ -38,7 +39,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.io.IOException;
@@ -100,8 +108,23 @@ public class AdEvaluationController {
         return "admin/evaluation/resultList";
     }
 
+    // 평가 결과 기반 AI 분석 리포트 화면
+    @GetMapping("/ai-report")
+    public String aiEvalReport(Model model) {
+        model.addAttribute("analytics", adEvaluationService.getEvaluationAnalytics());
+        return "admin/evaluation/aiEvalReport";
+    }
+
+    @GetMapping("/ai-report/retention-analysis")
+    @ResponseBody
+    public ResponseEntity<?> aiRetentionAnalysis() {
+        var analytics = adEvaluationService.getEvaluationAnalytics();
+        String analysis = adEvaluationService.getAiRetentionRiskAnalysis(analytics.getRetentionRiskStats());
+        return ResponseEntity.ok(Map.of("analysis", analysis));
+    }
+
     /**
-     * 평가 결과 통계 화면(모달)에서 호출하는 평가 기준 수정 API
+     * 평가 결과 통계 화면에서 호출하는 평가 기준 수정 API
      */
     @PostMapping("/criteria")
     @ResponseBody
@@ -111,7 +134,7 @@ public class AdEvaluationController {
             @RequestParam Double weight) {
         try {
             adEvaluationService.updateCategoryCriteria(categoryName, passScore, weight);
-            return ResponseEntity.ok(Map.of("success", true, "message", "평가 기준이 수정되었습니다."));
+            return ResponseEntity.ok(Map.of("success", true, "message", "평가 기준을 수정했습니다."));
         } catch (Exception e) {
             return ResponseEntity.badRequest().body(Map.of("success", false, "message", e.getMessage()));
         }
@@ -393,7 +416,7 @@ public class AdEvaluationController {
         return dto;
     }
 
-    // 키워드 답안 입력값 JSON 배열 변환
+    // 키워드 답안 입력값을 JSON 배열 문자열로 변환
     private String normalizeKeywordAnswer(String keywordAnswerText) {
         String value = normalizeBlank(keywordAnswerText);
         if (value == null) {

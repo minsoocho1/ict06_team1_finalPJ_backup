@@ -389,8 +389,6 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
         }
 
         PayrollEmployeeInfoResponseDTO employeeInfo = getEmployeeInfo(requestDTO.getEmpNo());
-        PayrollPreviewResponseDTO preview =
-                calculatePayrollPreview(requestDTO, employeeInfo, payMonth);
 
         EmpEntity employee = entityManager.getReference(EmpEntity.class, requestDTO.getEmpNo());
 
@@ -413,25 +411,25 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                                     : requestDTO.getFamilyCount()
                     )
 
-                    .baseSalary(preview.getBaseSalary())
+                    .baseSalary(requestDTO.getBaseSalary())
 
                     .bonus(BigDecimal.ZERO)
 
-                    .totalAllowance(preview.getTotalAllowance())
-                    .totalGross(preview.getTotalGross())
-                    .taxableIncome(preview.getTaxableIncome())
+                    .totalAllowance(BigDecimal.ZERO)
+                    .totalGross(requestDTO.getTotalGross())
+                    .taxableIncome(requestDTO.getBaseSalary())
 
-                    .incomeTax(preview.getIncomeTax())
-                    .localIncomeTax(preview.getLocalIncomeTax())
+                    .incomeTax(requestDTO.getIncomeTax())
+                    .localIncomeTax(requestDTO.getLocalIncomeTax())
 
-                    .nationalPensionAmount(preview.getNationalPensionAmount())
-                    .healthInsuranceAmount(preview.getHealthInsuranceAmount())
-                    .longTermCareAmount(preview.getLongTermCareAmount())
-                    .employmentInsuranceAmount(preview.getEmploymentInsuranceAmount())
-                    .totalInsurance(preview.getTotalInsurance())
+                    .nationalPensionAmount(requestDTO.getNationalPensionAmount())
+                    .healthInsuranceAmount(requestDTO.getHealthInsuranceAmount())
+                    .longTermCareAmount(requestDTO.getLongTermCareAmount())
+                    .employmentInsuranceAmount(requestDTO.getEmploymentInsuranceAmount())
+                    .totalInsurance(requestDTO.getTotalInsurance())
 
-                    .totalDeduction(preview.getTotalDeduction())
-                    .netSalary(preview.getNetSalary())
+                    .totalDeduction(requestDTO.getTotalDeduction())
+                    .netSalary(requestDTO.getNetSalary())
 
                     .status(PayrollStatus.DRAFT)
                     .payDate(null)
@@ -486,14 +484,14 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                     .setParameter("status", PayrollStatus.DRAFT)
                     .setParameter("payrollId", payroll.getPayrollId())
                     .setParameter("zero", zero)
-                    .setParameter("totalAllowance", preview.getTotalAllowance())
-                    .setParameter("taxableIncome", preview.getTaxableIncome())
+                    .setParameter("totalAllowance", BigDecimal.ZERO)
+                    .setParameter("taxableIncome", requestDTO.getBaseSalary())
                     .setParameter("now", now)
                     .executeUpdate();
         }
 
         // 기존 지급/공제항목 삭제 후 현재 화면 기준으로 다시 저장
-        savePayrollItems(payroll, requestDTO.getItems(), preview);
+        savePayrollItems(payroll, requestDTO.getItems(), null);
 
         return "급여대장이 저장되었습니다.";
     }

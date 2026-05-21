@@ -8,6 +8,7 @@
  * @ 수정일자        수정자       수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.15    김다솜       OpenWeather 좌표 기반 조회와 역지오코딩 위치명 보강
+ * @ 2026.05.18    김다솜       현재 위치 구/동 단위 표기를 위한 역지오코딩 위치명 보강
  */
 package com.ict06.team1_fin_pj.external.crawling;
 
@@ -18,6 +19,10 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.util.UriComponentsBuilder;
 import org.springframework.web.client.RestTemplate;
@@ -86,6 +91,12 @@ public class CrawlingServiceImpl {
                 }
             }
 
+            String detailLocation = getDetailedLocationName(restTemplate, lat, lon);
+            if (!detailLocation.isBlank()) {
+                weatherNode.put("display_location_detail", detailLocation);
+                weatherNode.put("display_location", detailLocation);
+            }
+
             weatherNode.put("location_source", "GPS");
             return objectMapper.writeValueAsString(weatherNode);
         } catch (Exception e) {
@@ -144,5 +155,64 @@ public class CrawlingServiceImpl {
         }
         return newsList;
 
+    }
+
+    private String getDetailedLocationName(RestTemplate restTemplate, Double lat, Double lon) {
+        try {
+            String url = UriComponentsBuilder
+                    .fromUriString("https://nominatim.openstreetmap.org/reverse")
+                    .queryParam("format", "jsonv2")
+                    .queryParam("lat", lat)
+                    .queryParam("lon", lon)
+                    .queryParam("zoom", 18)
+                    .queryParam("addressdetails", 1)
+                    .queryParam("accept-language", "ko")
+                    .build()
+                    .toUriString();
+
+            HttpHeaders headers = new HttpHeaders();
+            headers.set("User-Agent", "ict06-team1-finalPJ/1.0");
+
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url,
+                    HttpMethod.GET,
+                    new HttpEntity<>(headers),
+                    String.class
+            );
+
+            JsonNode address = objectMapper.readTree(response.getBody()).path("address");
+            if (address.isMissingNode()) {
+                return "";
+            }
+
+            String city = firstText(address, "city", "province", "state");
+            String district = firstText(address, "city_district", "borough", "county");
+            String town = firstText(address, "suburb", "quarter", "neighbourhood", "village", "town");
+
+            return joinLocation(city, district, town);
+        } catch (Exception e) {
+            System.err.println("상세 위치명 조회 실패: " + e.getMessage());
+            return "";
+        }
+    }
+
+    private String firstText(JsonNode node, String... fieldNames) {
+        for (String fieldName : fieldNames) {
+            String value = node.path(fieldName).asText("");
+            if (!value.isBlank()) {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    private String joinLocation(String... parts) {
+        List<String> locationParts = new ArrayList<>();
+        for (String part : parts) {
+            if (part != null && !part.isBlank() && !locationParts.contains(part)) {
+                locationParts.add(part);
+            }
+        }
+        return String.join(" ", locationParts);
     }
 }

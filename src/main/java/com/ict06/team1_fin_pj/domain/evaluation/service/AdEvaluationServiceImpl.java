@@ -10,6 +10,9 @@
  * @ 2026.05.11    김다솜        AI 서버 퀴즈 초안 생성 연동 및 생성 문제 저장 로직 추가
  * @ 2026.05.13    김다솜        PDF 기반 RAG 문서 요약/청크 문맥 반영 및 문서 연계 퀴즈 자동 생성 저장 로직 추가
  * @ 2026.05.15    김다솜        출제 기준 가중치 수정 시 updateRule 호출로 컴파일 오류 수정
+ * @ 2026.05.18    김다솜        이탈 징후 분석, 복합 통계 요약 로직 추가
+ * @ 2026.05.18                 다중 문서-콘텐츠 연결 기반 RAG 문서 조회 추가
+ * @ 2026.05.19    김다솜        이탈 위험 분석 기본 인사이트 문구를 보고서형 문장으로 정리
  */
 package com.ict06.team1_fin_pj.domain.evaluation.service;
 
@@ -22,8 +25,11 @@ import com.ict06.team1_fin_pj.common.dto.evaluation.AdminEvaluationQuestionStats
 import com.ict06.team1_fin_pj.common.dto.evaluation.AdminQuizDraftDto;
 import com.ict06.team1_fin_pj.common.dto.evaluation.AdminQuizGenerationRequestDto;
 import com.ict06.team1_fin_pj.common.dto.evaluation.AdminQuizSaveRequestDto;
+import com.ict06.team1_fin_pj.common.dto.evaluation.AdminRetentionRiskDto;
 import com.ict06.team1_fin_pj.common.dto.evaluation.AiQuizGenerationRequestDto;
 import com.ict06.team1_fin_pj.common.dto.evaluation.AiQuizGenerationResponseDto;
+import com.ict06.team1_fin_pj.domain.auth.repository.EmpRepository;
+import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuestionType;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizGenerationRuleEntity;
 import com.ict06.team1_fin_pj.domain.evaluation.entity.QuizQuestionEntity;
@@ -34,8 +40,16 @@ import com.ict06.team1_fin_pj.domain.evaluation.repository.QuizGenerationRuleRep
 import com.ict06.team1_fin_pj.domain.onboarding.entity.DocChunkEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.DocumentEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.OnContentEntity;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.ProgressStatus;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadItemEntity;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadmapEntity;
+import com.ict06.team1_fin_pj.domain.onboarding.repository.ChecklistProgressRepository;
+import com.ict06.team1_fin_pj.domain.onboarding.repository.ChecklistRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.DocumentRepository;
 import com.ict06.team1_fin_pj.domain.onboarding.repository.OnContentRepository;
+import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadItemRepository;
+import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadProgressRepository;
+import com.ict06.team1_fin_pj.domain.onboarding.repository.RoadmapRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
@@ -46,12 +60,17 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -62,10 +81,16 @@ public class AdEvaluationServiceImpl implements AdEvaluationService {
     private static final String LEGACY_AI_GENERATED_PREFIX = "[AI?먮룞?앹꽦]";
 
     private final OnContentRepository onContentRepository;
+    private final EmpRepository empRepository;
     private final DocumentRepository documentRepository;
     private final EvaluationQuestionRepository evaluationQuestionRepository;
     private final EvaluationResultRepository evaluationResultRepository;
     private final QuizGenerationRuleRepository quizGenerationRuleRepository;
+    private final RoadmapRepository roadmapRepository;
+    private final RoadItemRepository roadItemRepository;
+    private final RoadProgressRepository roadProgressRepository;
+    private final ChecklistRepository checklistRepository;
+    private final ChecklistProgressRepository checklistProgressRepository;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -284,21 +309,46 @@ public class AdEvaluationServiceImpl implements AdEvaluationService {
                         .thenComparing(AdminEvaluationEmployeeStatsDto::getEmpNo))
                 .toList();
 
+        List<AdminRetentionRiskDto> retentionRiskStats = buildRetentionRiskStats(attempts, ruleMap);
+        String retentionAiInsight = buildFallbackRetentionInsight(retentionRiskStats);
+
         return AdminEvaluationAnalyticsDto.builder()
                 .submissionCount(submissionCount)
                 .participantCount(participantCount)
                 .averageScoreRate(averageScoreRate)
                 .weightedAverageScoreRate(weightedAverageScoreRate)
                 .passRate(passRate)
+                .highRiskEmployeeCount((int) retentionRiskStats.stream()
+                        .filter(risk -> "HIGH".equals(risk.getRiskLevel()))
+                        .count())
+                .mediumRiskEmployeeCount((int) retentionRiskStats.stream()
+                        .filter(risk -> "MEDIUM".equals(risk.getRiskLevel()))
+                        .count())
+                .averageLearningProgressRate(roundOneDecimal(retentionRiskStats.stream()
+                        .mapToDouble(AdminRetentionRiskDto::getLearningProgressRate)
+                        .average()
+                        .orElse(0.0)))
+                .averageChecklistProgressRate(roundOneDecimal(retentionRiskStats.stream()
+                        .mapToDouble(AdminRetentionRiskDto::getChecklistProgressRate)
+                        .average()
+                        .orElse(0.0)))
+                .retentionAiInsight(retentionAiInsight)
                 .categoryStats(categoryStats)
                 .questionStats(questionStats)
                 .employeeStats(employeeStats)
+                .retentionRiskStats(retentionRiskStats)
                 .build();
     }
 
     private Optional<DocumentEntity> findRelatedDocument(OnContentEntity content) {
         if (content.getType() != null && "VIDEO".equalsIgnoreCase(content.getType().name())) {
             return Optional.empty();
+        }
+
+        Optional<DocumentEntity> directDocument = documentRepository.findFirstByRelatedContents_ContentIdOrderByCreatedAtDesc(content.getContentId())
+                .or(() -> documentRepository.findFirstByRelatedContent_ContentIdOrderByCreatedAtDesc(content.getContentId()));
+        if (directDocument.isPresent()) {
+            return directDocument;
         }
 
         if (content.getPath() != null && !content.getPath().isBlank()) {
@@ -403,6 +453,340 @@ public class AdEvaluationServiceImpl implements AdEvaluationService {
                         (previous, current) -> current,
                         LinkedHashMap::new
                 ));
+    }
+
+    private List<AdminRetentionRiskDto> buildRetentionRiskStats(
+            List<EvaluationAttemptSummary> attempts,
+            Map<String, QuizGenerationRuleEntity> ruleMap
+    ) {
+        Map<String, List<EvaluationAttemptSummary>> attemptsByEmployee = attempts.stream()
+                .collect(Collectors.groupingBy(EvaluationAttemptSummary::empNo, LinkedHashMap::new, Collectors.toList()));
+
+        int totalChecklistCount = checklistRepository.findAll().size();
+        List<EmpEntity> targetEmployees = empRepository.findAll().stream()
+                .filter(emp -> !"Y".equalsIgnoreCase(emp.getIsDeleted()))
+                .filter(emp -> emp.getRole() == null || emp.getRole().getRoleId() != 1)
+                .toList();
+
+        Map<String, Double> learningRateByEmployee = targetEmployees.stream()
+                .collect(Collectors.toMap(EmpEntity::getEmpNo, emp -> calculateLearningProgressRate(emp.getEmpNo())));
+        Map<String, Double> checklistRateByEmployee = targetEmployees.stream()
+                .collect(Collectors.toMap(EmpEntity::getEmpNo, emp -> calculateChecklistProgressRate(emp.getEmpNo(), totalChecklistCount)));
+        Map<String, Double> evaluationRateByEmployee = targetEmployees.stream()
+                .collect(Collectors.toMap(
+                        EmpEntity::getEmpNo,
+                        emp -> attemptsByEmployee.getOrDefault(emp.getEmpNo(), List.of()).stream()
+                                .mapToDouble(EvaluationAttemptSummary::scoreRate)
+                                .average()
+                                .orElse(0.0)
+                ));
+
+        double averageLearningRate = learningRateByEmployee.values().stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        double averageChecklistRate = checklistRateByEmployee.values().stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+        double averageEvaluationRate = evaluationRateByEmployee.values().stream().mapToDouble(Double::doubleValue).average().orElse(0.0);
+
+        return targetEmployees.stream()
+                .filter(emp -> hasOnboardingStarted(emp.getEmpNo(), attemptsByEmployee.getOrDefault(emp.getEmpNo(), List.of())))
+                .map(emp -> buildRetentionRisk(
+                        emp,
+                        attemptsByEmployee.getOrDefault(emp.getEmpNo(), List.of()),
+                        ruleMap,
+                        learningRateByEmployee.getOrDefault(emp.getEmpNo(), 0.0),
+                        checklistRateByEmployee.getOrDefault(emp.getEmpNo(), 0.0),
+                        evaluationRateByEmployee.getOrDefault(emp.getEmpNo(), 0.0),
+                        averageLearningRate,
+                        averageChecklistRate,
+                        averageEvaluationRate
+                ))
+                .sorted(Comparator.comparing(AdminRetentionRiskDto::getRiskScore).reversed()
+                        .thenComparing(AdminRetentionRiskDto::getEmpNo))
+                .limit(10)
+                .toList();
+    }
+
+    private boolean hasOnboardingStarted(String empNo, List<EvaluationAttemptSummary> attempts) {
+        if (attempts != null && !attempts.isEmpty()) {
+            return true;
+        }
+
+        Optional<RoadmapEntity> roadmap = roadmapRepository.findFirstByEmployee_EmpNoOrderByRoadmapIdDesc(empNo);
+        if (roadmap.isEmpty()) {
+            return false;
+        }
+
+        List<RoadItemEntity> items = roadItemRepository.findByRoadmap_RoadmapIdOrderByOrderNo(roadmap.get().getRoadmapId());
+        if (items.isEmpty()) {
+            return false;
+        }
+
+        boolean hasProgress = roadProgressRepository.findByEmployee_EmpNo(empNo).stream()
+                .anyMatch(progress -> progress.getItem() != null);
+        if (hasProgress) {
+            return true;
+        }
+
+        return items.stream()
+                .map(RoadItemEntity::getStartDate)
+                .filter(startDate -> startDate != null)
+                .min(LocalDate::compareTo)
+                .map(firstStartDate -> !firstStartDate.isAfter(LocalDate.now()))
+                .orElse(false);
+    }
+
+    private AdminRetentionRiskDto buildRetentionRisk(
+            EmpEntity emp,
+            List<EvaluationAttemptSummary> attempts,
+            Map<String, QuizGenerationRuleEntity> ruleMap,
+            double learningProgressRate,
+            double checklistProgressRate,
+            double evaluationAverageScoreRate,
+            double averageLearningRate,
+            double averageChecklistRate,
+            double averageEvaluationRate
+    ) {
+        evaluationAverageScoreRate = roundOneDecimal(evaluationAverageScoreRate);
+        double evaluationPassRate = attempts.isEmpty()
+                ? 0.0
+                : roundOneDecimal(attempts.stream().filter(EvaluationAttemptSummary::passed).count() * 100.0 / attempts.size());
+        LocalDateTime latestSubmittedAt = attempts.stream()
+                .map(EvaluationAttemptSummary::submittedAt)
+                .max(LocalDateTime::compareTo)
+                .orElse(null);
+
+        List<String> reasons = new ArrayList<>();
+        List<String> recommendations = new ArrayList<>();
+        int riskScore = 0;
+
+        if (learningProgressRate < 50.0) {
+            riskScore += 25;
+            reasons.add("학습 완료율이 50% 미만입니다.");
+            recommendations.add("미완료 학습 콘텐츠를 우선순위로 재배치하고 1:1 학습 리마인드를 발송하세요.");
+        } else if (learningProgressRate < 80.0) {
+            riskScore += 12;
+            reasons.add("학습 완료율이 목표치보다 낮습니다.");
+            recommendations.add("남은 학습 항목 중 필수 콘텐츠부터 완료하도록 안내하세요.");
+        }
+
+        if (checklistProgressRate < 50.0) {
+            riskScore += 20;
+            reasons.add("체크리스트 완료율이 50% 미만입니다.");
+            recommendations.add("온보딩 체크리스트 중 미완료 항목을 확인하고 담당자가 진행 여부를 점검하세요.");
+        } else if (checklistProgressRate < 80.0) {
+            riskScore += 10;
+            reasons.add("체크리스트 진행이 다소 지연되고 있습니다.");
+            recommendations.add("체크리스트 마감 항목을 홈 To-Do 또는 알림으로 재노출하세요.");
+        }
+
+        if (attempts.isEmpty()) {
+            riskScore += 25;
+            reasons.add("아직 평가에 응시하지 않았습니다.");
+            recommendations.add("학습 완료 후 평가 응시 일정을 별도로 안내하세요.");
+        } else {
+            if (evaluationAverageScoreRate < 70.0) {
+                riskScore += 15;
+                reasons.add("평가 평균 점수가 70% 미만입니다.");
+                recommendations.add("오답이 많은 카테고리의 콘텐츠 요약/재설명 기능을 활용하도록 안내하세요.");
+            }
+            if (evaluationPassRate < 50.0) {
+                riskScore += 20;
+                reasons.add("평가 통과율이 50% 미만입니다.");
+                recommendations.add("불합격 카테고리에 대한 보충 학습 후 재응시를 권장하세요.");
+            }
+        }
+
+        if (latestSubmittedAt != null && ChronoUnit.DAYS.between(latestSubmittedAt, LocalDateTime.now()) >= 7) {
+            riskScore += 10;
+            reasons.add("최근 평가 제출 이후 7일 이상 추가 활동이 없습니다.");
+            recommendations.add("최근 활동 공백이 길어졌으므로 담당자 확인 또는 자동 알림을 발송하세요.");
+        }
+
+        if (averageLearningRate > 0 && learningProgressRate <= averageLearningRate - 25.0) {
+            riskScore += 12;
+            reasons.add("전체 직원 평균 대비 학습 완료율이 크게 낮습니다.");
+            recommendations.add("동료군 평균보다 뒤처진 학습 항목을 우선순위로 재배치하세요.");
+        }
+
+        if (averageChecklistRate > 0 && checklistProgressRate <= averageChecklistRate - 25.0) {
+            riskScore += 10;
+            reasons.add("전체 직원 평균 대비 체크리스트 완료율이 낮은 편입니다.");
+            recommendations.add("체크리스트 미완료 항목을 관리자 확인 대상으로 표시하세요.");
+        }
+
+        if (!attempts.isEmpty() && averageEvaluationRate > 0 && evaluationAverageScoreRate <= averageEvaluationRate - 20.0) {
+            riskScore += 12;
+            reasons.add("전체 직원 평균 대비 평가 이해도 점수가 낮습니다.");
+            recommendations.add("평균 대비 낮은 평가 카테고리를 기준으로 보충 학습을 추천하세요.");
+        }
+
+        List<String> weakCategories = findWeakCategories(attempts, ruleMap);
+        if (!weakCategories.isEmpty()) {
+            recommendations.add("취약 카테고리(" + String.join(", ", weakCategories) + ")의 추천 학습 가이드를 우선 배정하세요.");
+        }
+
+        if (reasons.isEmpty()) {
+            reasons.add("현재 뚜렷한 이탈 위험 신호는 낮습니다.");
+            recommendations.add("현재 진행 흐름을 유지하되 다음 평가 일정만 사전 안내하세요.");
+        }
+
+        int normalizedRiskScore = Math.min(100, riskScore);
+        return AdminRetentionRiskDto.builder()
+                .empNo(emp.getEmpNo())
+                .employeeName(emp.getName())
+                .departmentName(emp.getDepartment() != null ? emp.getDepartment().getDeptName() : "미지정")
+                .riskLevel(resolveRiskLevel(normalizedRiskScore))
+                .riskScore(normalizedRiskScore)
+                .learningProgressRate(learningProgressRate)
+                .checklistProgressRate(checklistProgressRate)
+                .evaluationAverageScoreRate(evaluationAverageScoreRate)
+                .evaluationPassRate(evaluationPassRate)
+                .evaluationCount(attempts.size())
+                .latestSubmittedAt(latestSubmittedAt)
+                .riskReasons(reasons.stream().distinct().limit(4).toList())
+                .recommendations(recommendations.stream().distinct().limit(4).toList())
+                .build();
+    }
+
+    private double calculateLearningProgressRate(String empNo) {
+        Optional<RoadmapEntity> roadmap = roadmapRepository.findFirstByEmployee_EmpNoOrderByRoadmapIdDesc(empNo);
+        if (roadmap.isEmpty()) {
+            return 0.0;
+        }
+
+        List<RoadItemEntity> items = roadItemRepository.findByRoadmap_RoadmapIdOrderByOrderNo(roadmap.get().getRoadmapId());
+        if (items.isEmpty()) {
+            return 0.0;
+        }
+
+        Set<Integer> latestItemIds = items.stream()
+                .map(RoadItemEntity::getItemId)
+                .collect(Collectors.toSet());
+        long completedCount = roadProgressRepository.findByEmployee_EmpNo(empNo).stream()
+                .filter(progress -> progress.getItem() != null && latestItemIds.contains(progress.getItem().getItemId()))
+                .filter(progress -> progress.getStatus() == ProgressStatus.COMPLETED)
+                .count();
+
+        return roundOneDecimal(completedCount * 100.0 / items.size());
+    }
+
+    private double calculateChecklistProgressRate(String empNo, int totalChecklistCount) {
+        if (totalChecklistCount <= 0) {
+            return 0.0;
+        }
+
+        long completedCount = checklistProgressRepository.countByEmployee_EmpNoAndStatus(empNo, ProgressStatus.COMPLETED);
+        return roundOneDecimal(completedCount * 100.0 / totalChecklistCount);
+    }
+
+    private List<String> findWeakCategories(
+            List<EvaluationAttemptSummary> attempts,
+            Map<String, QuizGenerationRuleEntity> ruleMap
+    ) {
+        Set<String> weakCategories = new HashSet<>();
+        for (EvaluationAttemptSummary attempt : attempts) {
+            QuizGenerationRuleEntity rule = ruleMap.get(attempt.categoryName());
+            int passScore = rule != null && rule.getPassScore() != null ? rule.getPassScore() : 80;
+            if (attempt.scoreRate() < passScore) {
+                weakCategories.add(attempt.categoryName());
+            }
+        }
+        return weakCategories.stream().sorted().limit(3).toList();
+    }
+
+    private String resolveRiskLevel(int riskScore) {
+        if (riskScore >= 70) {
+            return "HIGH";
+        }
+        if (riskScore >= 40) {
+            return "MEDIUM";
+        }
+        return "LOW";
+    }
+
+    @Override
+    public String getAiRetentionRiskAnalysis(List<AdminRetentionRiskDto> retentionRiskStats) {
+        if (retentionRiskStats == null || retentionRiskStats.isEmpty()) {
+            return "이탈 징후를 분석할 직원 데이터가 충분하지 않습니다.";
+        }
+
+        try {
+            List<Map<String, Object>> topRisks = retentionRiskStats.stream()
+                    .limit(5)
+                    .map(risk -> {
+                        Map<String, Object> row = new LinkedHashMap<>();
+                        row.put("empNo", risk.getEmpNo());
+                        row.put("employeeName", risk.getEmployeeName());
+                        row.put("departmentName", risk.getDepartmentName());
+                        row.put("riskLevel", risk.getRiskLevel());
+                        row.put("riskScore", risk.getRiskScore());
+                        row.put("learningProgressRate", risk.getLearningProgressRate());
+                        row.put("checklistProgressRate", risk.getChecklistProgressRate());
+                        row.put("evaluationAverageScoreRate", risk.getEvaluationAverageScoreRate());
+                        row.put("evaluationPassRate", risk.getEvaluationPassRate());
+                        row.put("riskReasons", risk.getRiskReasons());
+                        row.put("recommendations", risk.getRecommendations());
+                        return row;
+                    })
+                    .toList();
+
+            Map<String, Object> payload = new LinkedHashMap<>();
+            payload.put("highRiskCount", retentionRiskStats.stream().filter(risk -> "HIGH".equals(risk.getRiskLevel())).count());
+            payload.put("mediumRiskCount", retentionRiskStats.stream().filter(risk -> "MEDIUM".equals(risk.getRiskLevel())).count());
+            payload.put("topRisks", topRisks);
+
+            String url = aiServerBaseUrl + "/api/ai/evaluation/analyze-retention";
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, payload, Map.class);
+            if (response.getBody() != null && response.getBody().get("analysis") != null) {
+                return (String) response.getBody().get("analysis");
+            }
+        } catch (Exception e) {
+            System.err.println("AI 이탈 징후 분석 코멘트 생성 실패: " + e.getMessage());
+        }
+
+        return buildFallbackRetentionInsight(retentionRiskStats);
+    }
+
+    private String buildFallbackRetentionInsight(List<AdminRetentionRiskDto> retentionRiskStats) {
+        if (retentionRiskStats == null || retentionRiskStats.isEmpty()) {
+            return "이탈 징후를 분석할 직원 데이터가 충분하지 않습니다.";
+        }
+
+        long highRiskCount = retentionRiskStats.stream().filter(risk -> "HIGH".equals(risk.getRiskLevel())).count();
+        long mediumRiskCount = retentionRiskStats.stream().filter(risk -> "MEDIUM".equals(risk.getRiskLevel())).count();
+        AdminRetentionRiskDto topRisk = retentionRiskStats.get(0);
+        String riskReasons = topRisk.getRiskReasons() == null || topRisk.getRiskReasons().isEmpty()
+                ? "- 주요 위험 신호가 아직 충분히 수집되지 않았습니다."
+                : topRisk.getRiskReasons().stream()
+                .limit(3)
+                .map(reason -> "- " + normalizeSentence(reason))
+                .collect(Collectors.joining("\n"));
+
+        return """
+                [규칙 기반 요약]
+                현재 고위험 직원은 %d명, 주의 필요 직원은 %d명입니다.
+
+                [주요 위험 신호]
+                %s님의 위험도가 가장 높습니다.
+                %s
+
+                [우선 조치]
+                1. 미완료 학습을 다시 안내합니다.
+                2. 체크리스트 진행 상태를 점검합니다.
+                3. 취약 카테고리 보충 학습을 배정합니다.
+                """.formatted(
+                highRiskCount,
+                mediumRiskCount,
+                topRisk.getEmployeeName(),
+                riskReasons
+        ).trim();
+    }
+
+    private String normalizeSentence(String value) {
+        if (value == null || value.isBlank()) {
+            return "-";
+        }
+
+        String trimmed = value.trim();
+        return trimmed.endsWith(".") ? trimmed : trimmed + ".";
     }
 
     private double calculateWeightedAverageScore(

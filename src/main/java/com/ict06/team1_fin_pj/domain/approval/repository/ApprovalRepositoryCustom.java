@@ -5,6 +5,8 @@ import com.ict06.team1_fin_pj.domain.approval.entity.ApprovalStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
+import java.time.LocalDate;
+
 /**
  * 결재 문서 목록처럼 조건이 복잡해질 수 있는 조회를 위한 QueryDSL 전용 Repository 인터페이스입니다.
  *
@@ -23,6 +25,8 @@ public interface ApprovalRepositoryCustom {
     Page<ApprovalListResponseDto> findMyDocuments(
             String writerNo,
             ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     );
 
@@ -34,6 +38,8 @@ public interface ApprovalRepositoryCustom {
      */
     Page<ApprovalListResponseDto> findMyDrafts(
             String writerNo,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     );
 
@@ -50,6 +56,8 @@ public interface ApprovalRepositoryCustom {
     Page<ApprovalListResponseDto> findMyReferencedDocuments(
             String referenceNo,
             ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     );
 
@@ -63,6 +71,28 @@ public interface ApprovalRepositoryCustom {
      */
     Page<ApprovalListResponseDto> findPendingApprovals(
             String approverNo,
+            ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    );
+
+    /**
+     * 결재 처리 완료 문서함 목록 조회
+     *
+     * 로그인 사용자가 결재자로 참여했고, 본인의 결재선 상태가 승인/반려로 처리 완료된 문서를 조회합니다.
+     *
+     * @param approverNo 로그인 사용자 사번
+     * @param status 조회할 결재 문서 상태. null이면 DRAFT를 제외한 전체 처리 이력을 조회합니다.
+     * @param startDate 상신일 시작일
+     * @param endDate 상신일 종료일
+     * @param pageable 페이지 번호, 크기 정보
+     */
+    Page<ApprovalListResponseDto> findProcessedApprovals(
+            String approverNo,
+            ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     );
 
@@ -77,6 +107,9 @@ public interface ApprovalRepositoryCustom {
      */
     Page<ApprovalListResponseDto> findUpcomingApprovals(
             String approverNo,
+            ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     );
 }

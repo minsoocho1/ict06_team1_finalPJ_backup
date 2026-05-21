@@ -37,14 +37,44 @@ import { PATH } from 'src/constants/path';
 
 // 공통 axios helper
 import { request } from 'src/helpers/axios_helper';
+import axiosInstance from 'src/api/axiosInstance';
 
-  // 일반 사원용 근태 메인 화면
+// [결재-근태 연동용]: 근태 화면에서 바로 열어야 하는 전자결재 기본 서식명입니다.
+const ABSENCE_FORM_NAME = '부재 일정';
+const WORK_RESULT_FORM_NAME = '근무 결과 신청';
+const STANDARD_END_HOUR = 18;
+
+const toDateInputValue = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toTimeInputValue = (date) =>
+  `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+
+const isBeforeStandardEndTime = (date) => date.getHours() < STANDARD_END_HOUR;
+
+const extractErrorMessage = (error) => {
+  const data = error?.response?.data;
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  return data?.message || error?.message || '';
+};
+
+const isCompanyLocationError = (error) =>
+  extractErrorMessage(error).includes('회사 근처에서만');
+
+// 일반 사원용 근태 메인 화면
 const Attendance = () => {
   // DefaultLayout에서 전달받은 로그인 사용자 정보
   const [userInfo] = useOutletContext();
 
-  // 로그인한 사용자의 사번
-  const empNo = userInfo?.empNo || '20209999';
+  // 로그인 사용자 사번
+  const empNo = userInfo?.empNo;
 
   // 오늘 출근 상태
   const [todayStatus, setTodayStatus] = useState('출근 전');
@@ -58,8 +88,75 @@ const Attendance = () => {
   // 페이지 이동용
   const navigate = useNavigate();
 
-  // 연차 요약 데이터
-  // 근태 메인 상단의 "내 연차" 카드에 표시할 데이터
+  /**
+   * [결재-근태 연동용]: 근태 화면에서 전자결재 작성 화면으로 이동하며 기본값과 잠금 필드를 전달합니다.
+   *
+   * 근태 화면에서 전자결재 작성 화면으로 바로 이동할 때 사용하는 공통 함수입니다.
+   *
+   * 전자결재 작성 화면은 selectedForm을 라우터 state로 받아 시작하므로,
+   * 먼저 결재 서식 목록에서 필요한 서식을 찾은 뒤 기본 입력값과 잠금 필드를 함께 넘깁니다.
+   */
+  const openApprovalWriteForm = async (formName, presetFieldValues, lockedFieldIds = []) => {
+    const response = await axiosInstance.get(PATH.API.APPROVAL.FORMS);
+    const form = (response.data || []).find((item) => item.formName === formName);
+
+    if (!form) {
+      alert(`${formName} 서식을 찾을 수 없습니다. 관리자에게 서식 등록 상태를 확인해주세요.`);
+      return;
+    }
+
+    navigate(PATH.APPROVAL.NEW_WRITE, {
+      state: {
+        selectedForm: form,
+        presetFieldValues,
+        lockedFieldIds,
+      },
+    });
+  };
+
+  /**
+   * [결재-근태 연동용]: 18시 이전 퇴근이 발생하면 조퇴 처리를 위한 "부재 일정" 서식으로 연결합니다.
+   *
+   * 18시 이전 퇴근은 조퇴 사유가 필요한 상황이므로 부재 일정 서식으로 이어줍니다.
+   * 조퇴 계산 기준은 "퇴근 시각부터 18시까지"이므로 absence_start_time에는 퇴근 시각을 넣습니다.
+   */
+  const openEarlyLeaveApproval = async (checkoutDate) => {
+    const todayValue = toDateInputValue(checkoutDate);
+    await openApprovalWriteForm(
+      ABSENCE_FORM_NAME,
+      {
+        absence_type: '조퇴',
+        absence_start_date: todayValue,
+        absence_end_date: todayValue,
+        absence_start_time: toTimeInputValue(checkoutDate),
+        absence_end_time: '18:00',
+      },
+      ['absence_type', 'absence_start_date', 'absence_end_date', 'absence_start_time']
+    );
+  };
+
+  /**
+   * [결재-근태 연동용]: 회사 위치 밖에서 퇴근에 실패하면 외근 소명을 위한 "근무 결과 신청" 서식으로 연결합니다.
+   *
+   * 회사 위치 밖에서 퇴근 처리에 실패한 경우, 실제 근무 결과를 결재로 소명할 수 있게 연결합니다.
+   */
+  const openOutsideWorkResultApproval = async (attemptedCheckoutDate) => {
+    await openApprovalWriteForm(
+      WORK_RESULT_FORM_NAME,
+      {
+        work_result_date: toDateInputValue(attemptedCheckoutDate),
+        actual_start_time: checkInTime || '',
+        actual_end_time: toTimeInputValue(attemptedCheckoutDate),
+        break_minutes: '60',
+        work_plan_type: '외근',
+        work_result_reason: '회사 위치 외부에서 퇴근 처리 시도',
+      },
+      ['work_result_date', 'actual_end_time']
+    );
+  };
+
+  // 휴가 요약 데이터
+  // 근태 메인 상단의 "내 휴가" 카드에 표시할 데이터
   const [leaveSummary, setLeaveSummary] = useState({
     usedDays: 0,
     totalDays: 0,
@@ -228,11 +325,14 @@ const Attendance = () => {
   // 처음 화면 들어왔을 때도 사용하고,
   // 출근/퇴근 성공 후 화면 갱신할 때도 다시 사용할 함수
   const fetchAttendance = async () => {
-    try {
-      const params = {empNo}; 
-      const res = await request('GET', '/attendance/my', params);
+    // 로그인 사용자 사번이 없으면 조회하지 않음
+    if (!empNo) return;
 
-      console.log('근태 조회 결과:', res.data);
+    try {
+      const params = {
+        empNo: empNo,
+      }; 
+      const res = await request('GET', '/attendance/my', params);
 
       // 1. 캘린더에 보여줄 근태 목록 저장
       setAttendanceList(res.data);
@@ -284,6 +384,8 @@ const Attendance = () => {
   // 연차 요약 조회 함수
   // 근태 메인에서 "내 연차" 카드에 보여줄 데이터 조회
   const fetchLeaveSummary = async () => {
+    if (!empNo) return;
+    
     try {
       // 공통 axios helper 사용
       // GET 요청이므로 세 번째 인자는 자동으로 params로 전달됨
@@ -293,13 +395,10 @@ const Attendance = () => {
 
       const res = await request('GET', '/leave/summary', params);
 
-      console.log('근태 메인 연차 요약:', res.data);
-
       setLeaveSummary(res.data);
     } catch (error) {
-      console.error(error);
 
-      // 연차 데이터 조회 실패 시 화면이 깨지지 않도록 0으로 유지
+      // 휴가 데이터 조회 실패 시 화면이 깨지지 않도록 0으로 유지
       setLeaveSummary({
         usedDays: 0,
         totalDays: 0,
@@ -308,13 +407,16 @@ const Attendance = () => {
     }
   };
 
-  // 화면이 처음 열릴 때 근태 목록 조회
+  // 화면이 처음 열리거나 로그인 사용자 사번이 준비되면 데이터 조회
   useEffect(() => {
+    // userInfo가 아직 준비되지 않았으면 API 호출하지 않음
+    if (!empNo) return;
+
     fetchAttendance();
 
-    // 근태 메인 진입 시 연차 요약도 함께 조회
+    // 근태 메인 진입 시 휴가 요약도 함께 조회
     fetchLeaveSummary();
-  }, []);
+  }, [empNo]);
 
   // 출근 후 퇴근 전일 때 실시간 근무시간 계산
   useEffect(() => {
@@ -386,19 +488,10 @@ const Attendance = () => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
-          console.log('현재 위치:', lat, lng);
-
           // GPS 성공 메시지
           setGpsMessage('GPS 확인 완료');
 
           // 4. 백엔드 출근 API 호출
-          // await axios.post('http://localhost:8081/api/attendance/check-in', null, {
-          //   params: {
-          //     empNo: empNo,
-          //     lat: lat,
-          //     lng: lng,
-          //   }
-          // });
           const params = {
             empNo: empNo,
             lat: lat,
@@ -414,7 +507,6 @@ const Attendance = () => {
           await fetchAttendance();
 
         } catch (error) {
-          console.error(error);
 
           // 실패 메시지
           setAttendanceMessage(
@@ -466,32 +558,45 @@ const Attendance = () => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
-          console.log('퇴근 위치:', lat, lng);
-
           // GPS 성공
           setGpsMessage('GPS 확인 완료');
 
-          // await axios.post('http://localhost:8081/api/attendance/check-out', null, {
-          //   params: {
-          //     empNo: empNo,
-          //     lat: lat,
-          //     lng: lng,
-          //   }
-          // });
           const params = {
               empNo: empNo,
               lat: lat,
               lng: lng,
           }
           await request('POST', '/attendance/check-out', params);
+          const checkoutDate = new Date();
 
           // 성공 메시지
           setAttendanceMessage('퇴근 처리가 완료되었습니다.');
 
           await fetchAttendance();
 
+          // [결재-근태 연동용]: 정상 퇴근은 완료하되, 18시 이전이면 조퇴 결재 작성 여부를 안내합니다.
+          if (isBeforeStandardEndTime(checkoutDate)) {
+            const shouldWriteEarlyLeave = window.confirm(
+              '18시 이전 퇴근으로 조퇴 신청이 필요합니다. 부재 일정 결재 문서를 작성하시겠습니까?'
+            );
+
+            if (shouldWriteEarlyLeave) {
+              await openEarlyLeaveApproval(checkoutDate);
+            }
+          }
+
         } catch (error) {
-          console.error(error);
+
+          // [결재-근태 연동용]: 회사 위치 밖에서 퇴근에 실패한 경우 외근 근무 결과 신청으로 이어줍니다.
+          if (isCompanyLocationError(error)) {
+            const shouldWriteWorkResult = window.confirm(
+              '회사 위치 밖에서 퇴근 처리에 실패했습니다. 근무 결과 신청 결재 문서를 작성하시겠습니까?'
+            );
+
+            if (shouldWriteWorkResult) {
+              await openOutsideWorkResultApproval(new Date());
+            }
+          }
 
           setAttendanceMessage(
             error.response?.data?.message || '퇴근 처리에 실패했습니다.'
@@ -518,6 +623,8 @@ const Attendance = () => {
   // 상태 배지 색상
   const getBadgeColor = (status) => {
     if (status === 'ON_TIME' || status === '정상출근') return 'success';
+    if (status === 'LEAVE' || status === '휴가') return 'info';
+    if (status === 'HALF_LEAVE' || status === '반차') return 'info';
     if (status === 'LATE' || status === '지각') return 'warning';
     if (status === 'EARLY' || status === '조퇴') return 'danger';
     if (status === 'LEFT' || status === '퇴근') return 'primary';
@@ -528,12 +635,16 @@ const Attendance = () => {
   const getStatusText = (status) => {
     // DB에서 영어 Enum 코드가 올 경우
     if (status === 'ON_TIME') return '정상출근';
+    if (status === 'LEAVE') return '휴가';
+    if (status === 'HALF_LEAVE') return '반차';
     if (status === 'LATE') return '지각';
     if (status === 'EARLY') return '조퇴';
     if (status === 'LEFT') return '퇴근완료';
 
     // DB에서 이미 한글 label이 올 경우
     if (status === '정상출근') return '정상출근';
+    if (status === '휴가') return '휴가';
+    if (status === '반차') return '반차';
     if (status === '지각') return '지각';
     if (status === '조퇴') return '조퇴';
     if (status === '퇴근') return '퇴근완료';
@@ -643,9 +754,25 @@ const Attendance = () => {
   // PieChart 색상
   const pieColors = ['#198754', '#f9b115', '#e55353'];
 
+  // 로그인 사용자 정보가 아직 준비되지 않았을 때 화면
+  // userInfo가 늦게 들어오는 경우 API 호출 전에 안내 화면을 보여준다.
+  if (!empNo) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <CCard>
+          <CCardBody className="text-center py-5">
+            사용자 정보를 불러오는 중입니다...
+          </CCardBody>
+        </CCard>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '24px' }}>
-      <h2 className="mb-4"> {userInfo?.name || '테스트'}</h2>
+      <h2 className="mb-4">
+        {userInfo?.name ? `${userInfo.name}님의 근태 현황` : '근태 현황'}
+      </h2>
       
       {/* 이번 달 근태 요약 카드 */}
       <CRow className="mb-4">
@@ -726,10 +853,10 @@ const Attendance = () => {
           </CCard>
         </CCol>
 
-        {/* 내 연차 카드 */}
+        {/* 내 휴가 카드 */}
         <CCol md={3}>
           <CCard
-            onClick={() => navigate(PATH.ATTENDANCE.HOLIDAYS)} // 연차 현황 페이지로 이동
+            onClick={() => navigate(PATH.ATTENDANCE.HOLIDAYS)} // 휴가 현황 페이지로 이동
             style={{
               cursor: 'pointer',
               border: '1px solid #ddd',
@@ -739,16 +866,16 @@ const Attendance = () => {
           >
             <CCardBody>
               <div style={{ fontSize: '13px', color: '#6c757d' }}>
-                내 연차
+                내 휴가
               </div>
 
-              {/* 남은 연차 / 총 연차 */}
+              {/* 남은 휴가 / 총 휴가 */}
               <h4 className="mt-2 mb-0">
                 {leaveSummary.remainDays} / {leaveSummary.totalDays}일
               </h4>
 
               <div className="mt-2" style={{ fontSize: '13px', color: '#6c757d' }}>
-                클릭하면 연차 현황으로 이동
+                클릭하면 휴가 현황으로 이동
               </div>
             </CCardBody>
           </CCard>
@@ -1058,7 +1185,7 @@ const Attendance = () => {
               </div>
             ))}
 
-            {displayDays.map((item, index) => {
+            {displayDays.map((item) => {
 
                 // displayDays 안의 날짜 객체에서 필요한 값 꺼내기
                 const { date, day, dateString } = item;

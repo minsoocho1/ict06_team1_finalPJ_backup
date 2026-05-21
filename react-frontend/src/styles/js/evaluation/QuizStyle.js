@@ -14,6 +14,7 @@
  * @ 2026.05.01    김다솜        카테고리별 일괄 제출 UI 및 결과 요약 스타일 추가
  * @ 2026.05.06    김다솜        AI 분석 리포트 전용 스타일(aiResultContainer, similarityBadge 등) 추가
  * @ 2026.05.15    김다솜        UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ * @ 2026.05.19    김다솜        평가 상세 화면 중앙 정렬 및 카드 스타일 보완
  */
 
 // ==============================
@@ -190,8 +191,48 @@ export const evalResultStyles = {
         gap: '16px'
     },
     // 상세 보기용 스타일
+    detailContainer: {
+        padding: '24px',
+        maxWidth: '1180px',
+        margin: '0 auto',
+        background: '#F4F7FB',
+        color: '#111827',
+        fontFamily: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif'
+    },
+    detailHeader: {
+        background: '#FFFFFF',
+        borderRadius: '18px',
+        padding: '20px 24px',
+        marginBottom: '20px',
+        border: '1px solid #DDE3EA',
+        boxShadow: '0 2px 10px rgba(15, 23, 42, 0.03)',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: '16px',
+        flexWrap: 'wrap'
+    },
+    detailHeaderTitle: {
+        margin: 0,
+        fontWeight: 800,
+        fontSize: '20px',
+        color: '#111827'
+    },
+    detailHeaderDescription: {
+        margin: '6px 0 0',
+        color: '#6B7280',
+        fontSize: '14px'
+    },
+    detailScoreBadge: {
+        padding: '12px 18px',
+        borderRadius: '16px',
+        background: '#EFF6FF',
+        border: '1px solid #DDE6FF',
+        textAlign: 'center',
+        minWidth: '150px'
+    },
     detailCard: {
-        background: '#fff',
+        background: '#FFFFFF',
         borderRadius: '18px',
         padding: '20px',
         border: '1px solid #DDE3EA',
@@ -201,14 +242,17 @@ export const evalResultStyles = {
     questionText: {
         fontWeight: 600,
         fontSize: '16px',
-        marginBottom: '10px'
+        marginBottom: '12px',
+        color: '#111827'
     },
     answerBox: {
-        padding: '12px',
-        borderRadius: '8px',
+        padding: '14px',
+        borderRadius: '14px',
         backgroundColor: '#F4F7FB',
         fontSize: '14px',
-        lineHeight: '1.6'
+        lineHeight: '1.6',
+        color: '#374151',
+        border: '1px solid #E5E7EB'
     }
 };
 

@@ -9,6 +9,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.04.22    김다솜        최초 생성/OpenWeather API 연동 및 위젯 반영
  * @ 2026.05.15    김다솜        홈 피드 날씨 위젯 상세 정보 표시용 필드 추가
+ * @ 2026.05.18    김다솜        날씨 위젯 현재 위치 상세 주소 표시 반영
 */
 
 import { cilSun, cilCloud, cilRain, cilSnowflake } from '@coreui/icons';
@@ -54,7 +55,7 @@ import axiosInstance from 'src/api/axiosInstance';
         cloudiness: weatherData.clouds?.all ?? null,
         desc: weatherData.weather[0].description,
         icon: weatherIcon,
-        city: weatherData.display_location || weatherData.name,
+        city: weatherData.display_location_detail || weatherData.display_location || weatherData.name,
         locationSource: weatherData.location_source === 'GPS' ? '현재 위치 기준' : '',
         newsList: newsRes.data
       };

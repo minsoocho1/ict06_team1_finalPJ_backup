@@ -3,6 +3,12 @@
     @Description : 관리자 온보딩 일정 사원별 상세 학습목록 화면 (학습 목록 관리)
     @Author : 김다솜
     @Date : 2026. 05. 12
+    @Modification_History
+    @
+    @ 수정일자        수정자        수정내용
+    @ ----------    ---------    -------------------------------
+    @ 2026.05.12    김다솜        최초 생성 및 직원별 학습목록 관리 화면 구현
+    @ 2026.05.18    김다솜        학습항목 수동 알림 발송 연결 및 사원-콘텐츠별 알림 이력 표시 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -26,6 +32,9 @@
                     <p class="text-muted">배정된 온보딩 항목의 진행 상태와 일정을 관리합니다.</p>
                 </div>
 
+                <div th:if="${successMessage}" class="alert alert-success" role="alert" th:text="${successMessage}"></div>
+                <div th:if="${errorMessage}" class="alert alert-danger" role="alert" th:text="${errorMessage}"></div>
+
                 <div class="card shadow-sm border-0">
                     <div class="card-body p-0">
                         <table class="table table-hover align-middle mb-0">
@@ -36,6 +45,7 @@
                                 <th>콘텐츠</th>
                                 <th>기간</th>
                                 <th class="text-center">상태</th>
+                                <th style="min-width: 260px;">알림 발송 이력</th>
                                 <th class="text-center pe-4">관리</th>
                             </tr>
                             </thead>
@@ -56,18 +66,45 @@
                                         STATUS
                                     </span>
                                 </td>
+                                <td>
+                                    <div th:if="${#lists.isEmpty(item.notificationHistories)}"
+                                         class="small text-muted">
+                                        발송 이력 없음
+                                    </div>
+                                    <div th:unless="${#lists.isEmpty(item.notificationHistories)}"
+                                         class="d-flex flex-column gap-1">
+                                        <div th:each="history : ${item.notificationHistories}"
+                                             class="small border rounded-3 px-2 py-1 bg-light">
+                                            <div class="d-flex justify-content-between gap-2">
+                                                <span class="fw-semibold text-truncate" th:text="${history.title}">알림 제목</span>
+                                                <span class="text-muted text-nowrap"
+                                                      th:text="${history.createdAt != null ? #temporals.format(history.createdAt, 'MM-dd HH:mm') : '-'}">05-18 09:00</span>
+                                            </div>
+                                            <div class="text-muted text-truncate" th:text="${history.content}">알림 내용</div>
+                                            <span class="badge mt-1"
+                                                  th:classappend="${history.isRead == true ? ' bg-success' : ' bg-secondary'}"
+                                                  th:text="${history.isRead == true ? '읽음' : '미읽음'}">미읽음</span>
+                                        </div>
+                                    </div>
+                                </td>
                                 <td class="text-center pe-4">
                                     <div class="d-flex justify-content-center gap-1">
                                         <a th:href="@{/admin/onboarding/roadmaps/{rid}/items/{iid}/edit(rid=${item.roadmapId}, iid=${item.itemId})}" 
                                            class="btn btn-xs btn-outline-primary">수정</a>
-                                        <button type="button" class="btn btn-xs btn-outline-warning">
-                                            <i class="fa-solid fa-bell"></i>
-                                        </button>
+                                        <form th:action="@{/admin/onboarding/schedules/{empNo}/items/{itemId}/notify(empNo=${empNo}, itemId=${item.itemId})}"
+                                              method="post"
+                                              class="d-inline">
+                                            <button type="submit"
+                                                    class="btn btn-xs btn-outline-warning"
+                                                    onclick="return confirm('해당 학습 콘텐츠 알림을 발송하시겠습니까?');">
+                                                <i class="fa-solid fa-bell"></i>
+                                            </button>
+                                        </form>
                                     </div>
                                 </td>
                             </tr>
                             <tr th:if="${#lists.isEmpty(items)}">
-                                <td colspan="6" class="text-center text-muted py-5">배정된 학습 항목이 없습니다.</td>
+                                <td colspan="7" class="text-center text-muted py-5">배정된 학습 항목이 없습니다.</td>
                             </tr>
                             </tbody>
                         </table>

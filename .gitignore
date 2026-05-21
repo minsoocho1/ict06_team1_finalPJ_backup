@@ -53,3 +53,6 @@ node_modules/
 
 # 사원 프로필/서명 업로드 파일
 /employee/ict_06_uploads/
+
+# 전자결재 증빙 문서
+/ict_06_uploads/approval/

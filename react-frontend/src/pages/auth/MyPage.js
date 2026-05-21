@@ -10,13 +10,14 @@
  * @ 2026.04.22    김다솜        최초 생성/화면 구성
  * @ 2026.04.23    김다솜        내 정보 조회/수정 구현
  * @ 2026.04.30    김다솜        스타일 코드 분리 (MyPageStyle.js) 및 UI 구조 개선
+ * @ 2026.05.19    김다솜        마이페이지 기본 프로필 이미지 제거
 */
 
 import { CAvatar, CBadge, CButton, CCard, CCardBody, CCol, CFormInput, CNav, CNavItem, CNavLink, CRow } from '@coreui/react';
 import React, { useEffect, useState } from 'react';
 
 import CIcon from '@coreui/icons-react';
-import { cilCheckAlt, cilPencil, cilX } from '@coreui/icons';
+import { cilCheckAlt, cilPencil, cilUser, cilX } from '@coreui/icons';
 import { useUser } from 'src/api/UserContext';
 import { accountInfoGroup, activeStatusBadge, profileAvatar, profileCover, profileHeader, valueGroup } from 'src/styles/js/auth/MyPageStyle';
 import axiosInstance from 'src/api/axiosInstance';
@@ -79,6 +80,7 @@ const MyPage = () => {
     const labelStyle = 'text-secondary small fw-semibold';
     const valueStyle = 'fw-semibold text-dark';
     const rowClass = 'mb-3 py-3 border-bottom border-light align-items-center';
+    const profileImage = userInfo?.profileImg || userInfo?.profile_img;
 
     return (
         <CRow>
@@ -88,11 +90,13 @@ const MyPage = () => {
                     <div style={profileCover}></div>
                     <CCardBody className='pt-0'>
                         <div className='d-flex align-items-end' style={profileHeader}>
-                            <CAvatar src={userInfo?.profileImg || userInfo?.profile_img || 'avatars/8.jpg'}
+                            <CAvatar src={profileImage || undefined}
                                 size="xl"
                                 className="border border-4 border-white shadow"
                                 style={profileAvatar}
-                            />
+                            >
+                                {!profileImage && <CIcon icon={cilUser} />}
+                            </CAvatar>
                             <div className='ms-3 mb-2'>
                                 <h4 className='mb-0 fw-bold text-dark'>
                                     {userInfo?.name || '사용자'}

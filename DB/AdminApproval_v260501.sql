@@ -4,7 +4,15 @@
 -- * DATE         AUTHOR      NOTE
 -- * 2026-05-01   송영은       최초 생성
 -- * 2026-05-14   송영은		 기본 결재 서식 넣기, approval, app_line 최신 엔티티 파일에 맞게 표 구조 변경 
+-- * 2026-05-15   송영은		 테스트 결재 상신 데이터 삭제
 
+----------------------------------------------------------------
+-- 테스트 결재 상신 데이터 삭제
+delete from app_line; 
+delete from app_file;
+delete from approval; 
+
+----------------------------------------------------------------
 -- app_form 데이터 삭제
 delete from app_form 
  where form_id <= 14; 
@@ -141,6 +149,15 @@ ALTER TABLE approval
     ADD CONSTRAINT fk_approval_current_approver
     FOREIGN KEY (current_approver_no)
     REFERENCES employee(emp_no);
+
+-- 7. ApprovalStatus enum에 추가된 CANCELED 상태를 DB 체크 제약조건에도 반영
+--    이 쿼리가 없으면 상신 취소 시 status='CANCELED' 업데이트가 approval_status_check에 막힙니다.
+ALTER TABLE approval
+    DROP CONSTRAINT IF EXISTS approval_status_check;
+
+ALTER TABLE approval
+    ADD CONSTRAINT approval_status_check
+    CHECK (status IN ('DRAFT', 'PENDING', 'IN_PROGRESS', 'COMPLETED', 'REJECTED', 'CANCELED'));
 
 COMMIT;
 

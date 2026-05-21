@@ -1,79 +1,207 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import {
+  CAlert,
+  CBadge,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CFormInput,
+  CPagination,
+  CPaginationItem,
+  CSpinner,
+  CTable,
+  CTableBody,
+  CTableDataCell,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
+} from '@coreui/react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 
-// CoreUI 
-import { CButton, CCard, CCardBody, CCardHeader } from '@coreui/react';
+import axiosInstance from 'src/api/axiosInstance';
+import { PATH } from 'src/constants/path';
+import { containerStyle } from 'src/styles/js/demoPageStyle';
 
-// 페이지 이동
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+const PAGE_SIZE = 10;
 
-// 시연용 이미지 파일
-import refImage from 'src/assets/images/first_demo/[Approval]tmp_documents.png'
+const formatDateTime = (value) => {
+  if (!value) {
+    return '-';
+  }
 
-// 1차 시연용으로 화면과 sql 쿼리를 함께 보여주기 위한 스타일 구현
-import { containerStyle, stepCardStyle } from 'src/styles/js/demoPageStyle';
-
-// 코드 하이라이터 : sql 코드 보여주는 용
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; 
-import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
+  return new Date(value).toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 // [전자결재] 임시저장함 페이지
 const TmpApprovals = () => {
+  const [userInfo] = useOutletContext();
+  const navigate = useNavigate();
 
-    //DefaultLayout.js의 Outlet에서 보낸 userInfo 데이터 받기
-    const [userInfo] = useOutletContext();
+  const [page, setPage] = useState(0);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [documents, setDocuments] = useState([]);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-    //해당 화면의 SQL 쿼리 작성(백틱 `` 사용)
-    const sqlQuery = `
-        SELECT d.*, f.title as form_title 
-        FROM approval_doc d
-        JOIN approval_form f ON d.form_id = f.form_id
-        WHERE d.emp_id = #{empId} 
-        AND d.status = #{status}
-        ORDER BY d.created_at DESC
-        LIMIT #{pageSize} OFFSET #{offset};
-    `;
+  useEffect(() => {
+    const fetchDrafts = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage('');
 
-    return (
-        <div style={containerStyle}>
-            <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>임시저장함</h2>
-            </header>
+        const response = await axiosInstance.get(PATH.API.APPROVAL.DRAFTS, {
+          params: {
+            page,
+            size: PAGE_SIZE,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+          },
+        });
 
-            <hr style={{ border: '0', height: '1px', background: '#eee', margin: '40px 0' }} />
+        setDocuments(response.data?.content || []);
+        setTotalPages(Math.max(1, response.data?.totalPages || 1));
+      } catch (error) {
+        console.error('임시저장 문서함 조회 실패:', error);
+        setErrorMessage('임시저장 문서 목록을 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-            {/* 1차 시연용 영역 */}
-            <CCard className="mb-4" style={{ height: 'calc(100vh - 120px)' }}>
-                <CCardHeader>
-                    <strong>시연 화면 및 관련 SQL쿼리</strong>
-                </CCardHeader>
-                <CCardBody className="p-0 d-flex flex-column">
+    fetchDrafts();
+  }, [page, startDate, endDate]);
 
-                    {/* 레퍼런스 이미지 영역 */}
-                    <div className="text-center" style={{ backgroundColor: '#f4f4f4', borderTop: '1px solid #eee' }}>
-                        <img 
-                            src={refImage} 
-                            alt="임시저장함" 
-                            style={{ width: '100%',
-                            height: 'auto',
-                            display: 'block' }} 
-                        />
-                    </div>
+  // 상신일 기간 필터가 바뀌면 첫 페이지부터 다시 조회합니다.
+  useEffect(() => {
+    setPage(0);
+  }, [startDate, endDate]);
 
-                    {/* SQL 쿼리 영역 */}
-                    <div className='text-start mt-4'>
-                        <h5 className='mb-3' style={{ fontWeight: 'bold', color: '#4f5d73' }}>
-                            <span style={{ borderLeft: '4px solid #321fdb', paddingLeft: '10px' }}>
-                                관련 SQL 쿼리
-                            </span>
-                        </h5>
-                        <SyntaxHighlighter language='sql' style={coy}>
-                            {sqlQuery}
-                        </SyntaxHighlighter>
-                    </div>
-                </CCardBody>
-            </CCard>
+  const openDraft = (approvalId) => {
+    navigate(PATH.APPROVAL.TMP_DETAIL_WITH_ID(approvalId));
+  };
+
+  return (
+    <div style={containerStyle}>
+      <header className="mb-4">
+        <div>
+          <h2 className="mb-1">임시저장함</h2>
+          <div className="text-body-secondary">
+            {userInfo?.name ? `${userInfo.name}님이 아직 상신하지 않은 문서입니다.` : '아직 상신하지 않은 결재 문서입니다.'}
+          </div>
         </div>
-    );
+      </header>
+
+      <CCard className="mb-4">
+        <CCardHeader className="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <strong>임시저장 문서</strong>
+          <div className="d-flex flex-wrap gap-2 align-items-center">
+            <CFormInput
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              style={{ width: '160px' }}
+              aria-label="상신일 시작일"
+            />
+            <span className="text-body-secondary">~</span>
+            <CFormInput
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              style={{ width: '160px' }}
+              aria-label="상신일 종료일"
+            />
+          </div>
+        </CCardHeader>
+        <CCardBody>
+          {errorMessage && <CAlert color="danger">{errorMessage}</CAlert>}
+
+          {loading ? (
+            <div className="py-5 text-center">
+              <CSpinner size="sm" className="me-2" />
+              임시저장 문서를 불러오는 중입니다.
+            </div>
+          ) : (
+            <CTable hover responsive align="middle">
+              <CTableHead>
+                <CTableRow>
+                  <CTableHeaderCell style={{ width: '90px' }}>번호</CTableHeaderCell>
+                  <CTableHeaderCell style={{ width: '100px' }}>상태</CTableHeaderCell>
+                  <CTableHeaderCell>문서 제목</CTableHeaderCell>
+                  <CTableHeaderCell>서식</CTableHeaderCell>
+                  <CTableHeaderCell>작성자</CTableHeaderCell>
+                  <CTableHeaderCell>최종 수정일</CTableHeaderCell>
+                </CTableRow>
+              </CTableHead>
+              <CTableBody>
+                {documents.length === 0 ? (
+                  <CTableRow>
+                    <CTableDataCell colSpan={6} className="text-center text-body-secondary py-5">
+                      임시저장된 문서가 없습니다.
+                    </CTableDataCell>
+                  </CTableRow>
+                ) : (
+                  documents.map((document) => (
+                    <CTableRow
+                      key={document.approvalId}
+                      role="button"
+                      onClick={() => openDraft(document.approvalId)}
+                    >
+                      <CTableDataCell>{document.approvalId}</CTableDataCell>
+                      <CTableDataCell>
+                        <CBadge color="secondary">
+                          {document.statusLabel || '임시저장'}
+                        </CBadge>
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        <strong>{document.title || '-'}</strong>
+                      </CTableDataCell>
+                      <CTableDataCell>{document.formName || '-'}</CTableDataCell>
+                      <CTableDataCell>{document.writerName || document.writerNo || '-'}</CTableDataCell>
+                      <CTableDataCell>{formatDateTime(document.updatedAt || document.createdAt)}</CTableDataCell>
+                    </CTableRow>
+                  ))
+                )}
+              </CTableBody>
+            </CTable>
+          )}
+
+          <div className="d-flex justify-content-end">
+            <CPagination className="mb-0">
+              <CPaginationItem
+                disabled={page === 0}
+                onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+              >
+                이전
+              </CPaginationItem>
+              {Array.from({ length: totalPages }, (_, index) => index).map((pageNumber) => (
+                <CPaginationItem
+                  active={pageNumber === page}
+                  key={pageNumber}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber + 1}
+                </CPaginationItem>
+              ))}
+              <CPaginationItem
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
+              >
+                다음
+              </CPaginationItem>
+            </CPagination>
+          </div>
+        </CCardBody>
+      </CCard>
+    </div>
+  );
 };
 
 export default TmpApprovals;

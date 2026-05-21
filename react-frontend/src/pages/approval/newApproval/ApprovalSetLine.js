@@ -25,6 +25,21 @@ import { containerStyle } from 'src/styles/js/demoPageStyle';
 
 const CANDIDATE_PAGE_SIZE = 5;
 
+const EMPLOYEE_SIGN_MISSING_MESSAGE =
+  '해당 결재자의 인감 이미지가 아직 등록되지 않았습니다. 추후 관리자에게 등록을 요청해주세요.';
+
+const buildResourceUrl = (path) => {
+  if (!path) {
+    return '';
+  }
+
+  if (path.startsWith('http://') || path.startsWith('https://')) {
+    return path;
+  }
+
+  return `${PATH.API.BASE.replace(/\/api$/, '')}${path}`;
+};
+
 const createRequestPart = (payload, files) => {
   if (!files || files.length === 0) {
     return { body: payload };
@@ -64,6 +79,12 @@ const getGroupKey = (kind, stepOrder) => `${kind}-${stepOrder}`;
 
 const getSelectedEmployees = (selectedMap, groupKey) => selectedMap[groupKey] || [];
 
+const hasSelectedEmployeeInGroupKind = (selectedMap, groupKind, empNo) =>
+  Object.entries(selectedMap).some(([key, employees]) =>
+    key.startsWith(`${groupKind}-`)
+    && employees.some((employee) => employee.empNo === empNo)
+  );
+
 const toggleEmployee = (selectedMap, groupKey, employee) => {
   const selectedEmployees = getSelectedEmployees(selectedMap, groupKey);
   const exists = selectedEmployees.some((item) => item.empNo === employee.empNo);
@@ -97,6 +118,13 @@ const createUserCandidates = (targets, keyword) => {
         .some((value) => String(value || '').toLowerCase().includes(normalizedKeyword));
     });
 };
+
+const lineToEmployee = (line) => ({
+  empNo: line.approverNo,
+  name: line.approverName || line.approverNo || '',
+  deptName: line.approverDeptName || '',
+  positionName: line.approverPositionName || '',
+});
 
 // DEPT/POSITION 타입 결재선 서식은 기존 직원 검색 API의 필터 파라미터로 변환합니다.
 // 여러 조건이 섞인 복잡한 결재선은 우선 키워드 검색과 수동 선택이 가능하도록 넓게 조회합니다.
@@ -189,7 +217,7 @@ const EmployeeCandidatePicker = ({
         <CFormInput
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
-          placeholder="사번, 이름, 부서명, 직급 검색"
+          placeholder="사번, 이름 검색"
           style={{ maxWidth: '320px' }}
         />
       </CCardHeader>
@@ -207,6 +235,29 @@ const EmployeeCandidatePicker = ({
             ))
           )}
         </div>
+
+        {stepOrder > 0 && selectedEmployees.some((employee) => employee.signImg) && (
+          <div className="d-flex flex-wrap gap-3 mb-3">
+            {selectedEmployees
+              .filter((employee) => employee.signImg)
+              .map((employee) => (
+                <div
+                  className="border rounded bg-light p-2 text-center"
+                  style={{ width: '120px' }}
+                  key={`${employee.empNo}-sign`}
+                >
+                  <img
+                    src={buildResourceUrl(employee.signImg)}
+                    alt={`${employee.name} 인감`}
+                    style={{ width: '80px', height: '80px', objectFit: 'contain' }}
+                  />
+                  <div className="small text-truncate mt-1" title={employee.name}>
+                    {employee.name}
+                  </div>
+                </div>
+              ))}
+          </div>
+        )}
 
         {loading ? (
           <div className="py-4 text-center">
@@ -293,9 +344,12 @@ const ApprovalSetLine = () => {
 
   const selectedForm = location.state?.selectedForm || null;
   const files = location.state?.files || [];
+  const draftId = location.state?.draftId || null;
+  const draftLines = useMemo(() => location.state?.draftLines || [], [location.state?.draftLines]);
 
   const [lineTemplate, setLineTemplate] = useState(null);
   const [selectedMap, setSelectedMap] = useState({});
+  const [draftLineInitialized, setDraftLineInitialized] = useState(false);
   const [loading, setLoading] = useState(Boolean(selectedForm?.lineTemplateId));
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
@@ -337,6 +391,28 @@ const ApprovalSetLine = () => {
     [lineTemplate]
   );
 
+  useEffect(() => {
+    if (draftLineInitialized || draftLines.length === 0 || loading) {
+      return;
+    }
+
+    const nextSelectedMap = {};
+    draftLines.forEach((line) => {
+      const stepOrder = Number(line.stepOrder);
+      const groupKey = stepOrder > 0
+        ? getGroupKey('approval', stepOrder)
+        : getGroupKey('reference', 0);
+
+      nextSelectedMap[groupKey] = [
+        ...(nextSelectedMap[groupKey] || []),
+        lineToEmployee(line),
+      ];
+    });
+
+    setSelectedMap(nextSelectedMap);
+    setDraftLineInitialized(true);
+  }, [draftLineInitialized, draftLines, loading]);
+
   const approvalLines = useMemo(() => {
     const approvalSelected = approvalGroups.flatMap((group) =>
       getSelectedEmployees(selectedMap, getGroupKey('approval', group.stepOrder))
@@ -365,7 +441,57 @@ const ApprovalSetLine = () => {
   }), [approvalLines, location.state?.content, location.state?.documentTitle, selectedForm?.formId, selectedForm?.formName]);
 
   const toggleSelection = (groupKey, employee) => {
-    setSelectedMap((prev) => toggleEmployee(prev, groupKey, employee));
+    const selectedEmployees = getSelectedEmployees(selectedMap, groupKey);
+    const alreadySelected = selectedEmployees.some((item) => item.empNo === employee.empNo);
+    const isApprovalGroup = groupKey.startsWith('approval-');
+    const isReferenceGroup = groupKey.startsWith('reference-');
+
+    if (alreadySelected) {
+      setSelectedMap((prev) => toggleEmployee(prev, groupKey, employee));
+      return;
+    }
+
+    /*
+     * 같은 사람이 결재자이면서 참조자가 되면 권한 의미가 섞입니다.
+     * 결재자는 처리 책임이 있고 참조자는 열람 권한만 있으므로, 상신 전 화면에서 중복 지정을 차단합니다.
+     */
+    if (isApprovalGroup && hasSelectedEmployeeInGroupKind(selectedMap, 'reference', employee.empNo)) {
+      alert('참조 대상으로 선택된 직원은 결재자로 중복 지정할 수 없습니다.');
+      return;
+    }
+
+    if (isReferenceGroup && hasSelectedEmployeeInGroupKind(selectedMap, 'approval', employee.empNo)) {
+      alert('결재자로 선택된 직원은 참조 대상으로 중복 지정할 수 없습니다.');
+      return;
+    }
+
+    if (!isApprovalGroup) {
+      setSelectedMap((prev) => toggleEmployee(prev, groupKey, employee));
+      return;
+    }
+
+    /*
+     * 실제 결재자를 새로 선택할 때 인감 이미지 경로를 함께 조회합니다.
+     * 이 경로는 현재 화면의 미리보기뿐 아니라 향후 PDF 출력에서 결재자 도장 이미지를 구성하는 기준 데이터가 됩니다.
+     */
+    axiosInstance.get(PATH.API.APPROVAL.EMPLOYEE_SIGN(employee.empNo))
+      .then((response) => {
+        const employeeWithSign = {
+          ...employee,
+          signImg: response.data?.signImg || '',
+        };
+
+        if (!employeeWithSign.signImg) {
+          alert(EMPLOYEE_SIGN_MISSING_MESSAGE);
+        }
+
+        setSelectedMap((prev) => toggleEmployee(prev, groupKey, employeeWithSign));
+      })
+      .catch((error) => {
+        console.error('결재자 인감 이미지 조회 실패:', error);
+        alert('결재자 인감 이미지 정보를 확인하지 못했습니다.');
+        setSelectedMap((prev) => toggleEmployee(prev, groupKey, employee));
+      });
   };
 
   const validateLines = (forSubmit) => {
@@ -389,9 +515,9 @@ const ApprovalSetLine = () => {
     return true;
   };
 
-  const sendApprovalRequest = async (apiPath) => {
+  const sendApprovalRequest = async (apiPath, method = 'post') => {
     const { body } = createRequestPart(requestPayload, files);
-    return axiosInstance.post(apiPath, body);
+    return axiosInstance[method](apiPath, body);
   };
 
   const saveDraft = async () => {
@@ -401,7 +527,9 @@ const ApprovalSetLine = () => {
 
     try {
       setSubmitting(true);
-      await sendApprovalRequest(PATH.API.APPROVAL.DRAFTS);
+      const apiPath = draftId ? PATH.API.APPROVAL.UPDATE_DRAFT(draftId) : PATH.API.APPROVAL.DRAFTS;
+      const method = draftId ? 'put' : 'post';
+      await sendApprovalRequest(apiPath, method);
       alert('임시저장되었습니다.');
       navigate(PATH.APPROVAL.TMP);
     } catch (error) {
@@ -419,7 +547,8 @@ const ApprovalSetLine = () => {
 
     try {
       setSubmitting(true);
-      await sendApprovalRequest(PATH.API.APPROVAL.SUBMIT);
+      const apiPath = draftId ? PATH.API.APPROVAL.SUBMIT_DRAFT(draftId) : PATH.API.APPROVAL.SUBMIT;
+      await sendApprovalRequest(apiPath);
       alert('상신되었습니다.');
       navigate(PATH.APPROVAL.PERSONAL);
     } catch (error) {
@@ -439,7 +568,23 @@ const ApprovalSetLine = () => {
             {selectedForm?.formName || '서식 미선택'}
           </div>
         </div>
-        <CButton color="secondary" variant="outline" onClick={() => navigate(PATH.APPROVAL.NEW_WRITE, { state: { selectedForm } })}>
+        <CButton
+          color="secondary"
+          variant="outline"
+          onClick={() => navigate(PATH.APPROVAL.NEW_WRITE, {
+            state: {
+              selectedForm,
+              draftId,
+              draftLines: approvalLines.map((line) => ({
+                approverNo: line.approverNo,
+                stepOrder: line.stepOrder,
+              })),
+              // [결재-근태 연동용]: 결재선 설정 후 내용 수정으로 돌아가도 근태 연동 기본값과 잠금 상태를 보존합니다.
+              presetFieldValues: location.state?.presetFieldValues,
+              lockedFieldIds: location.state?.lockedFieldIds,
+            },
+          })}
+        >
           내용 수정
         </CButton>
       </header>

@@ -11,6 +11,10 @@
 #  @ 2026.05.06    김다솜         Groq API 기반 주관식 채점 로직 반영
 #  @ 2026.05.11    김다솜         AI 퀴즈 자동 생성 로직 추가
 #  @ 2026.05.13    김다솜         RAG 문맥 우선 출제 기준 및 객관식/단답형 혼합 초안 생성 강화
+#  @ 2026.05.19    김다솜         자기 평가와 AI 평가 비교 기반 학습 피드백 생성 추가
+#  @ 2026.05.19    김다솜         문항 문맥과 채점 기준 기반 주관식 유사도 보정 추가
+#  @ 2026.05.19    김다솜         자기 평가 피드백 프롬프트 용어를 서비스 문맥에 맞게 조정
+#  @ 2026.05.19    김다솜         자기 평가 피드백 불렛 및 줄바꿈 형식 개선
 # 
 
 import json
@@ -24,6 +28,8 @@ from schemas.evaluation_schema import (
     AiQuizDraftItem,
     AiQuizGenerationRequest,
     AiQuizGenerationResponse,
+    AiSelfCheckFeedbackRequest,
+    AiSelfCheckFeedbackResponse,
 )
 from utils.nlp_helper import get_semantic_similarity
 
@@ -45,29 +51,45 @@ def evaluate_answer(req: AiEvaluationRequest) -> AiEvaluationResponse:
     nlp_similarity = get_semantic_similarity(user_answer, reference_answer)
 
     scoring_guideline = (
+        "- 기준 답안이 짧아도 사용자가 같은 뜻을 풀어 썼다면 높게 반영\n"
+        "- 문항, 기준 답안, 키워드, 채점 기준, 풀이 도움말을 함께 보고 포괄 여부 판단\n"
         "- 핵심 키워드 포함 여부\n"
         "- 업무 지식으로서의 논리와 정확성\n"
+        "- 불필요한 내용이 조금 있어도 정답 요지를 포함하면 과도하게 감점하지 않음\n"
         "- 단순 키워드 나열이 아닌 문장 수준의 설명 여부"
     )
 
     prompt = f"""
 당신은 온보딩 교육 평가 전문가입니다.
-NLP 유사도 점수는 {nlp_similarity}입니다.
+아래 NLP 유사도 점수는 참고값입니다. 기준 답안이 짧고 사용자 답변이 풀어쓴 형태라면, 문맥과 포함 관계를 직접 판단하여 similarity를 보정하세요.
+NLP 참고 유사도: {nlp_similarity}
 
 [채점 기준]
 {scoring_guideline}
 
+[문항]
+{req.question_text or "없음"}
+
 [기준 답안]
 {reference_answer}
+
+[핵심 키워드]
+{req.keyword_answer or "없음"}
+
+[루브릭]
+{req.rubric or "없음"}
+
+[풀이 도움말]
+{req.explanation or "없음"}
 
 [사용자 답변]
 {user_answer}
 
-유사도와 답변 내용을 함께 반영하여 아래 JSON 형식으로만 응답하세요.
+아래 JSON 형식으로만 응답하세요.
 {{
   "score": 0~100 사이 점수,
-  "similarity": {nlp_similarity},
-  "feedback": "구체적인 피드백 2~3문장"
+  "similarity": 0.0~1.0 사이 숫자,
+  "feedback": "구체적인 피드백 2~3문장. similarity가 NLP 참고값과 달라졌다면 왜 보정했는지 짧게 설명"
 }}
 """
 
@@ -96,11 +118,12 @@ NLP 유사도 점수는 {nlp_similarity}입니다.
         raw = raw.strip()
 
         result = json.loads(raw)
+        ai_similarity = clamp_similarity(result.get("similarity", nlp_similarity))
 
         return AiEvaluationResponse(
             score=int(result["score"]),
             feedback=str(result["feedback"]),
-            similarity=nlp_similarity,
+            similarity=ai_similarity,
         )
 
     except Exception as e:
@@ -110,6 +133,120 @@ NLP 유사도 점수는 {nlp_similarity}입니다.
             feedback=f"AI 채점 중 오류가 발생하여 테스트용 결과를 반환합니다. {str(e)}",
             similarity=0.65 if user_answer else 0.0,
         )
+
+
+def clamp_similarity(value) -> float:
+    try:
+        number_value = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return round(max(0.0, min(1.0, number_value)), 2)
+
+
+def generate_self_check_feedback(req: AiSelfCheckFeedbackRequest) -> AiSelfCheckFeedbackResponse:
+    client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+    review_items = req.review_items[:3] if req.review_items else []
+    review_text = "\n".join(
+        [
+            (
+                f"- 문제: {item.question or '없음'}\n"
+                f"  내 답: {item.user_answer or '없음'}\n"
+                f"  맞는 답/도움말: {item.correct_answer or item.explanation or '없음'}\n"
+                f"  받은 점수: {item.score if item.score is not None else '-'}"
+                f"/{item.max_score if item.max_score is not None else '-'}"
+            )
+            for item in review_items
+        ]
+    ) or "- 틀렸거나 덜 맞은 문제가 많지 않습니다."
+
+    prompt = f"""
+사용자의 온보딩 학습 자기 평가와 AI 평가 결과를 비교해, 바로 실행할 수 있는 피드백을 작성하세요.
+
+[학습 정보]
+- 콘텐츠: {req.content_title}
+- 카테고리: {req.category_name or '없음'}
+- 자기 평가: {req.self_score_rate}%
+- AI 평가: {req.evaluation_score_rate if req.evaluation_score_rate is not None else '없음'}%
+- 차이: {req.score_gap if req.score_gap is not None else '없음'}%
+- 추가 설명이 필요한 콘텐츠: {req.need_more_explanation}
+- 내가 작성한 의견: {req.memo or '없음'}
+
+[다시 볼 문제]
+{review_text}
+
+[작성 조건]
+- 한국어로만 작성하세요.
+- 한자 표기는 한글 표기로 바꾸되, 자기 평가, AI 평가, 차이, 추가 설명, 콘텐츠, 문제, 풀이 도움말 같은 서비스 용어는 그대로 사용하세요.
+- 지나치게 쉬운 말로 바꾸지 말고 사용자에게 자연스러운 교육 피드백 문장으로 작성하세요.
+- 콘텐츠 이름과 다시 볼 문제를 반드시 언급하세요.
+- 어떤 콘텐츠의 어느 문제 또는 어느 풀이 도움말을 다시 봐야 하는지 구체적으로 말하세요.
+- 사용자가 바로 할 수 있는 행동 1~2개를 넣으세요.
+- 제목 1줄과 불렛 2~3개로 구성하세요.
+- 각 불렛은 "- "로 시작하고 줄바꿈으로 구분하세요.
+- 첫 줄에는 자기 평가와 AI 평가의 관계를 요약하세요.
+- 불렛에는 다시 볼 콘텐츠/문제, 보완 행동, 추가 설명 필요 여부를 나누어 적으세요.
+- 전체 6줄 이내로 작성하세요.
+- JSON만 반환하세요.
+
+반환 형식:
+{{
+  "feedback": "요약 문장\n- 불렛 1\n- 불렛 2"
+}}
+"""
+
+    try:
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {
+                    "role": "system",
+                    "content": "당신은 온보딩 학습 도우미입니다. 한자 표기는 한글로 쓰되 서비스 용어는 자연스럽게 유지하고 반드시 JSON만 반환하세요.",
+                },
+                {
+                    "role": "user",
+                    "content": prompt,
+                },
+            ],
+            temperature=0.35,
+            response_format={"type": "json_object"},
+        )
+
+        raw = response.choices[0].message.content.strip()
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+        parsed = json.loads(raw.strip())
+        feedback = str(parsed.get("feedback", "")).strip()
+        if not feedback:
+            raise ValueError("피드백 문장이 비어 있습니다.")
+        return AiSelfCheckFeedbackResponse(feedback=feedback)
+
+    except Exception as e:
+        print(f"[Groq 자기 평가 피드백 오류] {e}")
+        return AiSelfCheckFeedbackResponse(
+            feedback=build_self_check_fallback(req, review_items)
+        )
+
+
+def build_self_check_fallback(req: AiSelfCheckFeedbackRequest, review_items: list) -> str:
+    score_part = (
+        f"자기 평가 {req.self_score_rate}%, AI 평가 {req.evaluation_score_rate}%, 차이 {req.score_gap}%입니다."
+        if req.evaluation_score_rate is not None
+        else f"자기 평가 {req.self_score_rate}%가 저장되었습니다."
+    )
+    if review_items:
+        first = review_items[0]
+        review_part = f"'{req.content_title}'에서 '{first.question}' 문제와 풀이 도움말을 먼저 다시 보세요."
+    else:
+        review_part = f"'{req.content_title}'에서 핵심 개념과 적용 순서를 한 번 더 정리해 보세요."
+    extra_part = " 추가 설명이 필요하다고 표시했으니 이 내용을 AI 학습 도우미에 질문해 보세요." if req.need_more_explanation else ""
+    return (
+        f"{score_part}\n"
+        f"- 다시 볼 콘텐츠: {review_part}\n"
+        f"- 보완 방법: 본인 말로 짧게 요약한 뒤 다시 풀어 보면 좋습니다.\n"
+        f"- 추가 설명: {extra_part.strip() if extra_part else '현재 선택된 추가 설명 요청은 없습니다.'}"
+    )
 
 
 # 콘텐츠 기반 객관식/단답형 퀴즈 초안 생성 함수

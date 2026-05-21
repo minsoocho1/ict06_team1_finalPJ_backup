@@ -8,7 +8,8 @@
 #  @ 수정일자        수정자          수정내용
 #  @ ----------    ---------    -------------------------------
 #  @ 2026.05.12    김다솜        문서 자동 처리 파이프라인 구현, 원격 문서 요청 timeout/User-Agent 보강 및 상단 주석 보강
-#
+#  @ 2026.05.18    김다솜        문서 처리 응답에 요청 docId를 포함하도록 보완
+#  @ 2026.05.19    김다솜        PDF 구조 태그와 객체 문법 필터링 및 청크 부족 시 제목 기반 외부 참고 요약 보강
 
 import hashlib
 import html
@@ -17,7 +18,7 @@ import math
 import os
 import re
 from io import BytesIO
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote_plus, urlparse
 
 import pdfplumber
 import requests
@@ -37,6 +38,49 @@ MAX_CHUNK_CHARS = 900
 EMBED_DIMENSION = 256
 REMOTE_CONNECT_TIMEOUT = 10
 REMOTE_READ_TIMEOUT = 90
+WEB_SEARCH_TIMEOUT = 8
+PDF_STRUCTURE_MARKERS = {
+    "PDF",
+    "StructElem",
+    "StructTreeRoot",
+    "MarkedContent",
+    "MCID",
+    "RowSpan",
+    "ColSpan",
+    "ListNumbering",
+    "Table",
+    "TR",
+    "TH",
+    "TD",
+    "Pg",
+    "Page",
+    "Pages",
+    "MediaBox",
+    "TrimBox",
+    "BleedBox",
+    "CropBox",
+    "Resources",
+    "Font",
+    "Image",
+    "Text",
+    "XObject",
+    "ProcSet",
+    "Contents",
+    "Parent",
+    "Kids",
+    "Length",
+    "Filter",
+    "BBox",
+    "K",
+    "P",
+}
+PDF_OBJECT_PATTERN = re.compile(
+    r"(%PDF-\d(?:\.\d)?|\b\d+\s+\d+\s+obj\b|\bendobj\b|\bstream\b|\bendstream\b|"
+    r"\bxref\b|\btrailer\b|\bstartxref\b|"
+    r"/Type\s*/(?:Page|Pages|Catalog|Font|XObject)\b|"
+    r"/(?:MediaBox|TrimBox|BleedBox|CropBox|Resources|Font|Image|Text|ProcSet|Contents|Parent|Kids|Length|Filter)\b)"
+)
+PDF_DICTIONARY_TOKEN_PATTERN = re.compile(r"/[A-Za-z][A-Za-z0-9]*(?:\s*/[A-Za-z][A-Za-z0-9]*)?")
 REMOTE_REQUEST_HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -57,11 +101,14 @@ def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
     if source_type.endswith("pdf") and is_low_quality_extraction(cleaned_text):
         raise ValueError("PDF 본문 추출 품질이 너무 낮습니다. 다른 PDF를 사용하거나 OCR 처리가 필요합니다.")
 
-    chunks = split_text(cleaned_text)
+    chunks = filter_content_chunks(split_text(cleaned_text))
     if not chunks:
-        raise ValueError("청크를 생성할 수 없습니다.")
+        preview_text = build_external_fallback_summary(req.title, build_reference_links(req.title, "요약"))
+        if not preview_text:
+            raise ValueError("본문으로 사용할 수 있는 문서 청크를 생성할 수 없습니다. PDF 구조 태그만 추출된 문서일 수 있어 OCR 또는 원본 파일 확인이 필요합니다.")
+    else:
+        preview_text = build_preview_text(req.title, cleaned_text)
 
-    preview_text = build_preview_text(req.title, cleaned_text)
     response_chunks: list[DocumentChunkResponse] = []
     for index, chunk_text in enumerate(chunks, start=1):
         token_count = estimate_token_count(chunk_text)
@@ -80,6 +127,7 @@ def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
         )
 
     return DocumentProcessResponse(
+        docId=req.docId,
         sourceType=source_type,
         extractedTextPreview=preview_text[:300],
         chunkCount=len(response_chunks),
@@ -93,7 +141,11 @@ def answer_document_question(req: DocumentQuestionRequest) -> DocumentQuestionRe
     if not question:
         raise ValueError("질문 내용을 입력해 주세요.")
 
-    context_chunks = [normalize_text(chunk).strip() for chunk in req.chunks if chunk and chunk.strip()]
+    context_chunks = filter_content_chunks([
+        normalize_text(chunk).strip()
+        for chunk in req.chunks
+        if chunk and chunk.strip()
+    ])
     summary_text = normalize_text((req.summaryPreview or "").strip()) if (req.summaryPreview or "").strip() else ""
 
     if not context_chunks and not summary_text:
@@ -104,6 +156,14 @@ def answer_document_question(req: DocumentQuestionRequest) -> DocumentQuestionRe
         for index, chunk in enumerate(context_chunks[:5], start=1)
     )
     reference_links = build_reference_links(req.title, question)
+
+    if has_thin_answer_evidence(summary_text, context_chunks):
+        external_answer = build_reference_grounded_answer(req.title, question, reference_links)
+        if external_answer:
+            return DocumentQuestionResponse(
+                answer=clean_answer_text(external_answer),
+                usedChunkCount=0,
+            )
 
     answer = generate_document_answer(req.title, question, summary_text, context_text, reference_links)
     return DocumentQuestionResponse(
@@ -277,6 +337,14 @@ def build_document_answer_fallback(
 def build_reference_links(title: str, question: str) -> list[tuple[str, str]]:
     source = f"{title} {question}".lower()
 
+    if any(keyword in source for keyword in ["표준프레임워크", "전자정부", "egov", "egovframe"]):
+        return [
+            ("eGovFrame 표준프레임워크 포털", "https://www.egovframe.go.kr/home/main.do"),
+            ("표준프레임워크 실행환경 가이드", "https://www.egovframe.go.kr/home/sub.do?menuNo=25"),
+            ("표준프레임워크 개발환경 가이드", "https://www.egovframe.go.kr/home/sub.do?menuNo=26"),
+            ("표준프레임워크 가이드 시작하기", "https://www.egovframe.go.kr/home/sub.do?menuNo=24"),
+        ]
+
     if "spring" in source:
         return [
             ("Spring Framework 예외 처리", "https://docs.spring.io/spring-framework/reference/web/webmvc/mvc-controller/ann-exceptionhandler.html"),
@@ -306,6 +374,13 @@ def build_reference_links(title: str, question: str) -> list[tuple[str, str]]:
         return [
             ("Figma Help Center", "https://help.figma.com/"),
             ("W3C Design Systems", "https://design-system.w3.org/"),
+        ]
+    if title and is_search_fallback_enabled():
+        return [
+            (
+                "제목 기반 웹 검색",
+                f"https://duckduckgo.com/?q={quote_plus(title)}",
+            )
         ]
     return []
 
@@ -486,9 +561,64 @@ def normalize_text(text: str) -> str:
     text = text.replace("\x00", " ")
     text = text.replace("\r", "\n")
     text = re.sub(r"[\x01-\x08\x0B\x0C\x0E-\x1F\x7F]", " ", text)
+    text = remove_pdf_structure_lines(text)
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
     return text.strip()
+
+
+def remove_pdf_structure_lines(text: str) -> str:
+    lines = []
+    for line in text.splitlines():
+        normalized = line.strip()
+        if not normalized:
+            lines.append(line)
+            continue
+        if is_pdf_structure_artifact(normalized):
+            continue
+        lines.append(line)
+    return remove_pdf_object_blocks("\n".join(lines))
+
+
+def filter_content_chunks(chunks: list[str]) -> list[str]:
+    return [chunk for chunk in chunks if not is_pdf_structure_artifact(chunk)]
+
+
+def remove_pdf_object_blocks(text: str) -> str:
+    # PDF dictionary/object blocks may be extracted as wrapped text, not line-by-line text.
+    text = re.sub(r"<<[^<>]{0,1200}>>", " ", text)
+    text = re.sub(r"\b\d+\s+\d+\s+obj\b.*?\bendobj\b", " ", text, flags=re.DOTALL)
+    text = re.sub(r"\bstream\b.*?\bendstream\b", " ", text, flags=re.DOTALL)
+    return text
+
+
+def is_pdf_structure_artifact(text: str) -> bool:
+    sample = re.sub(r"\s+", " ", text or "").strip()
+    if not sample:
+        return True
+
+    hangul_count = len(re.findall(r"[가-힣]", sample))
+    pdf_dictionary_hits = len(PDF_DICTIONARY_TOKEN_PATTERN.findall(sample))
+    if PDF_OBJECT_PATTERN.search(sample):
+        if hangul_count < 20 or pdf_dictionary_hits >= 3:
+            return True
+
+    marker_hits = sum(
+        1
+        for marker in PDF_STRUCTURE_MARKERS
+        if re.search(rf"\b{re.escape(marker)}\b", sample)
+    )
+    if marker_hits >= 3:
+        return True
+
+    words = re.findall(r"[A-Za-z가-힣]{2,}", sample)
+    if not words:
+        return True
+
+    marker_words = sum(1 for word in words if word in PDF_STRUCTURE_MARKERS)
+    marker_ratio = marker_words / max(1, len(words))
+    has_korean_content = bool(re.search(r"[가-힣]{2,}", sample))
+    return marker_ratio >= 0.35 and not has_korean_content
 
 
 def split_text(text: str) -> list[str]:
@@ -562,11 +692,18 @@ def extract_section_title(text: str) -> str | None:
 
 
 def build_preview_text(title: str, text: str) -> str:
+    reference_links = build_reference_links(title, "요약")
+
+    if is_insufficient_document_evidence(text):
+        external_summary = build_external_fallback_summary(title, reference_links)
+        if external_summary:
+            return external_summary
+
     try:
         summary = summarize_document(title, text)
         if summary:
             normalized_summary = normalize_summary_text(summary)
-            if normalized_summary and not looks_like_leading_copy(normalized_summary, text):
+            if normalized_summary and not looks_like_leading_copy(normalized_summary, text) and not looks_too_generic_answer(normalized_summary):
                 return normalized_summary
     except Exception:
         pass
@@ -574,6 +711,10 @@ def build_preview_text(title: str, text: str) -> str:
     extracted_summary = build_extractive_summary(title, text)
     if extracted_summary:
         return extracted_summary
+
+    external_summary = build_external_fallback_summary(title, reference_links)
+    if external_summary:
+        return external_summary
 
     return text[:300]
 
@@ -584,6 +725,58 @@ def build_section_title(document_title: str, chunk_no: int, text: str) -> str | 
         return extracted_title[:120]
 
     return f"{document_title} - Chunk {chunk_no}"
+
+
+def build_external_fallback_summary(title: str, reference_links: list[tuple[str, str]]) -> str | None:
+    source = (title or "").lower()
+    if any(keyword in source for keyword in ["표준프레임워크", "전자정부", "egov", "egovframe"]):
+        summary = (
+            f"{title} 문서는 전자정부 표준프레임워크(eGovFrame)의 적용·개발·실행환경 기준을 확인하기 위한 가이드로 볼 수 있습니다. "
+            "본문 추출 품질이 낮아 세부 절차는 공식 포털의 실행환경/개발환경 가이드와 적용 기준 문서를 함께 확인하는 것이 좋습니다."
+        )
+        return append_reference_links(normalize_summary_text(summary), reference_links)
+
+    snippets = search_web_snippets(title)
+    if snippets:
+        summary = f"{title} 문서는 외부 검색 결과 기준으로 {trim_summary_clause(snippets[0])}"
+        if len(snippets) > 1:
+            summary += f" {trim_summary_clause(snippets[1])}"
+        return append_reference_links(normalize_summary_text(summary), reference_links)
+
+    if reference_links:
+        summary = (
+            f"{title} 문서는 현재 추출된 본문만으로는 세부 요약이 어렵습니다. "
+            "아래 참고 URL을 확인해 공식 문서 기준으로 목적, 적용 범위, 절차를 보완해 주세요."
+        )
+        return append_reference_links(normalize_summary_text(summary), reference_links)
+
+    return None
+
+
+def build_reference_grounded_answer(title: str, question: str, reference_links: list[tuple[str, str]]) -> str | None:
+    source = f"{title} {question}".lower()
+    if any(keyword in source for keyword in ["표준프레임워크", "전자정부", "egov", "egovframe"]):
+        answer = f"""
+{title} 문서는 전자정부 표준프레임워크(eGovFrame)를 프로젝트에 적용할 때 확인해야 하는 실행환경, 개발환경, 적용 범위, 호환성 기준을 안내하는 자료로 볼 수 있습니다.
+
+* 표준프레임워크는 공공 정보화 사업에서 재사용 가능한 표준 개발 기반을 제공하기 위한 프레임워크입니다.
+* 적용 시 실행환경 버전, 개발환경 구성, 공통컴포넌트 사용 여부, 호환성 기준을 먼저 확인해야 합니다.
+* 프로젝트 구조와 패키지, 라이브러리 버전, Spring 기반 설정 방식이 표준프레임워크 기준과 충돌하지 않는지 점검하는 것이 핵심입니다.
+* 현재 등록 문서의 본문 추출 품질이 낮아 세부 절차는 공식 eGovFrame 가이드와 함께 확인하는 방식이 안전합니다.
+
+실무 포인트:
+문서 재처리 결과가 부족할 때는 원본 PDF/OCR 상태를 먼저 점검하고, 적용 기준은 공식 포털의 실행환경/개발환경 가이드를 기준으로 보완하세요.
+""".strip()
+        return append_reference_links(answer, reference_links)
+
+    snippets = search_web_snippets(title)
+    if snippets:
+        answer = f"{title} 문서는 등록된 본문 근거가 부족하여 제목 기반 웹 검색 결과를 보조로 참고했습니다.\n"
+        answer += "\n".join(f"* {trim_summary_clause(snippet)}" for snippet in snippets)
+        answer += "\n\n실무 포인트:\n외부 검색 결과는 보조 자료이므로 원본 문서 재처리 또는 공식 출처 확인을 함께 진행하세요."
+        return append_reference_links(answer, reference_links)
+
+    return None
 
 
 def build_extractive_summary(title: str, text: str) -> str | None:
@@ -636,6 +829,75 @@ def split_summary_sentences(text: str) -> list[str]:
         if is_navigation_like_sentence(sentence):
             continue
         results.append(sentence[:180])
+    return results
+
+
+def is_insufficient_document_evidence(text: str) -> bool:
+    normalized = re.sub(r"\s+", " ", text or "").strip()
+    if len(normalized) < 220:
+        return True
+
+    sentences = split_summary_sentences(normalized)
+    if len(sentences) < 2:
+        return True
+
+    tokens = extract_summary_tokens(normalized[:1500])
+    return len(set(tokens)) < 12
+
+
+def has_thin_answer_evidence(summary_text: str, context_chunks: list[str]) -> bool:
+    combined = " ".join([summary_text or "", *context_chunks])
+    normalized = re.sub(r"\s+", "", combined)
+    if not normalized:
+        return True
+
+    weak_markers = [
+        "내용이제공되지않아",
+        "문서의내용이제공되지않아",
+        "주요개념이나절차를파악하기어렵습니다",
+        "정보가부족",
+        "근거를충분히찾지못했습니다",
+        "본문추출품질이낮",
+        "세부요약이어렵습니다",
+    ]
+    if any(marker in normalized for marker in weak_markers):
+        return True
+
+    return is_insufficient_document_evidence(combined)
+
+
+def is_search_fallback_enabled() -> bool:
+    return os.getenv("ENABLE_WEB_SEARCH_FALLBACK", "true").lower() == "true"
+
+
+def search_web_snippets(title: str) -> list[str]:
+    if not title or not is_search_fallback_enabled():
+        return []
+
+    try:
+        response = requests.get(
+            "https://duckduckgo.com/html/",
+            params={"q": title},
+            headers=REMOTE_REQUEST_HEADERS,
+            timeout=WEB_SEARCH_TIMEOUT,
+        )
+        response.raise_for_status()
+    except Exception:
+        return []
+
+    snippets = re.findall(
+        r'<a[^>]+class="result__snippet"[^>]*>(.*?)</a>|<div[^>]+class="result__snippet"[^>]*>(.*?)</div>',
+        response.text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    results: list[str] = []
+    for groups in snippets:
+        raw = next((group for group in groups if group), "")
+        text = normalize_text(html_to_text(raw))
+        if text and not is_pdf_structure_artifact(text):
+            results.append(text[:180])
+        if len(results) >= 2:
+            break
     return results
 
 

@@ -5,10 +5,13 @@
     @Date : 2026. 05. 14
     @Modification_History
     @
-    @ 수정일자        수정자       수정내용
+    @ 수정일자        수정자        수정내용
     @ ----------    ---------    -------------------------------
     @ 2026.05.14    김다솜        최초 생성
     @ 2026.05.15    김다솜        평가 결과 통계 시각화 구현
+    @ 2026.05.18    김다솜        복합 통계 요약, 이탈 징후 분석, LLM 인사이트, 위험 직원 로드맵 연결 및 깨진 마크업 복구
+    @ 2026.05.19    김다솜        직원별 평가 결과 실시간 검색/필터 표시 방식 적용
+    @ 2026.05.19    김다솜        AI 분석 리포트 이동 안내 표시 추가
 -->
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -27,12 +30,12 @@
                 <div class="row mb-3">
                     <div class="col">
                         <h3>평가 결과 통계</h3>
-                        <p class="text-muted mb-0">제출 현황, 평균 이해도, 가중 평균, 카테고리별 기준점 비교를 확인합니다.</p>
+                        <p class="text-muted mb-0">
+                            평가 제출 현황, 평균 이해도, 기준 대비 차이, 취약 문항을 한 화면에서 확인합니다.
+                        </p>
                     </div>
                     <div class="col text-end d-flex justify-content-end align-items-start gap-2">
-                        <button type="button" class="btn btn-success" onclick="downloadCsv()">
-                            CSV 내보내기
-                        </button>
+                        <button type="button" class="btn btn-success" onclick="downloadCsv()">CSV 다운로드</button>
                         <a th:href="@{/admin/evaluation/main}" class="btn btn-outline-secondary">평가 메인</a>
                     </div>
                 </div>
@@ -49,7 +52,7 @@
                     <div class="col-md-6 col-xl-3">
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
-                                <div class="text-muted small mb-2">참여 인원</div>
+                                <div class="text-muted small mb-2">참여 직원</div>
                                 <div class="fs-3 fw-semibold" th:text="${analytics.participantCount}">0</div>
                             </div>
                         </div>
@@ -58,7 +61,8 @@
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
                                 <div class="text-muted small mb-2">평균 이해도 점수</div>
-                                <div class="fs-3 fw-semibold" th:text="${#numbers.formatDecimal(analytics.averageScoreRate, 1, 1) + '%'}">0.0%</div>
+                                <div class="fs-3 fw-semibold"
+                                     th:text="${#numbers.formatDecimal(analytics.averageScoreRate, 1, 1) + '%'}">0.0%</div>
                             </div>
                         </div>
                     </div>
@@ -66,7 +70,8 @@
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
                                 <div class="text-muted small mb-2">가중 평균 이해도</div>
-                                <div class="fs-3 fw-semibold" th:text="${#numbers.formatDecimal(analytics.weightedAverageScoreRate, 1, 1) + '%'}">0.0%</div>
+                                <div class="fs-3 fw-semibold"
+                                     th:text="${#numbers.formatDecimal(analytics.weightedAverageScoreRate, 1, 1) + '%'}">0.0%</div>
                             </div>
                         </div>
                     </div>
@@ -77,29 +82,31 @@
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
                                 <div class="row align-items-center">
-                                    <!-- 좌측: 레이더 차트 -->
                                     <div class="col-lg-8">
-                                        <h5 class="card-title mb-3">종합 역량 맵 (이해도 vs 기준점)</h5>
+                                        <h5 class="card-title mb-3">카테고리별 이해도 비교</h5>
                                         <div style="position: relative; height: 400px;">
                                             <canvas id="categoryScoreChart"></canvas>
                                         </div>
                                     </div>
-                                    <!-- 우측: AI 분석 코멘트 -->
                                     <div class="col-lg-4 border-start py-2">
                                         <div class="d-flex align-items-center mb-3">
-                                            <span class="badge bg-primary-subtle text-primary me-2"><i class="bi bi-robot"></i></span>
+                                            <span class="badge bg-primary-subtle text-primary me-2">
+                                                <i class="bi bi-robot"></i>
+                                            </span>
                                             <h5 class="mb-0">AI 분석 코멘트</h5>
                                         </div>
-                                        <div id="aiAnalysisComment" class="p-3 bg-light rounded-3" style="min-height: 280px; line-height: 1.7; font-size: 0.95rem;">
+                                        <div id="aiAnalysisComment" class="p-3 bg-light rounded-3"
+                                             style="min-height: 280px; line-height: 1.7; font-size: 0.95rem;">
                                             <div class="d-flex flex-column align-items-center justify-content-center h-100 py-5">
-                                                <div class="spinner-border text-primary mb-3" role="status" style="width: 3rem; height: 3rem;">
+                                                <div class="spinner-border text-primary mb-3" role="status"
+                                                     style="width: 3rem; height: 3rem;">
                                                     <span class="visually-hidden">Loading...</span>
                                                 </div>
-                                                <div class="text-muted fw-medium">AI가 데이터를 심층 분석하고 있습니다...</div>
+                                                <div class="text-muted fw-medium">AI가 평가 통계를 분석하고 있습니다.</div>
                                             </div>
                                         </div>
                                         <div class="mt-3 small text-muted text-end">
-                                            * 카테고리별 목표 격차 기반 자동 분석
+                                            * 카테고리별 기준 대비 차이를 기반으로 생성됩니다.
                                         </div>
                                     </div>
                                 </div>
@@ -110,24 +117,24 @@
 
                 <div class="card shadow-sm mb-4">
                     <div class="card-body table-responsive">
-                        <h5 class="card-title mb-3">카테고리별 기준 비교</h5>
+                        <h5 class="card-title mb-3">카테고리별 평가 기준 및 결과</h5>
                         <table class="table table-hover align-middle mb-0">
                             <thead>
                             <tr>
                                 <th>카테고리</th>
-                                <th>기준 점수(%)</th>
+                                <th>합격 기준(%)</th>
                                 <th>문항 수</th>
-                                <th>만점</th>
-                                <th>합격 기준</th>
+                                <th>총점</th>
+                                <th>필요 점수</th>
                                 <th>가중치</th>
                                 <th>평균 점수</th>
-                                <th>격차</th>
+                                <th>차이</th>
                                 <th style="width: 80px;">관리</th>
                             </tr>
                             </thead>
                             <tbody>
                             <tr th:each="stat : ${analytics.categoryStats}">
-                                <td th:text="${stat.categoryName}">개발</td>
+                                <td th:text="${stat.categoryName}">카테고리</td>
                                 <td>
                                     <span class="badge bg-secondary" th:text="${stat.passScore + '%'}">80%</span>
                                 </td>
@@ -137,8 +144,8 @@
                                 <td th:text="${stat.weightPercent + '%'}">100%</td>
                                 <td th:text="${#numbers.formatDecimal(stat.averageScoreRate, 1, 1) + '%'}">82.5%</td>
                                 <td>
-                                    <span th:classappend="${stat.scoreGap >= 0} ? 'text-success fw-semibold' : 'text-danger fw-semibold'"
-                                          th:text="${#numbers.formatDecimal(stat.scoreGap, 1, 1) + '%'}">+2.5%</span>
+                                    <span th:class="${stat.scoreGap >= 0 ? 'text-success' : 'text-danger'}"
+                                          th:text="${(stat.scoreGap >= 0 ? '+' : '') + #numbers.formatDecimal(stat.scoreGap, 1, 1) + '%'}">+2.5%</span>
                                 </td>
                                 <td>
                                     <button class="btn btn-sm btn-outline-primary"
@@ -148,7 +155,7 @@
                                 </td>
                             </tr>
                             <tr th:if="${#lists.isEmpty(analytics.categoryStats)}">
-                                <td colspan="9" class="text-center text-muted">집계된 카테고리 통계가 없습니다.</td>
+                                <td colspan="9" class="text-center text-muted">평가 카테고리 통계가 없습니다.</td>
                             </tr>
                             </tbody>
                         </table>
@@ -159,7 +166,7 @@
                     <div class="col-lg-5">
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
-                                <h5 class="card-title mb-3">전체 통과 분포</h5>
+                                <h5 class="card-title mb-3">전체 통과 현황</h5>
                                 <div style="position: relative; height: 340px;">
                                     <canvas id="categoryPassChart"></canvas>
                                 </div>
@@ -169,7 +176,7 @@
                     <div class="col-lg-7">
                         <div class="card shadow-sm h-100">
                             <div class="card-body">
-                                <h5 class="card-title mb-3">문항별 이해도 하위 구간</h5>
+                                <h5 class="card-title mb-3">문항별 이해도 취약 지점</h5>
                                 <div style="position: relative; height: 360px;">
                                     <canvas id="questionWeaknessChart"></canvas>
                                 </div>
@@ -178,13 +185,165 @@
                     </div>
                 </div>
 
+                <div class="row g-3 mb-4">
+                    <div class="col-12">
+                        <div class="card shadow-sm h-100 border-0"
+                             role="button"
+                             style="cursor: pointer;"
+                             title="AI 분석 리포트로 이동"
+                             th:onclick="|location.href='@{/admin/evaluation/ai-report}'|">
+                            <div class="card-body">
+                                <div class="text-muted small mb-1">복합 통계 요약</div>
+                                <h5 class="card-title mb-3">학습·체크리스트·평가 통합 지표</h5>
+                                <div class="row g-3">
+                                    <div class="col-md-6 col-xl-3">
+                                        <div class="p-3 rounded-3 bg-light h-100" style="min-width: 0;">
+                                            <div class="small text-muted text-nowrap">고위험 직원</div>
+                                            <div class="fs-4 fw-bold text-danger text-nowrap"
+                                                 th:text="${analytics.highRiskEmployeeCount + '명'}">0명</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-xl-3">
+                                        <div class="p-3 rounded-3 bg-light h-100" style="min-width: 0;">
+                                            <div class="small text-muted text-nowrap">주의 필요</div>
+                                            <div class="fs-4 fw-bold text-warning text-nowrap"
+                                                 th:text="${analytics.mediumRiskEmployeeCount + '명'}">0명</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-xl-3">
+                                        <div class="p-3 rounded-3 bg-light h-100" style="min-width: 0;">
+                                            <div class="small text-muted text-nowrap">평균 학습</div>
+                                            <div class="fw-bold text-nowrap"
+                                                 th:text="${#numbers.formatDecimal(analytics.averageLearningProgressRate, 1, 1) + '%'}">0.0%</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6 col-xl-3">
+                                        <div class="p-3 rounded-3 bg-light h-100" style="min-width: 0;">
+                                            <div class="small text-muted text-nowrap">평균 체크</div>
+                                            <div class="fw-bold text-nowrap"
+                                                 th:text="${#numbers.formatDecimal(analytics.averageChecklistProgressRate, 1, 1) + '%'}">0.0%</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+                                    <div class="small text-muted">
+                                        고위험 직원과 개선 인사이트는 AI 분석 리포트에서 자세히 확인할 수 있습니다.
+                                    </div>
+                                    <span class="badge bg-primary-subtle text-primary">
+                                        이 영역을 클릭하면 AI 분석 리포트로 이동합니다 →
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="card shadow-sm h-100 border-0"
+                             role="button"
+                             style="cursor: pointer;"
+                             title="AI 분석 리포트로 이동"
+                             th:onclick="|location.href='@{/admin/evaluation/ai-report}'|">
+                            <div class="card-body">
+                                <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+                                    <div>
+                                        <div class="text-muted small">학습, 체크리스트, 평가 데이터를 통합한 위험 신호</div>
+                                        <h5 class="card-title mb-0">위험 직원 Top 10</h5>
+                                    </div>
+                                    <span class="badge bg-primary-subtle text-primary">규칙 기반 + 평균 흐름 + LLM 확장</span>
+                                </div>
+                                <div class="alert alert-primary py-2 small mb-3">
+                                    표 영역을 클릭하면 AI 분석 리포트에서 개선 인사이트를 확인할 수 있습니다.
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead class="table-light position-sticky top-0">
+                                        <tr>
+                                            <th style="min-width: 140px;">직원</th>
+                                            <th style="min-width: 92px;">위험도</th>
+                                            <th class="text-nowrap">학습</th>
+                                            <th class="text-nowrap">체크</th>
+                                            <th class="text-nowrap">평가</th>
+                                            <th style="min-width: 220px;">핵심 신호</th>
+                                            <th style="min-width: 220px;">우선 조치</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        <tr th:each="risk : ${analytics.retentionRiskStats}">
+                                            <td>
+                                                <a class="fw-semibold text-decoration-none"
+                                                   th:href="@{/admin/onboarding/schedules/{empNo}(empNo=${risk.empNo})}"
+                                                   onclick="event.stopPropagation();"
+                                                   title="직원별 로드맵 관리로 이동"
+                                                   th:text="${risk.employeeName}">직원명</a>
+                                                <div class="text-muted small"
+                                                     th:text="${risk.empNo + ' / ' + risk.departmentName}">20260001 / 부서</div>
+                                            </td>
+                                            <td>
+                                                <span class="badge"
+                                                      th:classappend="${risk.riskLevel == 'HIGH' ? ' bg-danger' : (risk.riskLevel == 'MEDIUM' ? ' bg-warning text-dark' : ' bg-success')}"
+                                                      th:text="${risk.riskLevel + ' ' + risk.riskScore + '점'}">HIGH 80점</span>
+                                            </td>
+                                            <td class="text-nowrap"
+                                                th:text="${#numbers.formatDecimal(risk.learningProgressRate, 1, 1) + '%'}">40.0%</td>
+                                            <td class="text-nowrap"
+                                                th:text="${#numbers.formatDecimal(risk.checklistProgressRate, 1, 1) + '%'}">50.0%</td>
+                                            <td class="text-nowrap">
+                                                <div th:text="${#numbers.formatDecimal(risk.evaluationAverageScoreRate, 1, 1) + '%'}">60.0%</div>
+                                                <div class="text-muted small"
+                                                     th:text="${'통과 ' + #numbers.formatDecimal(risk.evaluationPassRate, 1, 1) + '%'}">통과 50.0%</div>
+                                            </td>
+                                            <td class="small text-danger"
+                                                th:text="${!#lists.isEmpty(risk.riskReasons) ? risk.riskReasons[0] : '-'}">핵심 신호</td>
+                                            <td class="small text-muted"
+                                                th:text="${!#lists.isEmpty(risk.recommendations) ? risk.recommendations[0] : '-'}">우선 조치</td>
+                                        </tr>
+                                        <tr th:if="${#lists.isEmpty(analytics.retentionRiskStats)}">
+                                            <td colspan="7" class="text-center text-muted">위험 직원 데이터가 없습니다.</td>
+                                        </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card shadow-sm">
                     <div class="card-body table-responsive">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="card-title mb-0">직원별 평가 성과</h5>
-                            <span class="text-muted small">현재 저장된 최신 카테고리별 평가 결과 기준</span>
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-3">
+                            <div>
+                                <h5 class="card-title mb-1">직원별 평가 결과</h5>
+                                <span class="text-muted small">검색어 또는 필터를 선택하면 결과 목록이 표시됩니다.</span>
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 justify-content-end" style="max-width: 680px;">
+                                <input type="search"
+                                       id="employeeSearchInput"
+                                       class="form-control form-control-sm"
+                                       style="width: 220px;"
+                                       placeholder="사번, 이름, 부서 검색">
+                                <select id="employeeDepartmentFilter"
+                                        class="form-select form-select-sm"
+                                        style="width: 160px;">
+                                    <option value="">부서 전체</option>
+                                </select>
+                                <select id="employeePassFilter"
+                                        class="form-select form-select-sm"
+                                        style="width: 150px;">
+                                    <option value="">통과 상태 전체</option>
+                                    <option value="passed">통과 이력 있음</option>
+                                    <option value="not-passed">통과 이력 없음</option>
+                                </select>
+                                <button type="button"
+                                        id="employeeFilterResetBtn"
+                                        class="btn btn-sm btn-outline-secondary">
+                                    초기화
+                                </button>
+                            </div>
                         </div>
-                        <table class="table table-hover align-middle mb-0">
+                        <div id="employeeFilterSummary" class="small text-muted mb-2">
+                            조건을 입력하면 직원별 평가 결과가 표시됩니다.
+                        </div>
+                        <table id="employeeStatsTable" class="table table-hover align-middle mb-0">
                             <thead>
                             <tr>
                                 <th style="min-width: 90px;">사번</th>
@@ -199,15 +358,25 @@
                             <tbody>
                             <tr th:each="employee : ${analytics.employeeStats}">
                                 <td th:text="${employee.empNo}">20260001</td>
-                                <td th:text="${employee.employeeName}">홍길동</td>
-                                <td th:text="${employee.departmentName}">인사팀</td>
+                                <td th:text="${employee.employeeName}">직원명</td>
+                                <td th:text="${employee.departmentName}">부서</td>
                                 <td th:text="${employee.evaluationCount}">3</td>
                                 <td th:text="${employee.passCount}">2</td>
                                 <td th:text="${#numbers.formatDecimal(employee.averageScoreRate, 1, 1) + '%'}">80.0%</td>
                                 <td th:text="${employee.latestSubmittedAt != null ? #temporals.format(employee.latestSubmittedAt, 'yyyy-MM-dd HH:mm') : '-'}">2026-05-14 09:00</td>
                             </tr>
                             <tr th:if="${#lists.isEmpty(analytics.employeeStats)}">
-                                <td colspan="7" class="text-center text-muted">집계된 평가 결과가 없습니다.</td>
+                                <td colspan="7" class="text-center text-muted">평가 결과 데이터가 없습니다.</td>
+                            </tr>
+                            <tr id="employeeFilterGuideRow" th:if="${!#lists.isEmpty(analytics.employeeStats)}">
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    검색어를 입력하거나 필터를 선택하면 직원별 평가 결과가 표시됩니다.
+                                </td>
+                            </tr>
+                            <tr id="employeeNoResultRow" class="d-none">
+                                <td colspan="7" class="text-center text-muted py-4">
+                                    조건에 맞는 직원별 평가 결과가 없습니다.
+                                </td>
                             </tr>
                             </tbody>
                         </table>
@@ -220,7 +389,6 @@
     <th:block th:replace="~{/admin/common/footer}"></th:block>
 </div>
 
-<!-- 기준 수정 모달 -->
 <div class="modal fade" id="criteriaModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
@@ -242,110 +410,80 @@
                     <div class="mb-3">
                         <label class="form-label">가중치 (%)</label>
                         <input type="number" id="editWeight" class="form-control" min="0" max="300" required>
-                        <div class="form-text">가중치 100%가 기본(1.0)입니다.</div>
+                        <div class="form-text">100%는 가중치 1.0으로 저장됩니다.</div>
                     </div>
                 </form>
             </div>
             <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
-                <button type="button" class="btn btn-primary" onclick="updateCriteria()">저장하기</button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                <button type="button" class="btn btn-primary" onclick="updateCriteria()">저장</button>
             </div>
         </div>
     </div>
 </div>
 
 <th:block th:replace="~{/admin/common/commonJs}"></th:block>
-
-<!-- Chart.js 라이브러리 추가 (UMD 버전으로 전역 Chart 객체 보장) -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.js"></script>
 
 <script th:inline="javascript">
     let criteriaModal;
 
     document.addEventListener('DOMContentLoaded', function () {
-        // 모달 초기화 안전 처리
         const modalEl = document.getElementById('criteriaModal');
         if (modalEl && typeof bootstrap !== 'undefined') {
             criteriaModal = new bootstrap.Modal(modalEl);
-        } else {
-            console.warn("Bootstrap library or Modal element missing.");
         }
 
-        // Chart.js 로드 확인 로그
         if (typeof Chart === 'undefined') {
-            console.error("Critical: Chart.js library failed to load. Please check your internet connection or CDN link.");
+            console.error('Chart.js library failed to load.');
             return;
         }
 
         const categoryStats = /*[[${analytics.categoryStats}]]*/ [];
         const questionStats = /*[[${analytics.questionStats}]]*/ [];
-        const analytics = /*[[${analytics}]]*/ {};
-
-        const categoryLabels = categoryStats.map((item) => `${item.categoryName} (${item.submissionCount}건)`);
-        const categoryAverageScores = categoryStats.map((item) => item.averageScoreRate);
-        const categoryPassScores = categoryStats.map((item) => item.passScore);
-
-        const totalPassCount = Math.round(analytics.submissionCount * (analytics.passRate / 100));
-        const totalFailCount = analytics.submissionCount - totalPassCount;
-
-        // 방사형 차트 배경 색상 영역(Color Zones) 플러그인 정의
-        const radarBackgroundZones = {
-            id: 'radarBackgroundZones',
-            beforeDraw: (chart) => {
-                const { ctx, scales: { r } } = chart;
-                if (!r || !r.drawingArea) return;
-                const centerX = r.xCenter;
-                const centerY = r.yCenter;
-                const outerRadius = r.drawingArea;
-
-                // 수준별 색상 영역 정의 (뒤에서부터 그리기 위해 큰 값부터 설정)
-                const zones = [
-                    { limit: 100, color: 'rgba(46, 184, 92, 0.07)' }, // 탁월 (80-100)
-                    { limit: 80, color: 'rgba(249, 177, 21, 0.07)' },  // 우수 (60-80)
-                    { limit: 60, color: 'rgba(206, 210, 216, 0.15)' }  // 보통 (0-60)
-                ];
-
-                ctx.save();
-                zones.forEach(zone => {
-                    ctx.beginPath();
-                    ctx.fillStyle = zone.color;
-                    const radius = (zone.limit / 100) * outerRadius;
-                    ctx.arc(centerX, centerY, radius, 0, Math.PI * 2);
-                    ctx.fill();
-                });
-                ctx.restore();
-            }
+        const analyticsSummary = {
+            averageScoreRate: /*[[${analytics.averageScoreRate}]]*/ 0,
+            passRate: /*[[${analytics.passRate}]]*/ 0,
+            submissionCount: /*[[${analytics.submissionCount}]]*/ 0
         };
 
-        const questionLabels = questionStats.map((item) => {
-            const text = item.questionText || '';
-            return text.length > 22 ? text.slice(0, 22) + '...' : text;
-        });
-        const questionAverageScores = questionStats.map((item) => item.averageScoreRate);
+        renderCategoryScoreChart(categoryStats);
+        renderCategoryPassChart(analyticsSummary);
+        renderQuestionWeaknessChart(questionStats);
+        updateAiComment(categoryStats, analyticsSummary);
+        initializeEmployeeStatsFilter();
+    });
 
-        new Chart(document.getElementById('categoryScoreChart'), {
+    function renderCategoryScoreChart(categoryStats) {
+        const canvas = document.getElementById('categoryScoreChart');
+        if (!canvas) {
+            return;
+        }
+
+        const labels = categoryStats.map((item) => `${item.categoryName} (${item.submissionCount}건)`);
+        const averageScores = categoryStats.map((item) => item.averageScoreRate);
+        const passScores = categoryStats.map((item) => item.passScore);
+
+        new Chart(canvas, {
             type: 'radar',
-            plugins: [radarBackgroundZones], // 커스텀 배경 플러그인 추가
             data: {
-                labels: categoryLabels,
+                labels,
                 datasets: [
                     {
                         label: '평균 점수(%)',
-                        data: categoryAverageScores,
+                        data: averageScores,
                         backgroundColor: 'rgba(50, 31, 219, 0.15)',
                         borderColor: 'rgba(50, 31, 219, 0.8)',
                         pointBackgroundColor: 'rgba(50, 31, 219, 1)',
                         pointBorderColor: '#fff',
-                        pointHoverBackgroundColor: '#fff',
-                        pointHoverBorderColor: '#321fdb',
                         borderWidth: 3,
                         fill: true,
-                        tension: 0.1, // 부드러운 곡선 효과
+                        tension: 0.1,
                         pointRadius: 4
                     },
                     {
                         label: '합격 기준(%)',
-                        data: categoryPassScores,
+                        data: passScores,
                         backgroundColor: 'transparent',
                         borderColor: '#ced2d8',
                         borderWidth: 1,
@@ -360,50 +498,36 @@
                 maintainAspectRatio: false,
                 scales: {
                     r: {
-                        angleLines: {
-                            display: true,
-                            color: 'rgba(0, 0, 0, 0.05)'
-                        },
-                        grid: {
-                            circular: true // 다각형이 아닌 원형 그리드를 사용하여 방사형 느낌 강조
-                        },
                         suggestedMin: 0,
                         suggestedMax: 100,
                         ticks: {
                             stepSize: 20,
                             callback: (value) => value + '%',
-                            backdropColor: 'transparent', // 숫자 배경 투명화
-                            font: { size: 10 }
+                            backdropColor: 'transparent'
                         }
-                    }
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: (context) => ` ${context.dataset.label}: ${context.raw}%`
-                        }
-                    }
-                },
-                layout: {
-                    padding: {
-                        top: 10,
-                        bottom: 30, // 하단선 겹침 방지를 위한 여백 추가
-                        left: 10,
-                        right: 10
                     }
                 }
             }
         });
+    }
 
-        new Chart(document.getElementById('categoryPassChart'), {
+    function renderCategoryPassChart(analyticsSummary) {
+        const canvas = document.getElementById('categoryPassChart');
+        if (!canvas) {
+            return;
+        }
+
+        const submissionCount = Number(analyticsSummary.submissionCount || 0);
+        const passRate = Number(analyticsSummary.passRate || 0);
+        const passCount = Math.round(submissionCount * (passRate / 100));
+        const failCount = Math.max(submissionCount - passCount, 0);
+
+        new Chart(canvas, {
             type: 'doughnut',
             data: {
                 labels: ['통과', '미통과'],
                 datasets: [{
-                    data: [totalPassCount, totalFailCount],
+                    data: [passCount, failCount],
                     backgroundColor: ['#2eb85c', '#e55353'],
                     hoverOffset: 4
                 }]
@@ -413,37 +537,40 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        position: 'right',
-                        labels: {
-                            padding: 20,
-                            usePointStyle: true,
-                            font: { size: 12 }
-                        }
+                        position: 'right'
                     },
                     tooltip: {
                         callbacks: {
-                            label: (context) => ` ${context.label}: ${context.raw}건 (${Math.round(context.raw / analytics.submissionCount * 100)}%)`
+                            label: (context) => {
+                                const rate = submissionCount > 0 ? Math.round(context.raw / submissionCount * 100) : 0;
+                                return ` ${context.label}: ${context.raw}건 (${rate}%)`;
+                            }
                         }
-                    }
-                },
-                layout: {
-                    padding: {
-                        top: 10,
-                        bottom: 40,
-                        left: 10,
-                        right: 10
                     }
                 }
             }
         });
+    }
 
-        new Chart(document.getElementById('questionWeaknessChart'), {
+    function renderQuestionWeaknessChart(questionStats) {
+        const canvas = document.getElementById('questionWeaknessChart');
+        if (!canvas) {
+            return;
+        }
+
+        const labels = questionStats.map((item) => {
+            const text = item.questionText || '';
+            return text.length > 22 ? text.slice(0, 22) + '...' : text;
+        });
+        const averageScores = questionStats.map((item) => item.averageScoreRate);
+
+        new Chart(canvas, {
             type: 'bar',
             data: {
-                labels: questionLabels,
+                labels,
                 datasets: [{
                     label: '평균 점수(%)',
-                    data: questionAverageScores,
+                    data: averageScores,
                     backgroundColor: '#f59e0b',
                     borderRadius: 6
                 }]
@@ -466,22 +593,27 @@
                 }
             }
         });
+    }
 
-        // AI 분석 코멘트 업데이트 함수 호출
-        updateAiComment(categoryStats, analytics);
-    });
-
-    function updateAiComment(categoryStats, analytics) {
+    function updateAiComment(categoryStats, analyticsSummary) {
         const commentEl = document.getElementById('aiAnalysisComment');
+        if (!commentEl) {
+            return;
+        }
+
         if (!categoryStats || categoryStats.length === 0) {
-            commentEl.innerHTML = `<p class="text-muted text-center py-5">분석할 평가 데이터가 충분하지 않습니다.</p>`;
+            commentEl.innerHTML = '<p class="text-muted text-center py-5">분석할 평가 통계가 없습니다.</p>';
             return;
         }
 
         const statsSummary = {
-            averageScore: analytics.averageScoreRate,
-            passRate: analytics.passRate,
-            categories: categoryStats.map(c => ({ name: c.categoryName, gap: c.scoreGap, avg: c.averageScoreRate }))
+            averageScore: analyticsSummary.averageScoreRate,
+            passRate: analyticsSummary.passRate,
+            categories: categoryStats.map((category) => ({
+                name: category.categoryName,
+                gap: category.scoreGap,
+                avg: category.averageScoreRate
+            }))
         };
 
         fetch('/admin/evaluation/ai-analysis', {
@@ -489,49 +621,131 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(statsSummary)
         })
-        .then(res => res.json())
-        .then(data => {
-            if (data && data.analysis) {
-                commentEl.innerHTML = `<div class="ai-text">${data.analysis}</div>`;
-            } else {
-                throw new Error("Invalid response");
-            }
-        })
-        .catch(err => {
-            console.error("AI 분석 연동 실패:", err);
-            commentEl.innerHTML = `<p class="text-muted">실시간 AI 분석을 불러오지 못했습니다.</p>`;
-        });
+            .then((res) => res.json())
+            .then((data) => {
+                if (data && data.analysis) {
+                    commentEl.innerHTML = `<div class="ai-text">${data.analysis}</div>`;
+                    return;
+                }
+                throw new Error('Invalid response');
+            })
+            .catch((err) => {
+                console.error('AI 분석 요청 오류:', err);
+                commentEl.innerHTML = '<p class="text-muted">현재 AI 분석을 불러올 수 없습니다.</p>';
+            });
     }
 
-    function downloadCsv() {
-        const stats = /*[[${analytics.employeeStats}]]*/ [];
-        if (!stats || stats.length === 0) {
-            alert("내보낼 데이터가 없습니다.");
+    function initializeEmployeeStatsFilter() {
+        const table = document.getElementById('employeeStatsTable');
+        const searchInput = document.getElementById('employeeSearchInput');
+        const departmentFilter = document.getElementById('employeeDepartmentFilter');
+        const passFilter = document.getElementById('employeePassFilter');
+        const resetButton = document.getElementById('employeeFilterResetBtn');
+        const summary = document.getElementById('employeeFilterSummary');
+        const guideRow = document.getElementById('employeeFilterGuideRow');
+        const noResultRow = document.getElementById('employeeNoResultRow');
+
+        if (!table || !searchInput || !departmentFilter || !passFilter) {
             return;
         }
 
-        // CSV 헤더 설정
-        const headers = ["사번", "이름", "부서", "평가 수", "통과 수", "평균 점수", "최근 제출 시각"];
-        
-        // 데이터 행 구성
-        const rows = stats.map(emp => [
-            emp.empNo,
-            `"${emp.employeeName}"`,
-            `"${emp.departmentName}"`,
-            emp.evaluationCount,
-            emp.passCount,
-            `${emp.averageScoreRate}%`,
-            emp.latestSubmittedAt ? emp.latestSubmittedAt.replace('T', ' ').slice(0, 16) : '-'
-        ]);
+        const rows = Array.from(table.querySelectorAll('tbody tr'))
+            .filter((row) => row.querySelectorAll('td').length === 7
+                && row.id !== 'employeeFilterGuideRow'
+                && row.id !== 'employeeNoResultRow');
 
-        let csvContent = "\uFEFF" + headers.join(",") + "\n";
-        rows.forEach(row => { csvContent += row.join(",") + "\n"; });
+        rows.forEach((row) => row.classList.add('d-none'));
+
+        const departments = Array.from(new Set(rows
+            .map((row) => row.children[2]?.textContent.trim())
+            .filter((department) => department && department !== '-')))
+            .sort((left, right) => left.localeCompare(right, 'ko'));
+
+        departments.forEach((department) => {
+            const option = document.createElement('option');
+            option.value = department;
+            option.textContent = department;
+            departmentFilter.appendChild(option);
+        });
+
+        const updateRows = () => {
+            const keyword = searchInput.value.trim().toLowerCase();
+            const department = departmentFilter.value;
+            const passState = passFilter.value;
+            const hasCondition = Boolean(keyword || department || passState);
+            let visibleCount = 0;
+
+            rows.forEach((row) => {
+                const cells = Array.from(row.children).map((cell) => cell.textContent.trim());
+                const searchText = `${cells[0]} ${cells[1]} ${cells[2]}`.toLowerCase();
+                const passCount = Number(cells[4] || 0);
+                const matchesKeyword = !keyword || searchText.includes(keyword);
+                const matchesDepartment = !department || cells[2] === department;
+                const matchesPassState = !passState
+                    || (passState === 'passed' && passCount > 0)
+                    || (passState === 'not-passed' && passCount <= 0);
+                const visible = hasCondition && matchesKeyword && matchesDepartment && matchesPassState;
+
+                row.classList.toggle('d-none', !visible);
+                if (visible) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (guideRow) {
+                guideRow.classList.toggle('d-none', hasCondition);
+            }
+            if (noResultRow) {
+                noResultRow.classList.toggle('d-none', !hasCondition || visibleCount > 0);
+            }
+            if (summary) {
+                summary.textContent = hasCondition
+                    ? `조건에 맞는 직원 ${visibleCount}명이 표시됩니다.`
+                    : '조건을 입력하면 직원별 평가 결과가 표시됩니다.';
+            }
+        };
+
+        searchInput.addEventListener('input', updateRows);
+        departmentFilter.addEventListener('change', updateRows);
+        passFilter.addEventListener('change', updateRows);
+        resetButton?.addEventListener('click', () => {
+            searchInput.value = '';
+            departmentFilter.value = '';
+            passFilter.value = '';
+            updateRows();
+        });
+
+        updateRows();
+    }
+
+    function downloadCsv() {
+        const table = document.getElementById('employeeStatsTable');
+        const bodyRows = table ? Array.from(table.querySelectorAll('tbody tr')) : [];
+        const dataRows = bodyRows.filter((row) => row.querySelectorAll('td').length === 7
+            && !row.classList.contains('d-none')
+            && row.id !== 'employeeFilterGuideRow'
+            && row.id !== 'employeeNoResultRow');
+
+        if (dataRows.length === 0) {
+            alert('다운로드할 직원별 평가 결과가 없습니다. 검색어 또는 필터를 먼저 적용해 주세요.');
+            return;
+        }
+
+        const headers = ['사번', '이름', '부서', '평가 수', '통과 수', '평균 점수', '최근 제출 시각'];
+        const rows = dataRows.map((row) => Array.from(row.querySelectorAll('td'))
+            .map((cell) => `"${cell.textContent.trim().replaceAll('"', '""')}"`));
+
+        let csvContent = '\uFEFF' + headers.map((header) => `"${header}"`).join(',') + '\n';
+        rows.forEach((row) => {
+            csvContent += row.join(',') + '\n';
+        });
 
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement("a");
+        const link = document.createElement('a');
         link.href = URL.createObjectURL(blob);
         link.download = `evaluation_report_${new Date().toISOString().slice(0, 10)}.csv`;
         link.click();
+        URL.revokeObjectURL(link.href);
     }
 
     function openEditModal(name, passScore, weight) {
@@ -558,16 +772,16 @@
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: formData
         })
-        .then(res => res.json())
-        .then(data => {
-            if(data.success) {
-                alert(data.message);
-                location.reload();
-            } else {
-                alert('수정 실패: ' + data.message);
-            }
-        })
-        .catch(err => alert('오류가 발생했습니다.'));
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert('수정 실패: ' + data.message);
+                }
+            })
+            .catch(() => alert('저장 중 오류가 발생했습니다.'));
     }
 </script>
 </body>

@@ -5,6 +5,7 @@ import com.ict06.team1_fin_pj.common.dto.approval.ApprovalCreateResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalDetailResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalFormResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalListResponseDto;
+import com.ict06.team1_fin_pj.common.dto.approval.ApprovalEmployeeSignResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.AppLineFormDetailDto;
 import com.ict06.team1_fin_pj.common.dto.employee.EmployeeListDto;
 import com.ict06.team1_fin_pj.common.dto.employee.EmployeeSearchConditionDto;
@@ -16,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -31,6 +33,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -106,6 +109,21 @@ public class ApprovalApiController {
     }
 
     /**
+     * 결재자 인감 이미지 조회 API
+     *
+     * - React 결재선 설정 화면에서 결재 대상자를 선택하는 순간 호출합니다.
+     * - 응답의 signImg가 비어 있으면 화면에서 관리자 등록 요청 alert를 띄웁니다.
+     * - 향후 PDF 출력 시에도 같은 signImg 경로를 결재자 인감 이미지로 사용할 수 있습니다.
+     */
+    @GetMapping("/employees/{empNo}/sign")
+    public ApprovalEmployeeSignResponseDto getApprovalEmployeeSign(
+            @PathVariable String empNo,
+            @AuthenticationPrincipal PrincipalDetails principal
+    ) {
+        return approvalService.getEmployeeSign(empNo, principal);
+    }
+
+    /**
      * 개인 문서함 목록 조회 API
      *
      * - 로그인한 사용자가 작성한 결재 문서를 조회합니다.
@@ -116,10 +134,12 @@ public class ApprovalApiController {
     @GetMapping("/my-documents")
     public Page<ApprovalListResponseDto> getMyDocuments(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        return approvalService.getMyDocuments(status, principal, pageable);
+        return approvalService.getMyDocuments(status, startDate, endDate, principal, pageable);
     }
 
     /**
@@ -130,10 +150,12 @@ public class ApprovalApiController {
      */
     @GetMapping("/drafts")
     public Page<ApprovalListResponseDto> getMyDrafts(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        return approvalService.getMyDrafts(principal, pageable);
+        return approvalService.getMyDrafts(startDate, endDate, principal, pageable);
     }
 
     /**
@@ -147,10 +169,12 @@ public class ApprovalApiController {
     @GetMapping("/referenced-documents")
     public Page<ApprovalListResponseDto> getMyReferencedDocuments(
             @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        return approvalService.getMyReferencedDocuments(status, principal, pageable);
+        return approvalService.getMyReferencedDocuments(status, startDate, endDate, principal, pageable);
     }
 
     /**
@@ -161,10 +185,30 @@ public class ApprovalApiController {
      */
     @GetMapping("/pending-documents")
     public Page<ApprovalListResponseDto> getPendingApprovals(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        return approvalService.getPendingApprovals(principal, pageable);
+        return approvalService.getPendingApprovals(status, startDate, endDate, principal, pageable);
+    }
+
+    /**
+     * 결재 처리 완료 문서함 목록 조회 API
+     *
+     * - 로그인한 사용자가 과거에 승인 또는 반려 처리한 문서를 조회합니다.
+     * - 결재 대기 문서함과 조회 의미가 다르므로 별도 API로 분리했습니다.
+     */
+    @GetMapping("/processed-documents")
+    public Page<ApprovalListResponseDto> getProcessedApprovals(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable,
+            @AuthenticationPrincipal PrincipalDetails principal
+    ) {
+        return approvalService.getProcessedApprovals(status, startDate, endDate, principal, pageable);
     }
 
     /**
@@ -175,10 +219,13 @@ public class ApprovalApiController {
      */
     @GetMapping("/upcoming-documents")
     public Page<ApprovalListResponseDto> getUpcomingApprovals(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @PageableDefault(size = 10, sort = "updatedAt", direction = Sort.Direction.DESC) Pageable pageable,
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
-        return approvalService.getUpcomingApprovals(principal, pageable);
+        return approvalService.getUpcomingApprovals(status, startDate, endDate, principal, pageable);
     }
 
     /**
@@ -329,6 +376,21 @@ public class ApprovalApiController {
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
         return approvalService.updateDraft(approvalId, requestDto, principal, files);
+    }
+
+    /**
+     * 기존 임시저장 문서 삭제 API
+     *
+     * - 작성자 본인의 DRAFT 문서만 삭제할 수 있습니다.
+     * - 임시저장 문서는 아직 결재자에게 공유되지 않은 개인 작업물이므로 실제 삭제합니다.
+     * - 첨부파일이 있으면 서버에 저장된 실제 파일과 APP_FILE 행도 함께 삭제됩니다.
+     */
+    @DeleteMapping("/drafts/{approvalId}")
+    public void deleteDraft(
+            @PathVariable Integer approvalId,
+            @AuthenticationPrincipal PrincipalDetails principal
+    ) {
+        approvalService.deleteDraft(approvalId, principal);
     }
 
     /**

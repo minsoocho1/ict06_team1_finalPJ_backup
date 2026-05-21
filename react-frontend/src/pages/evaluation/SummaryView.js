@@ -9,6 +9,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.06    김다솜       최초 생성, Quiz.js에서 평가 진행 현황/결과 요약 컴포넌트 분리
  * @ 2026.05.15    김다솜       UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ * @ 2026.05.19    김다솜       카테고리별 학습·평가 방사형 통계 차트 추가
  */
 import { CBadge, CCard, CCardBody } from '@coreui/react';
 import React from 'react';
@@ -16,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useUser } from 'src/api/UserContext';
 import { PATH } from 'src/constants/path';
+import CategoryRadarChart from './CategoryRadarChart';
 
 const SummaryView = ({
   results,
@@ -110,6 +112,8 @@ const SummaryView = ({
           </div>
         </div>
       </div>
+
+      <CategoryRadarChart roadmapGroups={roadmapGroups} results={results} />
 
       <div style={{ marginTop: '24px' }}>
         <h5 style={{ fontWeight: 700 }}>진행할 평가</h5>

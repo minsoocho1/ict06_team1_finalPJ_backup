@@ -11,7 +11,8 @@
  * @ 2026.04.23    김다솜        사번 기반 권한 매핑 로직 보완
  * @ 2026.05.07    김다솜        Refresh Token DB 저장 및 재발급 로직 추가
  * @ 2026.05.08    김다솜        Spring Security UserDetailsService 구현 및 subject 기반 재발급 검증 적용
- * @ 2026.05.14    김다솜        JWT 만료/재발급 테스트용 상세 로그 보강
+ * @ 2026.05.14    김다솜        JWT 만료/재발급 테스트용 상세 로그 및 로그인 사용자 소속 응답 보강
+ * @ 2026.05.18    김다솜        로그인 응답 부서/직급 포함 및 role_name 기반 관리자 권한 판별 보강
  */
 package com.ict06.team1_fin_pj.domain.auth.service;
 
@@ -75,7 +76,7 @@ public class AuthServiceImpl implements UserDetailsService {
             throw new RuntimeException("사번 또는 비밀번호가 일치하지 않습니다.");
         }
 
-        String roleName = getRoleName(emp.getRole().getRoleId());
+        String roleName = getRoleName(emp);
         String accessToken = jwtTokenProvider.createAccessToken(emp.getEmpNo(), roleName);
         String refreshToken = jwtTokenProvider.createRefreshToken(emp.getEmpNo());
         emp.updateRefreshToken(refreshToken);
@@ -88,6 +89,8 @@ public class AuthServiceImpl implements UserDetailsService {
         response.put("empNo", emp.getEmpNo());
         response.put("userName", emp.getName());
         response.put("role", roleName);
+        response.put("deptName", emp.getDeptName());
+        response.put("positionName", emp.getPosition() != null ? emp.getPosition().getPositionName() : null);
 
         return response;
     }
@@ -118,7 +121,7 @@ public class AuthServiceImpl implements UserDetailsService {
             throw new RuntimeException("저장된 Refresh Token과 일치하지 않습니다.");
         }
 
-        String roleName = getRoleName(emp.getRole().getRoleId());
+        String roleName = getRoleName(emp);
         String newAccessToken = jwtTokenProvider.createAccessToken(emp.getEmpNo(), roleName);
         System.out.println("[AuthService] Access Token 재발급 성공 - 사번: " + emp.getEmpNo());
 
@@ -138,11 +141,43 @@ public class AuthServiceImpl implements UserDetailsService {
      * @param roleId 역할 ID
      * @return Spring Security 권한명
      */
-    private String getRoleName(int roleId) {
+    private String getRoleName(EmpEntity emp) {
+        if (emp == null || emp.getRole() == null) {
+            return "ROLE_USER";
+        }
+
+        String roleName = normalizeRoleName(emp.getRole().getRoleName());
+        if (roleName != null) {
+            return roleName;
+        }
+
+        Integer roleId = emp.getRole().getRoleId();
+        if (roleId == null) {
+            return "ROLE_USER";
+        }
+
         return switch (roleId) {
             case 1 -> "ROLE_ADMIN";
             case 2 -> "ROLE_TEAM_LEADER";
             default -> "ROLE_USER";
         };
+    }
+
+    private String normalizeRoleName(String rawRoleName) {
+        if (rawRoleName == null || rawRoleName.isBlank()) {
+            return null;
+        }
+
+        String normalized = rawRoleName.trim().toUpperCase();
+        if (normalized.contains("ADMIN") || normalized.contains("관리자")) {
+            return "ROLE_ADMIN";
+        }
+        if (normalized.contains("TEAM_LEADER") || normalized.contains("TEAM LEADER") || normalized.contains("팀장")) {
+            return "ROLE_TEAM_LEADER";
+        }
+        if (normalized.contains("USER") || normalized.contains("사원")) {
+            return "ROLE_USER";
+        }
+        return normalized.startsWith("ROLE_") ? normalized : null;
     }
 }

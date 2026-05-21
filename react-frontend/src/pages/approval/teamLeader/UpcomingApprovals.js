@@ -1,89 +1,231 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import {
+  CAlert,
+  CBadge,
+  CCard,
+  CCardBody,
+  CCardHeader,
+  CFormInput,
+  CFormSelect,
+  CPagination,
+  CPaginationItem,
+  CSpinner,
+  CTable,
+  CTableBody,
+  CTableDataCell,
+  CTableHead,
+  CTableHeaderCell,
+  CTableRow,
+} from '@coreui/react';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 
-// CoreUI 
-import { CButton, CCard, CCardBody, CCardHeader } from '@coreui/react';
+import axiosInstance from 'src/api/axiosInstance';
+import { PATH } from 'src/constants/path';
+import { containerStyle } from 'src/styles/js/demoPageStyle';
 
-// 페이지 이동
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
+const PAGE_SIZE = 10;
 
-// 시연용 이미지 파일
-import refImage from 'src/assets/images/first_demo/approval_scheduled_documents.png'
+const STATUS_BADGE = {
+  IN_PROGRESS: 'primary',
+  COMPLETED: 'success',
+  REJECTED: 'danger',
+  CANCELED: 'dark',
+};
 
-// 1차 시연용으로 화면과 sql 쿼리를 함께 보여주기 위한 스타일 구현
-import { containerStyle, stepCardStyle } from 'src/styles/js/demoPageStyle';
+const formatDateTime = (value) => {
+  if (!value) {
+    return '-';
+  }
 
-// 코드 하이라이터 : sql 코드 보여주는 용
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; 
-import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
+  return new Date(value).toLocaleString('ko-KR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
-// [전자결재] 결재 예정 문서함 페이지
+// [전자결재] 결재 예정 문서함
+// 아직 내 결재 차례는 아니지만 결재선에 포함된 문서를 미리 확인하는 화면입니다.
 const UpcomingApprovals = () => {
-    //DefaultLayout.js의 Outlet에서 보낸 userInfo 데이터 받기
-    const [userInfo] = useOutletContext();
+  const [userInfo] = useOutletContext();
+  const navigate = useNavigate();
 
-    //해당 화면의 SQL 쿼리 작성(백틱 `` 사용)
-    const sqlQuery = `
-        SELECT 
-            d.*, 
-            l.step_num
-        FROM approval_doc d
-        JOIN approval_line l 
-            ON d.doc_id = l.doc_id
-        WHERE l.emp_id = #{empId}
-        AND d.status = '진행중'
-        
-        AND EXISTS (
-            SELECT 1 
-            FROM approval_line prev
-            WHERE prev.doc_id = d.doc_id
-                AND prev.step_num < l.step_num
-                AND prev.status != '승인'
-        )
-        ORDER BY d.created_at ASC
-        LIMIT 3;
-    `;
+  const [documents, setDocuments] = useState([]);
+  const [status, setStatus] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-    return (
-        <div style={containerStyle}>
-            <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>결재 예정 문서함</h2>
-            </header>
+  useEffect(() => {
+    const fetchUpcomingDocuments = async () => {
+      try {
+        setLoading(true);
+        setErrorMessage('');
 
-            <hr style={{ border: '0', height: '1px', background: '#eee', margin: '40px 0' }} />
+        const response = await axiosInstance.get(PATH.API.APPROVAL.UPCOMING_DOCUMENTS, {
+          params: {
+            page,
+            size: PAGE_SIZE,
+            status: status || undefined,
+            startDate: startDate || undefined,
+            endDate: endDate || undefined,
+          },
+        });
 
-            {/* 1차 시연용 영역 */}
-            <CCard className="mb-4" style={{ height: 'calc(100vh - 120px)' }}>
-                <CCardHeader>
-                    <strong>시연 화면 및 관련 SQL쿼리</strong>
-                </CCardHeader>
-                <CCardBody className="p-0 d-flex flex-column">
+        setDocuments(response.data?.content || []);
+        setTotalPages(Math.max(1, response.data?.totalPages || 1));
+      } catch (error) {
+        console.error('결재 예정 문서함 조회 실패:', error);
+        setErrorMessage('결재 예정 문서 목록을 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-                    {/* 레퍼런스 이미지 영역 */}
-                    <div className="text-center" style={{ backgroundColor: '#f4f4f4', borderTop: '1px solid #eee' }}>
-                        <img 
-                            src={refImage} 
-                            alt="결재 예정 문서함" 
-                            style={{ width: '100%',
-                            height: 'auto',
-                            display: 'block' }} 
-                        />
-                    </div>
+    fetchUpcomingDocuments();
+  }, [page, status, startDate, endDate]);
 
-                    {/* SQL 쿼리 영역 */}
-                    <div className='text-start mt-4'>
-                        <h5 className='mb-3' style={{ fontWeight: 'bold', color: '#4f5d73' }}>
-                            <span style={{ borderLeft: '4px solid #321fdb', paddingLeft: '10px' }}>
-                                관련 SQL 쿼리
-                            </span>
-                        </h5>
-                        <SyntaxHighlighter language='sql' style={coy}>
-                            {sqlQuery}
-                        </SyntaxHighlighter>
-                    </div>
-                </CCardBody>
-            </CCard>
+  // 검색 필터가 바뀌면 첫 페이지부터 다시 조회합니다.
+  useEffect(() => {
+    setPage(0);
+  }, [status, startDate, endDate]);
+
+  // 예정 문서는 승인/반려 대상이 아니므로 읽기 전용 상세 화면으로 이동합니다.
+  const openDetail = (approvalId) => {
+    navigate(PATH.APPROVAL.UPCOMING_DETAIL_WITH_ID(approvalId));
+  };
+
+  return (
+    <div style={containerStyle}>
+      <header className="d-flex justify-content-between align-items-center mb-4">
+        <div>
+          <h2 className="mb-1">결재 예정 문서함</h2>
+          <div className="text-body-secondary">
+            {userInfo?.name
+              ? `${userInfo.name}님이 이후 단계에서 결재할 문서입니다.`
+              : '아직 내 차례는 아니지만 결재선에 포함된 문서입니다.'}
+          </div>
         </div>
-    );
+      </header>
+
+      <CCard className="mb-4">
+        <CCardHeader className="d-flex flex-wrap justify-content-between align-items-center gap-3">
+          <strong>결재 예정 문서</strong>
+          <div className="d-flex flex-wrap gap-2 align-items-center">
+            <CFormInput
+              type="date"
+              value={startDate}
+              onChange={(event) => setStartDate(event.target.value)}
+              style={{ width: '160px' }}
+              aria-label="상신일 시작일"
+            />
+            <span className="text-body-secondary">~</span>
+            <CFormInput
+              type="date"
+              value={endDate}
+              onChange={(event) => setEndDate(event.target.value)}
+              style={{ width: '160px' }}
+              aria-label="상신일 종료일"
+            />
+          </div>
+        </CCardHeader>
+        <CCardBody>
+          {errorMessage && <CAlert color="danger">{errorMessage}</CAlert>}
+
+          {loading ? (
+            <div className="py-5 text-center">
+              <CSpinner size="sm" className="me-2" />
+              결재 예정 문서를 불러오는 중입니다.
+            </div>
+          ) : (
+            <CTable hover responsive align="middle">
+              <CTableHead>
+                <CTableRow>
+                  <CTableHeaderCell style={{ width: '90px' }}>번호</CTableHeaderCell>
+                  <CTableHeaderCell style={{ width: '90px' }}>상태</CTableHeaderCell>
+                  <CTableHeaderCell>문서 제목</CTableHeaderCell>
+                  <CTableHeaderCell>서식</CTableHeaderCell>
+                  <CTableHeaderCell>작성자</CTableHeaderCell>
+                  <CTableHeaderCell>현재 진행</CTableHeaderCell>
+                  <CTableHeaderCell>현재 결재자</CTableHeaderCell>
+                  <CTableHeaderCell>상신일</CTableHeaderCell>
+                </CTableRow>
+              </CTableHead>
+              <CTableBody>
+                {documents.length === 0 ? (
+                  <CTableRow>
+                    <CTableDataCell colSpan={8} className="text-center text-body-secondary py-5">
+                      결재 예정 문서가 없습니다.
+                    </CTableDataCell>
+                  </CTableRow>
+                ) : (
+                  documents.map((document) => (
+                    <CTableRow
+                      key={document.approvalId}
+                      role="button"
+                      onClick={() => openDetail(document.approvalId)}
+                    >
+                      <CTableDataCell>{document.approvalId}</CTableDataCell>
+                      <CTableDataCell>
+                        <CBadge color={STATUS_BADGE[document.status] || 'secondary'}>
+                          {document.statusLabel || document.status}
+                        </CBadge>
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        <strong>{document.title}</strong>
+                      </CTableDataCell>
+                      <CTableDataCell>{document.formName || '-'}</CTableDataCell>
+                      <CTableDataCell>{document.writerName || document.writerNo || '-'}</CTableDataCell>
+                      <CTableDataCell>
+                        {Number(document.maxStep) > 0
+                          ? `${document.currentStep || 0} / ${document.maxStep}`
+                          : '-'}
+                      </CTableDataCell>
+                      <CTableDataCell>
+                        {document.currentApproverName || document.currentApproverNo || '-'}
+                      </CTableDataCell>
+                      <CTableDataCell>{formatDateTime(document.createdAt)}</CTableDataCell>
+                    </CTableRow>
+                  ))
+                )}
+              </CTableBody>
+            </CTable>
+          )}
+
+          <div className="d-flex justify-content-end">
+            <CPagination className="mb-0">
+              <CPaginationItem
+                disabled={page === 0}
+                onClick={() => setPage((prev) => Math.max(0, prev - 1))}
+              >
+                이전
+              </CPaginationItem>
+              {Array.from({ length: totalPages }, (_, index) => index).map((pageNumber) => (
+                <CPaginationItem
+                  active={pageNumber === page}
+                  key={pageNumber}
+                  onClick={() => setPage(pageNumber)}
+                >
+                  {pageNumber + 1}
+                </CPaginationItem>
+              ))}
+              <CPaginationItem
+                disabled={page + 1 >= totalPages}
+                onClick={() => setPage((prev) => Math.min(totalPages - 1, prev + 1))}
+              >
+                다음
+              </CPaginationItem>
+            </CPagination>
+          </div>
+        </CCardBody>
+      </CCard>
+    </div>
+  );
 };
 
 export default UpcomingApprovals;

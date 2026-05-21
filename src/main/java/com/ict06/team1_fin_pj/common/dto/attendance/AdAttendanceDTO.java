@@ -21,6 +21,10 @@ import lombok.Setter;
 @Builder                // builder 패턴 사용 가능
 public class AdAttendanceDTO {
 
+    // 근태 ID
+    // ATTENDANCE.attendance_id 값
+    private Integer attendanceId;
+
     // 사번
     private String empNo;
 

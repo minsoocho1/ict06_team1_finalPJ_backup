@@ -10,6 +10,8 @@
  * @ 2026.04.23    김다솜        최초 생성
  * @ 2026.04.23    김다솜        SSE 연결 관리 및 알림 저장·전송 로직/더티 체킹 이용한 알림 읽음 처리 로직 추가
  * @ 2026.05.08    김다솜        Redis 장애 시 DB 기반 안 읽은 알림 수 조회로 fallback 처리/알림 전체 읽음, 단건 삭제, 전체 삭제 기능 추가
+ * @ 2026.05.19    김다솜        RAG 처리 실패 알림 수신자 조회를 관리자 role_id 기준으로 보강
+ * @ 2026.05.19    김다솜        RAG 처리 실패 알림에 문서 제목 및 문서/RAG 관리 상세 위치 이동 URL 추가
  */
 
 package com.ict06.team1_fin_pj.domain.notification.service;
@@ -28,6 +30,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -88,6 +91,62 @@ public class NotificationServiceImpl {
                 "url", noti.getUrl() != null ? noti.getUrl() : ""
         );
         sseEmitterManager.sendToEmp(empNo, payload);
+    }
+
+    /**
+     * 관리자용: RAG 문서 처리 실패 알림 발송
+     * @param docId 문서 ID
+     * @param title 문서 제목
+     * @param stage 실패한 단계 (예: "청크 분할", "벡터 임베딩")
+     */
+    @Transactional
+    public void sendRagFailureNotification(Integer docId, String title, String stage) {
+        String documentTitle = title != null && !title.isBlank() ? title : "제목 없음";
+        String content = String.format(
+                "문서명: %s / 실패 단계: %s. 온보딩 관리 > 문서/RAG 관리에서 해당 문서를 확인해 주세요.",
+                documentTitle,
+                stage
+        );
+        String url = docId != null
+                ? "/admin/onboarding/documents#document-" + docId
+                : "/admin/onboarding/documents";
+
+        // 모든 관리자 권한 계정 조회
+        List<EmpEntity> admins = findAdminEmployees();
+        for (EmpEntity admin : admins) {
+            this.sendNotification(admin.getEmpNo(), NotificationType.ONBOARDING.name(), "문서 RAG 처리 실패 - " + documentTitle, content, url);
+        }
+    }
+
+    /**
+     * 관리자용: 사원 로드맵 학습 및 평가 완료 알림 발송
+     * @param empNo 완료한 사원의 사번
+     * @param empName 완료한 사원의 이름
+     */
+    @Transactional
+    public void sendOnboardingCompleteNotification(String empNo, String empName) {
+        String content = String.format("%s 사원이 온보딩 로드맵 학습 및 평가를 모두 완료했습니다. 최종 성취도를 확인해 주세요.", empName);
+        String url = "/admin/onboarding/main";
+
+        List<EmpEntity> admins = findAdminEmployees();
+        for (EmpEntity admin : admins) {
+            this.sendNotification(admin.getEmpNo(), NotificationType.ONBOARDING.name(), "온보딩 완료 보고", content, url);
+        }
+    }
+
+    private List<EmpEntity> findAdminEmployees() {
+        Map<String, EmpEntity> admins = new LinkedHashMap<>();
+
+        empRepository.findByRole_RoleId(1)
+                .forEach(emp -> admins.put(emp.getEmpNo(), emp));
+        empRepository.findByRole_RoleName("관리자")
+                .forEach(emp -> admins.put(emp.getEmpNo(), emp));
+        empRepository.findByRole_RoleName("ROLE_ADMIN")
+                .forEach(emp -> admins.put(emp.getEmpNo(), emp));
+        empRepository.findByRole_RoleName("ADMIN")
+                .forEach(emp -> admins.put(emp.getEmpNo(), emp));
+
+        return admins.values().stream().toList();
     }
 
     // 읽지 않은 알림 개수 조회: Redis 장애 또는 캐시 누락 시 DB 조회로 대체

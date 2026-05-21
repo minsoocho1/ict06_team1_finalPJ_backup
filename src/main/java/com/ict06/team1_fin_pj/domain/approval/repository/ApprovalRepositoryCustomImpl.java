@@ -1,6 +1,7 @@
 package com.ict06.team1_fin_pj.domain.approval.repository;
 
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalListResponseDto;
+import com.ict06.team1_fin_pj.domain.approval.entity.ApprovalLineStatus;
 import com.ict06.team1_fin_pj.domain.approval.entity.ApprovalStatus;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.types.Projections;
@@ -11,6 +12,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDate;
 import java.util.List;
 
 import static com.ict06.team1_fin_pj.domain.approval.entity.QAppLineEntity.appLineEntity;
@@ -42,6 +44,8 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
     public Page<ApprovalListResponseDto> findMyDocuments(
             String writerNo,
             ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     ) {
         BooleanBuilder builder = baseWriterCondition(writerNo);
@@ -51,6 +55,7 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
         } else {
             builder.and(approvalEntity.status.ne(ApprovalStatus.DRAFT));
         }
+        applyCreatedDateRange(builder, startDate, endDate);
 
         return fetchApprovalPage(builder, pageable);
     }
@@ -61,10 +66,13 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
     @Override
     public Page<ApprovalListResponseDto> findMyDrafts(
             String writerNo,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     ) {
         BooleanBuilder builder = baseWriterCondition(writerNo)
                 .and(approvalEntity.status.eq(ApprovalStatus.DRAFT));
+        applyCreatedDateRange(builder, startDate, endDate);
 
         return fetchApprovalPage(builder, pageable);
     }
@@ -79,6 +87,8 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
     public Page<ApprovalListResponseDto> findMyReferencedDocuments(
             String referenceNo,
             ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     ) {
         BooleanBuilder builder = new BooleanBuilder()
@@ -91,6 +101,7 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
         }
 
         builder.and(approvalEntity.status.ne(ApprovalStatus.DRAFT));
+        applyCreatedDateRange(builder, startDate, endDate);
 
         return fetchLineParticipantPage(builder, pageable);
     }
@@ -104,14 +115,49 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
     @Override
     public Page<ApprovalListResponseDto> findPendingApprovals(
             String approverNo,
+            ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     ) {
         BooleanBuilder builder = new BooleanBuilder()
                 .and(approvalEntity.currentApprover.empNo.eq(approverNo))
-                .and(approvalEntity.status.eq(ApprovalStatus.IN_PROGRESS))
                 .and(approvalEntity.isDeleted.isFalse());
 
+        if (status != null) {
+            builder.and(approvalEntity.status.eq(status));
+        } else {
+            builder.and(approvalEntity.status.eq(ApprovalStatus.IN_PROGRESS));
+        }
+        applyCreatedDateRange(builder, startDate, endDate);
+
         return fetchApprovalPage(builder, pageable);
+    }
+
+    /**
+     * 로그인 사용자가 과거에 승인 또는 반려 처리한 결재 문서 목록을 조회합니다.
+     */
+    @Override
+    public Page<ApprovalListResponseDto> findProcessedApprovals(
+            String approverNo,
+            ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
+            Pageable pageable
+    ) {
+        BooleanBuilder builder = new BooleanBuilder()
+                .and(appLineEntity.approver.empNo.eq(approverNo))
+                .and(appLineEntity.stepOrder.gt(0))
+                .and(appLineEntity.status.in(ApprovalLineStatus.APPROVED, ApprovalLineStatus.REJECTED))
+                .and(approvalEntity.isDeleted.isFalse())
+                .and(approvalEntity.status.ne(ApprovalStatus.DRAFT));
+
+        if (status != null) {
+            builder.and(approvalEntity.status.eq(status));
+        }
+        applyCreatedDateRange(builder, startDate, endDate);
+
+        return fetchLineParticipantPage(builder, pageable);
     }
 
     /**
@@ -123,14 +169,23 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
     @Override
     public Page<ApprovalListResponseDto> findUpcomingApprovals(
             String approverNo,
+            ApprovalStatus status,
+            LocalDate startDate,
+            LocalDate endDate,
             Pageable pageable
     ) {
         BooleanBuilder builder = new BooleanBuilder()
                 .and(appLineEntity.approver.empNo.eq(approverNo))
                 .and(appLineEntity.stepOrder.gt(0))
                 .and(appLineEntity.stepOrder.gt(approvalEntity.currentStep))
-                .and(approvalEntity.status.eq(ApprovalStatus.IN_PROGRESS))
                 .and(approvalEntity.isDeleted.isFalse());
+
+        if (status != null) {
+            builder.and(approvalEntity.status.eq(status));
+        } else {
+            builder.and(approvalEntity.status.eq(ApprovalStatus.IN_PROGRESS));
+        }
+        applyCreatedDateRange(builder, startDate, endDate);
 
         return fetchLineParticipantPage(builder, pageable);
     }
@@ -142,6 +197,22 @@ public class ApprovalRepositoryCustomImpl implements ApprovalRepositoryCustom {
         return new BooleanBuilder()
                 .and(approvalEntity.writer.empNo.eq(writerNo))
                 .and(approvalEntity.isDeleted.isFalse());
+    }
+
+    /**
+     * 목록 화면의 상신일 기간 검색 조건을 공통으로 적용합니다.
+     *
+     * 화면에서는 날짜만 전달하므로 시작일은 00:00:00 이상, 종료일은 다음 날 00:00:00 미만으로 처리해
+     * 종료일 하루 전체가 검색 범위에 포함되도록 합니다.
+     */
+    private void applyCreatedDateRange(BooleanBuilder builder, LocalDate startDate, LocalDate endDate) {
+        if (startDate != null) {
+            builder.and(approvalEntity.createdAt.goe(startDate.atStartOfDay()));
+        }
+
+        if (endDate != null) {
+            builder.and(approvalEntity.createdAt.lt(endDate.plusDays(1).atStartOfDay()));
+        }
     }
 
     /**

@@ -1,0 +1,275 @@
+<!--
+    @FileName : aiEvalReport.html
+    @Description : 관리자 평가 결과 기반 AI 분석 리포트 화면
+    @Author : 김다솜
+    @Date : 2026. 05. 18
+    @Modification_History
+    @
+    @ 수정일자        수정자        수정내용
+    @ ----------    ---------    -----------------------------------------------
+    @ 2026.05.18    김다솜        최초 생성, 복합 통계/이탈 분석/LLM 인사이트 화면 구성 및 깨진 마크업 복구
+    @ 2026.05.19    김다솜        AI 개선 인사이트 보고서형 줄바꿈 표시 보완
+    @ 2026.05.19    김다솜        평가 요약 지표 세로 배치로 가독성 개선
+-->
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{/admin/common/head.html :: common_header}">
+    <meta charset="UTF-8">
+    <title id="page_title">AI 분석 리포트</title>
+</head>
+<body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
+<div class="app-wrapper">
+    <th:block th:replace="~{/admin/common/header}"></th:block>
+    <th:block th:replace="~{/admin/common/sidebar}"></th:block>
+
+    <main class="app-main">
+        <div class="app-content">
+            <div class="container-fluid p-4" style="max-width: 1260px; margin: 0 auto;">
+                <div class="row mb-3">
+                    <div class="col">
+                        <h3>AI 분석 리포트</h3>
+                        <p class="text-muted mb-0">
+                            평가 결과, 학습 진행률, 체크리스트 데이터를 함께 분석해 이탈 징후와 개선 방향을 확인합니다.
+                        </p>
+                    </div>
+                    <div class="col text-end d-flex justify-content-end align-items-start gap-2">
+                        <a th:href="@{/admin/evaluation/results}" class="btn btn-outline-primary">평가 결과 통계</a>
+                        <a th:href="@{/admin/evaluation/main}" class="btn btn-outline-secondary">평가 메인</a>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body">
+                        <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                            <div>
+                                <div class="text-muted small mb-1">AI 개선 인사이트</div>
+                                <h5 class="mb-0">LLM 기반 이탈 위험 분석</h5>
+                            </div>
+                            <button type="button" id="loadLlmRetentionBtn" class="btn btn-sm btn-primary">
+                                LLM 분석 실행
+                            </button>
+                        </div>
+                        <div id="llmRetentionStatus" class="alert alert-info py-2 small d-none">
+                            LLM 기반으로 이탈 위험을 분석하는 중입니다.
+                        </div>
+                        <div id="llmRetentionInsight"
+                             class="fs-6 p-3 rounded-3 bg-light border"
+                             style="white-space: pre-line; line-height: 1.85;"
+                             th:text="${analytics.retentionAiInsight}">
+                            AI 분석 결과가 없습니다.
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-3 mb-4">
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">고위험 직원</div>
+                                <div class="fs-3 fw-bold text-danger"
+                                     th:text="${analytics.highRiskEmployeeCount + '명'}">0명</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">주의 필요</div>
+                                <div class="fs-3 fw-bold text-warning"
+                                     th:text="${analytics.mediumRiskEmployeeCount + '명'}">0명</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">평균 학습 진행률</div>
+                                <div class="fs-3 fw-bold"
+                                     th:text="${#numbers.formatDecimal(analytics.averageLearningProgressRate, 1, 1) + '%'}">0.0%</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 col-xl-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <div class="text-muted small mb-2">평균 체크리스트</div>
+                                <div class="fs-3 fw-bold"
+                                     th:text="${#numbers.formatDecimal(analytics.averageChecklistProgressRate, 1, 1) + '%'}">0.0%</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-5">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body">
+                                <h5 class="card-title mb-3">평가 요약</h5>
+                                <div class="border-bottom py-2">
+                                    <div class="text-muted small mb-1">평가 제출 건수</div>
+                                    <strong class="fs-5" th:text="${analytics.submissionCount + '건'}">0건</strong>
+                                </div>
+                                <div class="border-bottom py-2">
+                                    <div class="text-muted small mb-1">참여 직원</div>
+                                    <strong class="fs-5" th:text="${analytics.participantCount + '명'}">0명</strong>
+                                </div>
+                                <div class="border-bottom py-2">
+                                    <div class="text-muted small mb-1">평균 이해도</div>
+                                    <strong class="fs-5" th:text="${#numbers.formatDecimal(analytics.averageScoreRate, 1, 1) + '%'}">0.0%</strong>
+                                </div>
+                                <div class="py-2">
+                                    <div class="text-muted small mb-1">가중 평균 이해도</div>
+                                    <strong class="fs-5" th:text="${#numbers.formatDecimal(analytics.weightedAverageScoreRate, 1, 1) + '%'}">0.0%</strong>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body table-responsive">
+                                <h5 class="card-title mb-3">카테고리별 취약도</h5>
+                                <table class="table table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                    <tr>
+                                        <th>카테고리</th>
+                                        <th>평균 점수</th>
+                                        <th>기준</th>
+                                        <th>차이</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody>
+                                    <tr th:each="stat : ${analytics.categoryStats}">
+                                        <td th:text="${stat.categoryName}">카테고리</td>
+                                        <td th:text="${#numbers.formatDecimal(stat.averageScoreRate, 1, 1) + '%'}">0.0%</td>
+                                        <td th:text="${stat.passScore + '%'}">80%</td>
+                                        <td>
+                                            <span th:class="${stat.scoreGap >= 0 ? 'text-success' : 'text-danger'}"
+                                                  th:text="${(stat.scoreGap >= 0 ? '+' : '') + #numbers.formatDecimal(stat.scoreGap, 1, 1) + '%'}">0.0%</span>
+                                        </td>
+                                    </tr>
+                                    <tr th:if="${#lists.isEmpty(analytics.categoryStats)}">
+                                        <td colspan="4" class="text-center text-muted">카테고리 통계가 없습니다.</td>
+                                    </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card shadow-sm border-0">
+                    <div class="card-body table-responsive">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <div>
+                                <div class="text-muted small">학습, 체크리스트, 평가 데이터를 통합한 위험 신호</div>
+                                <h5 class="card-title mb-0">위험 직원 Top 10</h5>
+                            </div>
+                        </div>
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                            <tr>
+                                <th>직원</th>
+                                <th>위험도</th>
+                                <th>학습</th>
+                                <th>체크</th>
+                                <th>평가</th>
+                                <th>핵심 신호</th>
+                                <th>우선 조치</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr th:each="risk : ${analytics.retentionRiskStats}">
+                                <td>
+                                    <a class="fw-semibold text-decoration-none"
+                                       th:href="@{/admin/onboarding/schedules/{empNo}(empNo=${risk.empNo})}"
+                                       th:text="${risk.employeeName}">직원명</a>
+                                    <div class="text-muted small"
+                                         th:text="${risk.empNo + ' / ' + risk.departmentName}">20260001 / 부서</div>
+                                </td>
+                                <td>
+                                    <span class="badge"
+                                          th:classappend="${risk.riskLevel == 'HIGH' ? ' bg-danger' : (risk.riskLevel == 'MEDIUM' ? ' bg-warning text-dark' : ' bg-success')}"
+                                          th:text="${risk.riskLevel + ' ' + risk.riskScore + '점'}">HIGH 80점</span>
+                                </td>
+                                <td th:text="${#numbers.formatDecimal(risk.learningProgressRate, 1, 1) + '%'}">0.0%</td>
+                                <td th:text="${#numbers.formatDecimal(risk.checklistProgressRate, 1, 1) + '%'}">0.0%</td>
+                                <td>
+                                    <div th:text="${#numbers.formatDecimal(risk.evaluationAverageScoreRate, 1, 1) + '%'}">0.0%</div>
+                                    <div class="text-muted small"
+                                         th:text="${'통과 ' + #numbers.formatDecimal(risk.evaluationPassRate, 1, 1) + '%'}">통과 0.0%</div>
+                                </td>
+                                <td class="small text-danger"
+                                    th:text="${!#lists.isEmpty(risk.riskReasons) ? risk.riskReasons[0] : '-'}">핵심 신호</td>
+                                <td class="small text-muted"
+                                    th:text="${!#lists.isEmpty(risk.recommendations) ? risk.recommendations[0] : '-'}">우선 조치</td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(analytics.retentionRiskStats)}">
+                                <td colspan="7" class="text-center text-muted">위험 직원 데이터가 없습니다.</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <th:block th:replace="~{/admin/common/footer}"></th:block>
+</div>
+
+<th:block th:replace="~{/admin/common/commonJs}"></th:block>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const loadButton = document.getElementById('loadLlmRetentionBtn');
+        const insightBox = document.getElementById('llmRetentionInsight');
+        const statusBox = document.getElementById('llmRetentionStatus');
+
+        if (!loadButton || !insightBox || !statusBox) {
+            return;
+        }
+
+        loadButton.addEventListener('click', async function () {
+            loadButton.disabled = true;
+            statusBox.classList.remove('d-none', 'alert-danger', 'alert-success');
+            statusBox.classList.add('alert-info');
+            statusBox.textContent = 'LLM 기반으로 이탈 위험을 분석하는 중입니다.';
+
+            try {
+                const response = await fetch('/admin/evaluation/ai-report/retention-analysis', {
+                    headers: {
+                        'Accept': 'application/json'
+                    }
+                });
+
+                if (!response.ok) {
+                    throw new Error('HTTP ' + response.status);
+                }
+
+                const data = await response.json();
+                insightBox.textContent = formatInsightText(data.analysis || 'LLM 분석 결과가 없습니다.');
+                statusBox.classList.remove('alert-info');
+                statusBox.classList.add('alert-success');
+                statusBox.textContent = 'LLM 분석이 완료되었습니다.';
+            } catch (error) {
+                statusBox.classList.remove('alert-info');
+                statusBox.classList.add('alert-danger');
+                statusBox.textContent = 'LLM 분석 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.';
+            } finally {
+                loadButton.disabled = false;
+            }
+        });
+
+        function formatInsightText(text) {
+            if (!text) {
+                return 'LLM 분석 결과가 없습니다.';
+            }
+
+            return String(text)
+                .replace(/([.!?])\s+(?=(우선|개선|위험|조치|권장|다음|핵심|첫째|둘째|셋째))/g, '$1\n')
+                .replace(/,\s*(?=(우선|개선|위험|조치|권장|다음|핵심|첫째|둘째|셋째))/g, '\n')
+                .trim();
+        }
+    });
+</script>
+</body>
+</html>
