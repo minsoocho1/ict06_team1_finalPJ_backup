@@ -17,7 +17,6 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head th:insert="~{/admin/common/head.html :: common_header}">
     <title id="page_title">COREWORK Admin Dashboard</title>
-    <link rel="stylesheet" th:href="@{css/admin/home.css}">
 </head>
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
 <div class="app-wrapper">
@@ -25,20 +24,20 @@
     <th:block th:replace="~{/admin/common/sidebar}"></th:block>
 
     <main class="app-main">
-        <div class="container-fluid p-4" style="max-width: 1160px; margin: 0 auto;">
+        <div class="container-fluid p-4 cw-page-container">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h2 class="fw-bold mb-0" style="color: #3c4b64;">
-                    CORE<span style="color: #321fdb;">WORK</span>
+                <h2 class="fw-bold mb-0 cw-brand-heading">
+                    CORE<span class="cw-brand-mark">WORK</span>
                     <small class="text-muted" style="font-size: 1.2rem;">Admin Center</small>
                 </h2>
             </div>
 
             <div class="row">
                 <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
-                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #321fdb !important;">
+                    <div class="card h-100 shadow-sm border-0 card-core cw-card-top-primary w-100">
                         <div class="card-body py-3">
                             <div class="mb-2">
-                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">전체 온보딩 대상</span>
+                                <span class="badge badge-ai">전체 온보딩 대상</span>
                             </div>
                             <div class="h3 mb-0 fw-bold text-dark" th:text="${totalOnboarding + '명'}">0명</div>
                         </div>
@@ -46,10 +45,10 @@
                 </div>
 
                 <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
-                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #2eb85c !important;">
+                    <div class="card h-100 shadow-sm border-0 card-core cw-card-top-success w-100">
                         <div class="card-body py-3">
                             <div class="mb-2">
-                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">평균 온보딩 완료율</span>
+                                <span class="badge badge-ai">평균 온보딩 완료율</span>
                             </div>
                             <div class="h3 mb-0 fw-bold text-dark" th:text="${avgProgress + '%'}">0%</div>
                         </div>
@@ -57,10 +56,10 @@
                 </div>
 
                 <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
-                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #f9b115 !important;">
+                    <div class="card h-100 shadow-sm border-0 card-core cw-card-top-warning w-100">
                         <div class="card-body py-3">
                             <div class="mb-2">
-                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">평가 제출 건수</span>
+                                <span class="badge badge-ai">평가 제출 건수</span>
                             </div>
                             <div class="h3 mb-0 fw-bold text-dark" th:text="${evaluationSubmissions + '건'}">0건</div>
                         </div>
@@ -68,10 +67,10 @@
                 </div>
 
                 <div class="col-xxl-3 col-xl-6 col-md-6 mb-4 d-flex">
-                    <div class="card h-100 shadow-sm border-0 card-core w-100" style="border-top-color: #3399ff !important;">
+                    <div class="card h-100 shadow-sm border-0 card-core cw-card-top-accent w-100">
                         <div class="card-body py-3">
                             <div class="mb-2">
-                                <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">AI 비서 사용 건수</span>
+                                <span class="badge badge-ai">AI 비서 사용 건수</span>
                             </div>
                             <div class="h3 mb-0 fw-bold text-dark" th:text="${#numbers.formatInteger(aiActivities, 0, 'COMMA') + '건'}">0건</div>
                         </div>
@@ -85,7 +84,7 @@
                         <div class="card-header bg-white border-0 py-3 d-flex justify-content-between align-items-center">
                             <h6 class="fw-bold mb-0 text-dark">
                                 온보딩 완료율 (%)
-                                <span class="badge border ms-2" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">AI Analysis</span>
+                                <span class="badge badge-ai ms-2">AI Analysis</span>
                             </h6>
                             <div class="btn-group btn-group-sm" role="group" aria-label="온보딩 완료율 기준">
                                 <button type="button" class="btn btn-outline-primary active" id="onboardingTeamBtn">팀별</button>
@@ -245,8 +244,19 @@
             chart.update();
         }
 
-        const onboardingChart = buildBarChart('onboardingChart', 'onboardingEmpty', onboardingTeamData, 'completion_rate', '#321fdb', '완료율(%)');
-        const quizChart = buildBarChart('quizScoreChart', 'quizEmpty', quizTeamData, 'avg_score', '#2eb85c', '평균 점수');
+        const adminTheme = getComputedStyle(document.documentElement);
+        const themeColor = (name) => adminTheme.getPropertyValue(name).trim();
+        const chartColors = {
+            primary: themeColor('--cw-primary'),
+            accent: themeColor('--cw-accent'),
+            success: themeColor('--cw-success'),
+            warning: themeColor('--cw-warning'),
+            danger: themeColor('--cw-danger'),
+            border: themeColor('--cw-border')
+        };
+
+        const onboardingChart = buildBarChart('onboardingChart', 'onboardingEmpty', onboardingTeamData, 'completion_rate', chartColors.primary, '완료율(%)');
+        const quizChart = buildBarChart('quizScoreChart', 'quizEmpty', quizTeamData, 'avg_score', chartColors.success, '평균 점수');
 
         if (onboardingChart) {
             const onboardingTeamBtn = document.getElementById('onboardingTeamBtn');
@@ -289,7 +299,7 @@
                     labels: ragData.map(d => d.stage),
                     datasets: [{
                         data: ragData.map(d => d.count),
-                        backgroundColor: ['#3399ff', '#2eb85c', '#f9b115', '#e55353']
+                        backgroundColor: [chartColors.accent, chartColors.success, chartColors.warning, chartColors.danger, chartColors.primary]
                     }]
                 },
                 options: {
@@ -311,7 +321,7 @@
                     labels: Object.keys(aiUsageData),
                     datasets: [{
                         data: Object.values(aiUsageData),
-                        backgroundColor: ['#321fdb', '#3399ff', '#ced2d8', '#f9b115']
+                        backgroundColor: [chartColors.primary, chartColors.accent, chartColors.border, chartColors.warning]
                     }]
                 },
                 options: {
@@ -334,7 +344,7 @@
                     labels: evaluationStatusData.map(d => d.status),
                     datasets: [{
                         data: evaluationStatusData.map(d => d.count),
-                        backgroundColor: ['#2eb85c', '#e55353']
+                        backgroundColor: [chartColors.success, chartColors.danger]
                     }]
                 },
                 options: {

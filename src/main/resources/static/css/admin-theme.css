@@ -1,0 +1,461 @@
+/*
+ * COREWORK admin design tokens.
+ * Keep AdminLTE intact and override Bootstrap/AdminLTE through this layer.
+ */
+
+:root,
+[data-bs-theme="light"] {
+    --cw-font-sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+    --cw-base: #f8f9fa;
+    --cw-surface: #ffffff;
+    --cw-surface-muted: #f1f4f8;
+    --cw-border: #d9e0e8;
+    --cw-border-strong: #b9c5d2;
+
+    --cw-primary: #0042a7;
+    --cw-primary-hover: #00347f;
+    --cw-primary-soft: #eaf2ff;
+    --cw-primary-border: #bfd5ff;
+    --cw-accent: #0077a6;
+    --cw-accent-hover: #005d82;
+    --cw-accent-soft: #e7f7fc;
+
+    --cw-success: #0ba600;
+    --cw-success-hover: #087f00;
+    --cw-success-soft: #e9fbe7;
+    --cw-warning: #a66e00;
+    --cw-warning-hover: #805500;
+    --cw-warning-soft: #fff5df;
+    --cw-danger: #a60062;
+    --cw-danger-hover: #7d004a;
+    --cw-danger-soft: #fff0f8;
+
+    --cw-text: #172033;
+    --cw-text-muted: #667085;
+    --cw-text-subtle: #8a95a6;
+    --cw-sidebar-bg: #111827;
+    --cw-sidebar-muted: #aab4c3;
+    --cw-focus-ring: rgba(0, 66, 167, 0.24);
+    --cw-shadow-sm: 0 4px 12px rgba(23, 32, 51, 0.06);
+    --cw-shadow-md: 0 10px 28px rgba(23, 32, 51, 0.1);
+
+    --bs-font-sans-serif: var(--cw-font-sans);
+    --bs-body-font-family: var(--cw-font-sans);
+    --bs-body-bg: var(--cw-base);
+    --bs-body-bg-rgb: 248, 249, 250;
+    --bs-body-color: var(--cw-text);
+    --bs-body-color-rgb: 23, 32, 51;
+    --bs-secondary-color: var(--cw-text-muted);
+    --bs-secondary-color-rgb: 102, 112, 133;
+    --bs-tertiary-bg: var(--cw-base);
+    --bs-tertiary-bg-rgb: 248, 249, 250;
+    --bs-border-color: var(--cw-border);
+    --bs-border-color-translucent: rgba(23, 32, 51, 0.14);
+
+    --bs-primary: var(--cw-primary);
+    --bs-primary-rgb: 0, 66, 167;
+    --bs-primary-text-emphasis: #002a69;
+    --bs-primary-bg-subtle: var(--cw-primary-soft);
+    --bs-primary-border-subtle: var(--cw-primary-border);
+    --bs-link-color: var(--cw-primary);
+    --bs-link-color-rgb: 0, 66, 167;
+    --bs-link-hover-color: var(--cw-primary-hover);
+    --bs-link-hover-color-rgb: 0, 52, 127;
+
+    --bs-success: var(--cw-success);
+    --bs-success-rgb: 11, 166, 0;
+    --bs-success-bg-subtle: var(--cw-success-soft);
+    --bs-warning: var(--cw-warning);
+    --bs-warning-rgb: 166, 110, 0;
+    --bs-warning-bg-subtle: var(--cw-warning-soft);
+    --bs-danger: var(--cw-danger);
+    --bs-danger-rgb: 166, 0, 98;
+    --bs-danger-bg-subtle: var(--cw-danger-soft);
+    --bs-info: var(--cw-accent);
+    --bs-info-rgb: 0, 119, 166;
+    --bs-info-bg-subtle: var(--cw-accent-soft);
+
+    --bs-focus-ring-color: var(--cw-focus-ring);
+}
+
+html,
+body {
+    font-family: var(--cw-font-sans);
+}
+
+body.layout-fixed {
+    background-color: var(--cw-base);
+}
+
+.app-main h3.fw-bold.mb-2 {
+    color: var(--cw-text);
+    font-size: 1.75rem;
+    font-weight: 800 !important;
+    letter-spacing: 0;
+    line-height: 1.25;
+}
+
+@media (max-width: 576px) {
+    .app-main h3.fw-bold.mb-2 {
+        font-size: 1.45rem;
+    }
+}
+
+.app-header.navbar {
+    background-color: var(--cw-surface) !important;
+    border-bottom: 1px solid var(--cw-border);
+    box-shadow: 0 1px 0 rgba(23, 32, 51, 0.03);
+}
+
+.app-main {
+    background-color: var(--cw-base);
+}
+
+.app-sidebar {
+    --bs-body-bg: var(--cw-sidebar-bg);
+    background-color: var(--cw-sidebar-bg) !important;
+}
+
+.app-sidebar .brand-link svg path:first-child {
+    fill: var(--cw-primary);
+}
+
+.brand-copy {
+    user-select: none;
+    line-height: 1;
+}
+
+.brand-title {
+    color: #f8f9fa;
+    font-size: 1.15rem;
+    font-weight: 800;
+}
+
+.brand-title-accent {
+    color: #8eb4ff;
+}
+
+.brand-subtitle {
+    color: var(--cw-sidebar-muted);
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.app-sidebar .nav-link.active,
+.app-sidebar .nav-link:hover {
+    background-color: rgba(0, 66, 167, 0.28) !important;
+}
+
+.badge-ai,
+.app-sidebar .badge {
+    background-color: var(--cw-primary-soft) !important;
+    border: 1px solid var(--cw-primary-border) !important;
+    color: var(--cw-primary) !important;
+    font-weight: 700;
+}
+
+.btn-primary {
+    --bs-btn-bg: var(--cw-primary);
+    --bs-btn-border-color: var(--cw-primary);
+    --bs-btn-hover-bg: var(--cw-primary-hover);
+    --bs-btn-hover-border-color: var(--cw-primary-hover);
+    --bs-btn-active-bg: var(--cw-primary-hover);
+    --bs-btn-active-border-color: var(--cw-primary-hover);
+    --bs-btn-disabled-bg: var(--cw-primary);
+    --bs-btn-disabled-border-color: var(--cw-primary);
+}
+
+.btn-outline-primary {
+    --bs-btn-color: var(--cw-primary);
+    --bs-btn-border-color: var(--cw-primary);
+    --bs-btn-hover-bg: var(--cw-primary);
+    --bs-btn-hover-border-color: var(--cw-primary);
+    --bs-btn-active-bg: var(--cw-primary-hover);
+    --bs-btn-active-border-color: var(--cw-primary-hover);
+}
+
+.btn-info {
+    --bs-btn-bg: var(--cw-accent);
+    --bs-btn-border-color: var(--cw-accent);
+    --bs-btn-hover-bg: var(--cw-accent-hover);
+    --bs-btn-hover-border-color: var(--cw-accent-hover);
+    --bs-btn-active-bg: var(--cw-accent-hover);
+    --bs-btn-active-border-color: var(--cw-accent-hover);
+    --bs-btn-color: #ffffff;
+    --bs-btn-hover-color: #ffffff;
+    --bs-btn-active-color: #ffffff;
+}
+
+.btn-success {
+    --bs-btn-bg: var(--cw-success);
+    --bs-btn-border-color: var(--cw-success);
+    --bs-btn-hover-bg: var(--cw-success-hover);
+    --bs-btn-hover-border-color: var(--cw-success-hover);
+    --bs-btn-active-bg: var(--cw-success-hover);
+    --bs-btn-active-border-color: var(--cw-success-hover);
+    --bs-btn-disabled-bg: var(--cw-success);
+    --bs-btn-disabled-border-color: var(--cw-success);
+}
+
+.btn-warning {
+    --bs-btn-bg: var(--cw-warning);
+    --bs-btn-border-color: var(--cw-warning);
+    --bs-btn-hover-bg: var(--cw-warning-hover);
+    --bs-btn-hover-border-color: var(--cw-warning-hover);
+    --bs-btn-color: #ffffff;
+    --bs-btn-hover-color: #ffffff;
+}
+
+.btn-danger,
+.btn-outline-danger:hover {
+    --bs-btn-bg: var(--cw-danger);
+    --bs-btn-border-color: var(--cw-danger);
+    --bs-btn-hover-bg: var(--cw-danger-hover);
+    --bs-btn-hover-border-color: var(--cw-danger-hover);
+}
+
+.btn-outline-danger {
+    --bs-btn-color: var(--cw-danger);
+    --bs-btn-border-color: var(--cw-danger);
+    --bs-btn-hover-bg: var(--cw-danger);
+    --bs-btn-hover-border-color: var(--cw-danger);
+}
+
+.text-primary {
+    color: var(--cw-primary) !important;
+}
+
+.text-success {
+    color: var(--cw-success) !important;
+}
+
+.text-warning {
+    color: var(--cw-warning) !important;
+}
+
+.text-danger {
+    color: var(--cw-danger) !important;
+}
+
+.text-muted {
+    color: var(--cw-text-muted) !important;
+}
+
+.bg-body-tertiary,
+.bg-light {
+    background-color: var(--cw-base) !important;
+}
+
+.bg-white,
+.card,
+.modal-content,
+.dropdown-menu {
+    background-color: var(--cw-surface) !important;
+}
+
+.card {
+    border-color: var(--cw-border);
+    box-shadow: var(--cw-shadow-sm);
+}
+
+.card-core {
+    border-top: 4px solid var(--cw-primary) !important;
+}
+
+.cw-page-container {
+    margin: 0 auto;
+    max-width: 1160px;
+}
+
+.cw-brand-heading {
+    color: var(--cw-text) !important;
+}
+
+.cw-brand-heading .cw-brand-mark {
+    color: var(--cw-primary) !important;
+}
+
+.cw-card-top-primary {
+    border-top-color: var(--cw-primary) !important;
+}
+
+.cw-card-top-success {
+    border-top-color: var(--cw-success) !important;
+}
+
+.cw-card-top-warning {
+    border-top-color: var(--cw-warning) !important;
+}
+
+.cw-card-top-accent {
+    border-top-color: var(--cw-accent) !important;
+}
+
+.table {
+    --bs-table-border-color: var(--cw-border);
+    --bs-table-striped-bg: var(--cw-surface-muted);
+    --bs-table-hover-bg: var(--cw-primary-soft);
+}
+
+.table-light {
+    --bs-table-bg: var(--cw-surface-muted);
+    --bs-table-color: var(--cw-text);
+}
+
+.form-control,
+.form-select {
+    border-color: var(--cw-border);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--cw-primary);
+    box-shadow: 0 0 0 0.2rem var(--cw-focus-ring);
+}
+
+.form-check-input:checked {
+    background-color: var(--cw-primary);
+    border-color: var(--cw-primary);
+}
+
+.nav-tabs .nav-link {
+    color: var(--cw-text-muted);
+}
+
+.nav-tabs .nav-link.active {
+    color: var(--cw-primary);
+    font-weight: 700;
+}
+
+.dropdown-item:active {
+    background-color: var(--cw-primary);
+}
+
+.page-link {
+    color: var(--cw-primary);
+}
+
+.active > .page-link,
+.page-link.active {
+    background-color: var(--cw-primary);
+    border-color: var(--cw-primary);
+}
+
+.progress,
+.progress-stacked {
+    --bs-progress-bar-bg: var(--cw-primary);
+}
+
+.text-bg-primary,
+.badge.text-bg-primary {
+    background-color: var(--cw-primary) !important;
+    color: #ffffff !important;
+}
+
+.text-bg-success,
+.badge.text-bg-success {
+    background-color: var(--cw-success) !important;
+    color: #ffffff !important;
+}
+
+.text-bg-warning,
+.badge.text-bg-warning {
+    background-color: var(--cw-warning) !important;
+    color: #ffffff !important;
+}
+
+.text-bg-danger,
+.badge.text-bg-danger {
+    background-color: var(--cw-danger) !important;
+    color: #ffffff !important;
+}
+
+.text-bg-info,
+.badge.text-bg-info {
+    background-color: var(--cw-accent) !important;
+    color: #ffffff !important;
+}
+
+.user-header.text-bg-primary {
+    background-color: var(--cw-primary) !important;
+}
+
+.alert-success,
+.department-message.success {
+    background-color: var(--cw-success-soft) !important;
+    border-color: var(--cw-success) !important;
+    color: var(--cw-success-hover) !important;
+}
+
+.alert-warning {
+    background-color: var(--cw-warning-soft) !important;
+    border-color: var(--cw-warning) !important;
+    color: var(--cw-warning-hover) !important;
+}
+
+.alert-danger,
+.department-message.error {
+    background-color: var(--cw-danger-soft) !important;
+    border-color: var(--cw-danger) !important;
+    color: var(--cw-danger-hover) !important;
+}
+
+.dept-node:hover,
+.department-badge-hq,
+.department-notice-box,
+.department-hq-row {
+    background-color: var(--cw-primary-soft) !important;
+}
+
+.dept-node:hover,
+.department-badge-hq,
+.department-count-text,
+.department-toggle-btn {
+    color: var(--cw-primary) !important;
+}
+
+.dept-node.active {
+    background-color: var(--cw-primary) !important;
+    color: #ffffff !important;
+}
+
+.department-notice-box {
+    border-left-color: var(--cw-primary) !important;
+}
+
+.dept-tree-children,
+.position-group-header {
+    border-color: var(--cw-border) !important;
+}
+
+.dept-node,
+.position-group-header,
+.department-card-desc,
+.department-page-desc,
+.department-search-help,
+.department-summary-text,
+.department-edit-label,
+.department-edit-help,
+.department-delete-help,
+.org-help-text,
+.org-empty-message {
+    color: var(--cw-text-muted) !important;
+}
+
+.position-group-card,
+.department-team-row {
+    background-color: var(--cw-surface) !important;
+    border-color: var(--cw-border) !important;
+}
+
+.position-group-header,
+.department-badge-team {
+    background-color: var(--cw-surface-muted) !important;
+}
+
+.department-delete-disabled-help {
+    color: var(--cw-danger) !important;
+}
