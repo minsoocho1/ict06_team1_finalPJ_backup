@@ -1,93 +1,19 @@
 import React from 'react';
 
-// CoreUI 
-import { CButton, CCard, CCardBody, CCardHeader } from '@coreui/react';
+import { Navigate } from 'react-router-dom';
 
-// 페이지 이동
-import { Link, useNavigate, useOutletContext } from 'react-router-dom';
-
-// 시연용 이미지 파일
-import refImage from 'src/assets/images/first_demo/[Payroll]employee_salary_view.png'
-
-// 1차 시연용으로 화면과 sql 쿼리를 함께 보여주기 위한 스타일 구현
-import { containerStyle, stepCardStyle } from 'src/styles/js/demoPageStyle';
-
-// 코드 하이라이터 : sql 코드 보여주는 용
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'; 
-import { coy } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { PATH } from 'src/constants/path';
 
-// [급여관리] 사원별 급여 확인 페이지
+// 급여관리 메뉴 진입 페이지
+// - 사이드바의 급여관리 메뉴가 이 페이지에 연결되어 있다.
+// - 실제 급여명세서 조회 화면으로 바로 이동시킨다.
 const Payroll = () => {
 
-    //DefaultLayout.js의 Outlet에서 보낸 userInfo 데이터 받기
-    const [userInfo] = useOutletContext();
-
-    //해당 화면의 SQL 쿼리 작성(백틱 `` 사용)
-    const sqlQuery = `
-        SELECT p.*, m.name, d.dept_name 
-        FROM payroll_master p
-        JOIN employee e ON p.emp_id = e.emp_id
-        JOIN departments d ON e.dept_id = d.dept_id
-        WHERE p.emp_id = #{empId}
-        AND p.pay_month = #{targetMonth}
-        AND p.status IN ('CONFIRMED', 'PAID');
-    `;
-
     return (
-        <div style={containerStyle}>
-            <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>{userInfo?.name}님의 급여 상세</h2>
-            </header>
-
-            <hr style={{ border: '0', height: '1px', background: '#eee', margin: '40px 0' }} />
-
-            {/* 1차 시연용 영역 */}
-            <CCard className="mb-4" style={{ height: 'calc(100vh - 120px)' }}>
-                <CCardHeader>
-                    <strong>시연 화면 및 관련 SQL쿼리</strong>
-                </CCardHeader>
-                <CCardBody className="p-0 d-flex flex-column">
-                    <div className="p-2 d-flex justify-content-end">
-                        {/* 시연용 화면 이동 버튼 */}
-                        {/* path에서 경로 상수 불러오기 */}
-                        {/* <Link to="/payroll/issue"> */}
-                        <Link to={PATH.PAYROLL.ISSUE}>
-                            <CButton
-                                color='primary'
-                                variant='outline'
-                                style={{ fontWeight: 'bold' }}
-                                >
-                                급여명세서 발급
-                            </CButton>
-                        </Link>
-                    </div>
-
-                    {/* 레퍼런스 이미지 영역 */}
-                    <div className="text-center" style={{ backgroundColor: '#f4f4f4', borderTop: '1px solid #eee' }}>
-                        <img 
-                            src={refImage} 
-                            alt="급여명세서" 
-                            style={{ width: '100%',
-                            height: 'auto',
-                            display: 'block' }} 
-                        />
-                    </div>
-
-                    {/* SQL 쿼리 영역 */}
-                    <div className='text-start mt-4'>
-                        <h5 className='mb-3' style={{ fontWeight: 'bold', color: '#4f5d73' }}>
-                            <span style={{ borderLeft: '4px solid #321fdb', paddingLeft: '10px' }}>
-                                관련 SQL 쿼리
-                            </span>
-                        </h5>
-                        <SyntaxHighlighter language='sql' style={coy}>
-                            {sqlQuery}
-                        </SyntaxHighlighter>
-                    </div>
-                </CCardBody>
-            </CCard>
-        </div>
+        <Navigate
+            to={PATH.PAYROLL.ISSUE}
+            replace
+        />
     );
 };
 

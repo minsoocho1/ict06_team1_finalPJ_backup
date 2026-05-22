@@ -19,13 +19,13 @@
                 <li class="page-item" th:classappend="${startPage <= 1} ? 'disabled'">
                     <a class="page-link"
                        th:href="@{/admin/payroll/salary-policy(
-                          page=${startPage > 1 ? startPage - 1 : 1},
-                          size=${pageResponse.size},
-                          deptId=${searchDTO.deptId},
-                          positionId=${searchDTO.positionId},
-                          gradeId=${searchDTO.gradeId},
-                          keyword=${searchDTO.keyword}
-                       )}">
+                            page=${pageNum},
+                            size=${pageResponse.size},
+                            deptId=${searchDTO.deptId},
+                            positionId=${searchDTO.positionId},
+                            gradeId=${searchDTO.gradeId},
+                            keyword=${searchDTO.keyword}
+                        )}">
                         이전
                     </a>
                 </li>
@@ -38,13 +38,13 @@
                     <a class="page-link"
                        th:text="${pageNum}"
                        th:href="@{/admin/payroll/salary-policy(
-                        page=${pageNum},
-                        size=${pageResponse.size},
-                        deptId=${searchDTO.deptId},
-                        positionId=${searchDTO.positionId},
-                        gradeId=${searchDTO.gradeId},
-                        keyword=${searchDTO.keyword}
-                    )}">
+                            page=${pageNum},
+                            size=${pageResponse.size},
+                            deptId=${searchDTO.deptId},
+                            positionId=${searchDTO.positionId},
+                            gradeId=${searchDTO.gradeId},
+                            keyword=${searchDTO.keyword}
+                       )}">
                     </a>
                 </li>
 
@@ -52,13 +52,13 @@
                 <li class="page-item" th:classappend="${endPage >= totalPages} ? 'disabled'">
                     <a class="page-link"
                        th:href="@{/admin/payroll/salary-policy(
-                          page=${endPage < totalPages ? endPage + 1 : totalPages},
-                          size=${pageResponse.size},
-                          deptId=${searchDTO.deptId},
-                          positionId=${searchDTO.positionId},
-                          gradeId=${searchDTO.gradeId},
-                          keyword=${searchDTO.keyword}
-                    )}">
+                            page=${pageNum},
+                            size=${pageResponse.size},
+                            deptId=${searchDTO.deptId},
+                            positionId=${searchDTO.positionId},
+                            gradeId=${searchDTO.gradeId},
+                            keyword=${searchDTO.keyword}
+                       )}">
                         다음
                     </a>
                 </li>
