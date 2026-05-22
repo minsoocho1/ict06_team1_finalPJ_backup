@@ -363,7 +363,7 @@ export default function KnowledgeRequestScreen({ userInfo }) {
         resetForm({ preserveFeedback: true });
         setFeedback({
           type: "success",
-          text: "?? ?? ??? ???????.",
+          text: "자료 등록 요청이 정상적으로 접수되었습니다.",
         });
         await fetchRequests();
       } catch (error) {
