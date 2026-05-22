@@ -31,6 +31,7 @@ from pydantic import BaseModel
 
 from api.documents.ai_documents import router as document_router
 from api.evaluation.ai_evaluation import router as evaluation_router
+from api.embeddings.ai_embeddings import router as embedding_router
 from api.roadmap.ai_roadmap import router as roadmap_router
 from repositories import dashboard_repository
 from schemas.evaluation_schema import (
@@ -69,6 +70,7 @@ app.add_middleware(
 
 app.include_router(evaluation_router, prefix="/api/ai/evaluation", tags=["AI Evaluation"])
 app.include_router(document_router, prefix="/api/ai/documents", tags=["AI Documents"])
+app.include_router(embedding_router, prefix="/api/ai", tags=["AI Embeddings"])
 app.include_router(roadmap_router, prefix="/api/ai", tags=["AI Roadmap"])
 
 

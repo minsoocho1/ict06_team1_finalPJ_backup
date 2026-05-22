@@ -26,6 +26,7 @@ from groq import Groq
 from pypdf import PdfReader
 
 from services.ollama_client import summarize_document
+from utils.nlp_helper import get_semantic_embedding_model
 from schemas.document_schema import (
     DocumentChunkResponse,
     DocumentProcessRequest,
@@ -35,7 +36,7 @@ from schemas.document_schema import (
 )
 
 MAX_CHUNK_CHARS = 900
-EMBED_DIMENSION = 256
+EMBEDDING_MODEL_NAME = "jhgan/ko-sroberta-multitask"
 REMOTE_CONNECT_TIMEOUT = 10
 REMOTE_READ_TIMEOUT = 90
 WEB_SEARCH_TIMEOUT = 8
@@ -109,10 +110,18 @@ def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
     else:
         preview_text = build_preview_text(req.title, cleaned_text)
 
+    embedding_model = get_semantic_embedding_model()
+    expected_dimension = embedding_model.get_sentence_embedding_dimension()
+
     response_chunks: list[DocumentChunkResponse] = []
     for index, chunk_text in enumerate(chunks, start=1):
         token_count = estimate_token_count(chunk_text)
-        embedding = make_hash_embedding(chunk_text, EMBED_DIMENSION)
+        embedding = make_semantic_embedding(chunk_text, embedding_model)
+        embedding_dimension = len(embedding)
+        if expected_dimension != embedding_dimension:
+            raise RuntimeError(
+                f"SBERT 임베딩 차원이 예상값과 다릅니다. expected={expected_dimension}, actual={embedding_dimension}"
+            )
 
         response_chunks.append(
             DocumentChunkResponse(
@@ -121,8 +130,8 @@ def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
                 tokenCount=token_count,
                 sectionTitle=build_section_title(req.title, index, chunk_text),
                 embeddingData=json.dumps(embedding),
-                modelName="hash-embedding-v1",
-                dimension=EMBED_DIMENSION,
+                modelName=EMBEDDING_MODEL_NAME,
+                dimension=embedding_dimension,
             )
         )
 
@@ -132,6 +141,7 @@ def process_document(req: DocumentProcessRequest) -> DocumentProcessResponse:
         extractedTextPreview=preview_text[:300],
         chunkCount=len(response_chunks),
         vectorCount=len(response_chunks),
+        embeddingModel=EMBEDDING_MODEL_NAME,
         chunks=response_chunks,
     )
 
@@ -449,6 +459,9 @@ def extract_text(file_path: str) -> tuple[str, str]:
 
 
 def extract_remote_text(file_path: str) -> tuple[str, str]:
+    if is_google_drive_folder_url(file_path):
+        raise ValueError("Google Drive 폴더 링크는 현재 지원하지 않습니다. 공개 PDF 파일 공유 링크를 입력해 주세요.")
+
     request_url = normalize_drive_url(file_path)
     try:
         response = requests.get(
@@ -465,17 +478,28 @@ def extract_remote_text(file_path: str) -> tuple[str, str]:
     response.raise_for_status()
 
     content_type = response.headers.get("content-type", "").lower()
-    if "text/plain" in content_type or "application/json" in content_type:
+    body = response.content or b""
+
+    if content_type.startswith("text/plain") or "application/json" in content_type or request_url.lower().endswith((".txt", ".md", ".csv", ".json")):
         return decode_response_text(response), "remote-text"
 
-    if "text/html" in content_type:
-        return html_to_text(decode_response_text(response)), "remote-html"
+    if "text/html" in content_type or request_url.lower().endswith((".html", ".htm")):
+        html_text = html_to_text(decode_response_text(response))
+        if is_google_drive_url(file_path) and is_google_drive_access_denied_text(html_text):
+            raise ValueError("비공개 또는 권한이 필요한 Google Drive 링크입니다.")
+        return html_text, "remote-html"
 
-    if "application/pdf" in content_type or request_url.lower().endswith(".pdf"):
-        return extract_pdf_text(response.content), "remote-pdf"
+    if "application/pdf" in content_type or request_url.lower().endswith(".pdf") or body.startswith(b"%PDF-"):
+        return extract_pdf_text(body), "remote-pdf"
 
-    decoded = decode_response_text(response)
-    return decoded, "remote-binary-text"
+    if (
+        request_url.lower().endswith(".docx")
+        or "application/vnd.openxmlformats-officedocument.wordprocessingml.document" in content_type
+        or body.startswith(b"PK")
+    ):
+        raise ValueError("DOCX 본문 추출은 현재 지원하지 않습니다. PDF 문서로 등록하거나 DOCX 파서 도입 후 다시 처리해 주세요.")
+
+    raise ValueError("지원하지 않는 파일 형식입니다. 현재는 PDF, TXT, HTML 문서만 처리할 수 있습니다.")
 
 
 def extract_local_pdf_text(file_path: str) -> str:
@@ -527,6 +551,9 @@ def normalize_drive_url(file_path: str) -> str:
     if "drive.google.com" not in parsed.netloc:
         return file_path
 
+    if is_google_drive_folder_url(file_path):
+        raise ValueError("Google Drive 폴더 링크는 현재 지원하지 않습니다. 공개 PDF 파일 공유 링크를 입력해 주세요.")
+
     match = re.search(r"/file/d/([^/]+)/", file_path)
     if match:
         return f"https://drive.google.com/uc?export=download&id={match.group(1)}"
@@ -536,6 +563,34 @@ def normalize_drive_url(file_path: str) -> str:
         return f"https://drive.google.com/uc?export=download&id={query['id'][0]}"
 
     return file_path
+
+
+def is_google_drive_folder_url(file_path: str) -> bool:
+    parsed = urlparse(file_path)
+    if "drive.google.com" not in parsed.netloc:
+        return False
+
+    return "/drive/folders/" in parsed.path or "/drive/u/0/folders/" in parsed.path
+
+
+def is_google_drive_url(file_path: str) -> bool:
+    parsed = urlparse(file_path)
+    return "drive.google.com" in parsed.netloc
+
+
+def is_google_drive_access_denied_text(text: str) -> bool:
+    candidate = (text or "").lower()
+    return any(
+        token in candidate
+        for token in (
+            "access denied",
+            "permission",
+            "need access",
+            "sign in",
+            "로그인",
+            "권한",
+        )
+    )
 
 
 def html_to_text(raw_html: str) -> str:
@@ -1052,3 +1107,24 @@ def make_hash_embedding(text: str, dimension: int) -> list[float]:
         return vector
 
     return [round(value / norm, 6) for value in vector]
+
+
+def make_semantic_embedding(text: str, model) -> list[float]:
+    if model is None:
+        raise RuntimeError("SBERT 임베딩 모델이 로드되지 않았습니다.")
+
+    embedding = model.encode(
+        text,
+        convert_to_numpy=True,
+        normalize_embeddings=True,
+        show_progress_bar=False,
+    )
+
+    if embedding is None:
+        raise RuntimeError("SBERT 임베딩 결과를 생성하지 못했습니다.")
+
+    embedding_list = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+    if not embedding_list:
+        raise RuntimeError("SBERT 임베딩 결과가 비어 있습니다.")
+
+    return [float(value) for value in embedding_list]
