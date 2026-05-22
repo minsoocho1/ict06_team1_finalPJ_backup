@@ -7,9 +7,11 @@ import com.ict06.team1_fin_pj.common.dto.approval.ApprovalFormResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalListResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.ApprovalEmployeeSignResponseDto;
 import com.ict06.team1_fin_pj.common.dto.approval.AppLineFormDetailDto;
+import com.ict06.team1_fin_pj.common.dto.approval.ReceiptOcrResponseDto;
 import com.ict06.team1_fin_pj.common.dto.employee.EmployeeListDto;
 import com.ict06.team1_fin_pj.common.dto.employee.EmployeeSearchConditionDto;
 import com.ict06.team1_fin_pj.common.security.PrincipalDetails;
+import com.ict06.team1_fin_pj.domain.approval.service.ApprovalReceiptOcrService;
 import com.ict06.team1_fin_pj.domain.approval.service.ApprovalService;
 import com.ict06.team1_fin_pj.domain.employee.service.AdEmployeeService;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,7 @@ public class ApprovalApiController {
 
     private final ApprovalService approvalService;
     private final AdEmployeeService adEmployeeService;
+    private final ApprovalReceiptOcrService approvalReceiptOcrService;
 
     /**
      * 결재 서식 목록 조회 API
@@ -121,6 +124,28 @@ public class ApprovalApiController {
             @AuthenticationPrincipal PrincipalDetails principal
     ) {
         return approvalService.getEmployeeSign(empNo, principal);
+    }
+
+    /**
+     * 비용 정산 신청 영수증 OCR 인식 API
+     *
+     * - React 작성 화면에서 증빙 파일을 선택하면 이 API로 첫 번째 파일을 전송합니다.
+     * - 네이버 CLOVA OCR Secret Key가 브라우저에 노출되지 않도록 백엔드에서 OCR 서버를 호출합니다.
+     * - OCR 결과는 비용 정산 신청 template의 필드 id(payment_date, expense_amount, receipt_items_summary)에 맞춰 반환합니다.
+     */
+    @PostMapping(
+            value = "/receipt-ocr",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ReceiptOcrResponseDto recognizeReceipt(
+            @RequestPart("file") MultipartFile file,
+            @AuthenticationPrincipal PrincipalDetails principal
+    ) {
+        if (principal == null) {
+            throw new IllegalArgumentException("로그인 정보가 필요합니다.");
+        }
+
+        return approvalReceiptOcrService.recognizeReceipt(file);
     }
 
     /**

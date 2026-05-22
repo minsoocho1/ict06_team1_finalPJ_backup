@@ -1,0 +1,4 @@
+join_table,owner_entity,field,java_type,join_column,inverse_column,source
+"DOCUMENT_ON_CONTENT","DocumentEntity","relatedContents","Set<OnContentEntity>","doc_id","content_id","src/main/java/com/ict06/team1_fin_pj/domain/onboarding/entity/DocumentEntity.java"
+"ON_CONTENT_TARGET_DEPARTMENT","OnContentEntity","targetDepartments","Set<DepartmentEntity>","content_id","dept_id","src/main/java/com/ict06/team1_fin_pj/domain/onboarding/entity/OnContentEntity.java"
+"ON_CONTENT_TARGET_POSITION","OnContentEntity","targetPositions","Set<PositionEntity>","content_id","position_id","src/main/java/com/ict06/team1_fin_pj/domain/onboarding/entity/OnContentEntity.java"

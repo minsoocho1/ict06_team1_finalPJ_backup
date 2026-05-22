@@ -17,4 +17,5 @@ public class PayrollEmployeeSearchDTO {
 
     // 전체보기 여부
     private Boolean showAll;
+
 }

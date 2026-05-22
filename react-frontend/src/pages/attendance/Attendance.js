@@ -73,8 +73,8 @@ const Attendance = () => {
   // DefaultLayout에서 전달받은 로그인 사용자 정보
   const [userInfo] = useOutletContext();
 
-  // 로그인한 사용자의 사번
-  const empNo = userInfo?.empNo || '20209999';
+  // 로그인 사용자 사번
+  const empNo = userInfo?.empNo;
 
   // 오늘 출근 상태
   const [todayStatus, setTodayStatus] = useState('출근 전');
@@ -325,11 +325,14 @@ const Attendance = () => {
   // 처음 화면 들어왔을 때도 사용하고,
   // 출근/퇴근 성공 후 화면 갱신할 때도 다시 사용할 함수
   const fetchAttendance = async () => {
-    try {
-      const params = {empNo}; 
-      const res = await request('GET', '/attendance/my', params);
+    // 로그인 사용자 사번이 없으면 조회하지 않음
+    if (!empNo) return;
 
-      console.log('근태 조회 결과:', res.data);
+    try {
+      const params = {
+        empNo: empNo,
+      }; 
+      const res = await request('GET', '/attendance/my', params);
 
       // 1. 캘린더에 보여줄 근태 목록 저장
       setAttendanceList(res.data);
@@ -378,9 +381,11 @@ const Attendance = () => {
     }
   };
 
-  // 휴가 요약 조회 함수
-  // 근태 메인에서 "내 휴가" 카드에 보여줄 데이터 조회
+  // 연차 요약 조회 함수
+  // 근태 메인에서 "내 연차" 카드에 보여줄 데이터 조회
   const fetchLeaveSummary = async () => {
+    if (!empNo) return;
+    
     try {
       // 공통 axios helper 사용
       // GET 요청이므로 세 번째 인자는 자동으로 params로 전달됨
@@ -390,11 +395,8 @@ const Attendance = () => {
 
       const res = await request('GET', '/leave/summary', params);
 
-      console.log('근태 메인 휴가 요약:', res.data);
-
       setLeaveSummary(res.data);
     } catch (error) {
-      console.error(error);
 
       // 휴가 데이터 조회 실패 시 화면이 깨지지 않도록 0으로 유지
       setLeaveSummary({
@@ -405,13 +407,16 @@ const Attendance = () => {
     }
   };
 
-  // 화면이 처음 열릴 때 근태 목록 조회
+  // 화면이 처음 열리거나 로그인 사용자 사번이 준비되면 데이터 조회
   useEffect(() => {
+    // userInfo가 아직 준비되지 않았으면 API 호출하지 않음
+    if (!empNo) return;
+
     fetchAttendance();
 
     // 근태 메인 진입 시 휴가 요약도 함께 조회
     fetchLeaveSummary();
-  }, []);
+  }, [empNo]);
 
   // 출근 후 퇴근 전일 때 실시간 근무시간 계산
   useEffect(() => {
@@ -483,19 +488,10 @@ const Attendance = () => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
-          console.log('현재 위치:', lat, lng);
-
           // GPS 성공 메시지
           setGpsMessage('GPS 확인 완료');
 
           // 4. 백엔드 출근 API 호출
-          // await axios.post('http://localhost:8081/api/attendance/check-in', null, {
-          //   params: {
-          //     empNo: empNo,
-          //     lat: lat,
-          //     lng: lng,
-          //   }
-          // });
           const params = {
             empNo: empNo,
             lat: lat,
@@ -511,7 +507,6 @@ const Attendance = () => {
           await fetchAttendance();
 
         } catch (error) {
-          console.error(error);
 
           // 실패 메시지
           setAttendanceMessage(
@@ -563,18 +558,9 @@ const Attendance = () => {
           const lat = position.coords.latitude;
           const lng = position.coords.longitude;
 
-          console.log('퇴근 위치:', lat, lng);
-
           // GPS 성공
           setGpsMessage('GPS 확인 완료');
 
-          // await axios.post('http://localhost:8081/api/attendance/check-out', null, {
-          //   params: {
-          //     empNo: empNo,
-          //     lat: lat,
-          //     lng: lng,
-          //   }
-          // });
           const params = {
               empNo: empNo,
               lat: lat,
@@ -600,7 +586,6 @@ const Attendance = () => {
           }
 
         } catch (error) {
-          console.error(error);
 
           // [결재-근태 연동용]: 회사 위치 밖에서 퇴근에 실패한 경우 외근 근무 결과 신청으로 이어줍니다.
           if (isCompanyLocationError(error)) {
@@ -769,9 +754,25 @@ const Attendance = () => {
   // PieChart 색상
   const pieColors = ['#198754', '#f9b115', '#e55353'];
 
+  // 로그인 사용자 정보가 아직 준비되지 않았을 때 화면
+  // userInfo가 늦게 들어오는 경우 API 호출 전에 안내 화면을 보여준다.
+  if (!empNo) {
+    return (
+      <div style={{ padding: '24px' }}>
+        <CCard>
+          <CCardBody className="text-center py-5">
+            사용자 정보를 불러오는 중입니다...
+          </CCardBody>
+        </CCard>
+      </div>
+    );
+  }
+
   return (
     <div style={{ padding: '24px' }}>
-      <h2 className="mb-4"> {userInfo?.name || '테스트'}</h2>
+      <h2 className="mb-4">
+        {userInfo?.name ? `${userInfo.name}님의 근태 현황` : '근태 현황'}
+      </h2>
       
       {/* 이번 달 근태 요약 카드 */}
       <CRow className="mb-4">
@@ -1184,7 +1185,7 @@ const Attendance = () => {
               </div>
             ))}
 
-            {displayDays.map((item, index) => {
+            {displayDays.map((item) => {
 
                 // displayDays 안의 날짜 객체에서 필요한 값 꺼내기
                 const { date, day, dateString } = item;

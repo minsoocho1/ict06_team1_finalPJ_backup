@@ -31,9 +31,10 @@ const parseTemplate = (template) => {
       title: parsed.title || '',
       fields: Array.isArray(parsed.fields) ? parsed.fields : [],
       fileRequired: Boolean(parsed.fileRequired),
+      ocr: parsed.ocr || {},
     };
   } catch (error) {
-    return { title: '', fields: [], fileRequired: false, invalid: true };
+    return { title: '', fields: [], fileRequired: false, ocr: {}, invalid: true };
   }
 };
 
@@ -123,6 +124,7 @@ const ApprovalWriteNew = () => {
   const [draftLines, setDraftLines] = useState([]);
   const [fileInputKey, setFileInputKey] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [ocrLoading, setOcrLoading] = useState(false);
 
   const template = useMemo(
     () => parseTemplate(selectedForm?.template),
@@ -136,9 +138,13 @@ const ApprovalWriteNew = () => {
    * "이 서식에는 첨부파일 입력 UI를 아예 보여주지 않는다"는 의미로 사용합니다.
    */
   const canAttachFile = template.fileRequired === true;
+  const isReceiptOcrForm =
+    template.ocr?.enabled === true && template.ocr?.documentType === 'receipt';
   const isExpenseSettlementForm =
     selectedForm?.formName === '비용 정산 신청' || documentTitle === '비용 정산 신청';
-  const fileAccept = isExpenseSettlementForm ? 'image/*,.pdf,application/pdf' : undefined;
+  const fileAccept = (isExpenseSettlementForm || isReceiptOcrForm)
+    ? 'image/*,.pdf,application/pdf'
+    : undefined;
 
   const filePreviews = useMemo(
     () =>
@@ -249,11 +255,57 @@ const ApprovalWriteNew = () => {
   };
 
   const canUploadFile = (file) => {
-    if (!isExpenseSettlementForm) {
+    if (!isExpenseSettlementForm && !isReceiptOcrForm) {
       return true;
     }
 
     return isImageFile(file) || isPdfFile(file);
+  };
+
+  // [전자결재-OCR 연동용]: 영수증 파일을 백엔드 OCR API로 보내고, 인식 결과를 현재 서식 필드에 자동 반영합니다.
+  const runReceiptOcr = async (targetFile = files[0]) => {
+    if (!isReceiptOcrForm && !isExpenseSettlementForm) {
+      return;
+    }
+
+    if (!targetFile) {
+      setErrorMessage('OCR 인식할 영수증 파일을 먼저 첨부해주세요.');
+      return;
+    }
+
+    if (!canUploadFile(targetFile)) {
+      setErrorMessage('영수증 OCR은 이미지 또는 PDF 파일만 사용할 수 있습니다.');
+      return;
+    }
+
+    try {
+      setOcrLoading(true);
+      const formData = new FormData();
+      formData.append('file', targetFile);
+
+      const response = await axiosInstance.post(PATH.API.APPROVAL.RECEIPT_OCR, formData);
+      const nextValues = response.data?.fieldValues || {};
+
+      if (Object.keys(nextValues).length === 0) {
+        setErrorMessage(response.data?.message || '영수증에서 자동 입력할 항목을 찾지 못했습니다.');
+        return;
+      }
+
+      setFieldValues((prev) => ({
+        ...prev,
+        ...nextValues,
+      }));
+      setErrorMessage('');
+    } catch (error) {
+      console.error('영수증 OCR 인식 실패:', error);
+      setErrorMessage(
+        error.response?.data?.message
+        || error.response?.data?.error
+        || '영수증 OCR 인식 중 오류가 발생했습니다.'
+      );
+    } finally {
+      setOcrLoading(false);
+    }
   };
 
   const handleFileChange = (event) => {
@@ -268,6 +320,11 @@ const ApprovalWriteNew = () => {
     }
 
     setFiles(availableFiles);
+
+    // [전자결재-OCR 연동용]: template.ocr.autoFillOnUpload=true이면 파일 선택 직후 첫 번째 영수증을 자동 인식합니다.
+    if (template.ocr?.autoFillOnUpload === true && availableFiles.length > 0) {
+      runReceiptOcr(availableFiles[0]);
+    }
   };
 
   const removeFile = (index) => {
@@ -599,6 +656,22 @@ const ApprovalWriteNew = () => {
               {isExpenseSettlementForm && (
                 <div className="form-text">
                   비용 정산 증빙은 이미지 또는 PDF 파일만 첨부할 수 있습니다.
+                </div>
+              )}
+              {isReceiptOcrForm && (
+                <div className="mt-2">
+                  <CButton
+                    color="info"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => runReceiptOcr()}
+                    disabled={ocrLoading || files.length === 0}
+                  >
+                    {ocrLoading ? '영수증 OCR 인식 중...' : '영수증 OCR 자동입력'}
+                  </CButton>
+                  <div className="form-text">
+                    OCR 결과는 결제일, 정산 금액, 구매 내역 요약 항목에 자동 반영됩니다.
+                  </div>
                 </div>
               )}
               {renderFilePreview()}

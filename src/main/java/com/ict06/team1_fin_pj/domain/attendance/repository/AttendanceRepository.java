@@ -10,7 +10,8 @@ import java.util.Optional;
 
 // 근태 DB 접근용 Repository
 // JpaRepository<엔티티, PK타입>
-public interface AttendanceRepository extends JpaRepository<AttendanceEntity, Integer> {
+public interface AttendanceRepository extends JpaRepository<AttendanceEntity, Integer>,
+        AttendanceRepositoryCustom {
 
     // 1. 출근 중복 체크 (하루 1번)
     // empNo + workDate 기준으로 조회, 있으면 이미 출근한 상태
@@ -30,5 +31,9 @@ public interface AttendanceRepository extends JpaRepository<AttendanceEntity, In
     // 상태별 근태 건수 조회
     // 예: ON_TIME 몇 건인지, LATE 몇 건인지 조회할 때 사용
     long countByStatus(AttendanceStatus status);
+
+    // 특정 근무일 기준 근태 목록 조회
+    // 오늘 출근 현황 계산에서 사용
+    List<AttendanceEntity> findByWorkDate(LocalDate workDate);
 
 }
