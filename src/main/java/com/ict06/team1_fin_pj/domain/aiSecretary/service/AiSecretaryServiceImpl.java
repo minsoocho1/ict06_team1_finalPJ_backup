@@ -1,6 +1,6 @@
 /**
- * @FileName : AiSecretaryService.js
- * @Description : 세션/메시지 저장 담당
+ * @FileName : AiSecretaryServiceImpl.java
+ * @Description : AI 비서/챗봇 세션 및 메시지 관리 서비스 구현체
  * @Author : 송혜진
  * @Date : 2026. 04. 28
  * @Modification_History
@@ -9,6 +9,8 @@
  * @ ----------    ---------    ----------------------------------------
  * @ 2026.04.28    송혜진        최초 생성 (세션 생성 및 메시지 저장, 목록 조회 메서드 추가)
  * @ 2026.05.05    송혜진        CHATBOT 최근 48시간 내 단일 세션 조회 또는 생성 메서드 추가
+ * @ 2026.05.12    송혜진        ASSISTANT 세션 장기 유지 및 최근 작성 목록 조회 기준 반영
+ * @ 2026.05.22    송혜진        챗봇 세션 소유자 empNo 기반 RAG 검색 연동 흐름 정리
  */
 
 package com.ict06.team1_fin_pj.domain.aiSecretary.service;

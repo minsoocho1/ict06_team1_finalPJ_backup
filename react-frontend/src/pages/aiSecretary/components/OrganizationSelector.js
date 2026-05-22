@@ -280,6 +280,7 @@ export default function OrganizationSelector({
   targets,
   initialOrganizationSeed = null,
   onChangeFormData,
+  showReferenceNote = true,
 }) {
   const safeFormType =
     formType === "REPORT" || formType === "MINUTES" || formType === "APPROVAL"
@@ -861,15 +862,17 @@ export default function OrganizationSelector({
         )}
       </div>
 
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: "#fff" }}>
-        <div style={labelStyle}>추가 대상 / 참고사항</div>
-        <textarea
-          value={referenceNote}
-          onChange={(event) => setReferenceNote(event.target.value)}
-          placeholder="추가로 반영할 내용이나 참고 메모를 입력하세요."
-          style={textareaStyle}
-        />
-      </div>
+      {showReferenceNote ? (
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: "#fff" }}>
+          <div style={labelStyle}>추가 대상 / 참고사항</div>
+          <textarea
+            value={referenceNote}
+            onChange={(event) => setReferenceNote(event.target.value)}
+            placeholder="추가로 반영할 내용이나 참고 메모를 입력하세요."
+            style={textareaStyle}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -1,22 +1,26 @@
+﻿<!--
+ * @FileName : adAiRagManage.html
+ * @Description : 관리자 지식 베이스 및 RAG 관리 화면
+ * @Author : 송혜진
+ * @Date : 2026. 05. 20
+ * @Modification_History
+ * @
+ * @ 수정일         수정자        수정내용
+ * @ ----------    ---------    ----------------------------------------
+ * @ 2026.05.20    송혜진        최초 생성 (지식 베이스 및 RAG 관리 화면 구성)
+ * @ 2026.05.21    송혜진        자료 등록 요청 상세 모달 및 문서/RAG 데이터 상세 모달 구성 정리
+ * @ 2026.05.22    송혜진        새 문서 업로드, 최종 권한 조건, 처리 상태 라벨 UI 반영
+ * @ 2026.05.22    송혜진        RAG 문서 활성화/비활성화 및 권한 조건 표시 기준 정리
+ -->
+
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
 
-<head th:include="/admin/common/head.html :: common_header">
-  <title id="page_title">자료 등록 요청 관리</title>
+<head th:insert="~{/admin/common/head.html :: common_header}">
+  <title id="page_title">지식 베이스 및 RAG 관리</title>
   <style>
-    .request-reference-box {
-      word-break: break-word;
-    }
-
-    .request-reference-link {
-      display: block;
-      max-width: 100%;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-      word-break: normal;
-    }
-
+    .request-reference-box { word-break: break-word; }
+    .request-reference-link,
     .request-reference-text {
       display: block;
       max-width: 100%;
@@ -25,48 +29,79 @@
       white-space: nowrap;
       word-break: normal;
     }
-
     .request-detail-section {
       border: 1px solid #e5e7eb;
       border-radius: 0.75rem;
       background: #fff;
       padding: 1rem;
     }
-
-    .request-summary-box {
-      border: 1px solid #e5e7eb;
-      border-radius: 0.75rem;
-      background: #f8fafc;
-      padding: 1rem;
-    }
-
-    .request-summary-label {
-      color: #64748b;
-      font-size: 0.85rem;
-      font-weight: 700;
-      margin-bottom: 0.35rem;
-    }
-
     .request-summary-value {
       color: #0f172a;
       font-size: 0.95rem;
       line-height: 1.45;
       word-break: break-word;
     }
-
-    .request-summary-clamp-2 {
+    .request-summary-clamp-5 {
       display: -webkit-box;
-      -webkit-line-clamp: 2;
+      -webkit-line-clamp: 5;
       -webkit-box-orient: vertical;
       overflow: hidden;
+      white-space: pre-wrap;
     }
-
+    .document-management-detail-panel {
+      border: 1px solid #dbe2ea;
+      border-radius: 0.75rem;
+      background: #f8fafc;
+      padding: 1rem;
+    }
+    .document-management-detail-list {
+      display: grid;
+      gap: 0.75rem;
+      max-height: 320px;
+      overflow: auto;
+    }
+    .document-management-detail-card {
+      border: 1px solid #e5e7eb;
+      border-radius: 0.75rem;
+      background: #fff;
+      padding: 0.875rem 1rem;
+    }
+    .document-management-stage-wrap {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+    }
+    .document-management-stage-badge {
+      border-radius: 999px;
+      padding: 0.45rem 0.85rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .document-management-stage-badge.is-active {
+      background: var(--bs-primary);
+      color: #fff;
+    }
+    .document-management-stage-badge.is-idle {
+      background: var(--bs-light);
+      color: #111827;
+      border: 1px solid #dbe2ea;
+    }
+    .document-management-stage-badge.is-failure {
+      background: var(--bs-danger);
+      color: #fff;
+    }
+    .document-management-failure-box {
+      border: 1px solid rgba(220, 53, 69, 0.28);
+      background: rgba(220, 53, 69, 0.05);
+      border-radius: 0.75rem;
+      padding: 1rem;
+    }
     .admin-autocomplete {
       position: relative;
       display: grid;
       gap: 8px;
     }
-
     .admin-autocomplete-dropdown {
       position: absolute;
       top: calc(100% + 6px);
@@ -83,11 +118,7 @@
       display: none;
       padding: 6px 0;
     }
-
-    .admin-autocomplete-dropdown.show {
-      display: block;
-    }
-
+    .admin-autocomplete-dropdown.show { display: block; }
     .admin-autocomplete-item {
       display: flex;
       align-items: center;
@@ -102,53 +133,33 @@
       color: #0f172a;
       transition: background-color 0.12s ease;
     }
-
     .admin-autocomplete-item:hover,
-    .admin-autocomplete-item.active {
-      background: #f8fafc;
-    }
-
-    .admin-autocomplete-item:not(:last-child) {
-      border-bottom: 1px solid #f1f5f9;
-    }
-
+    .admin-autocomplete-item.active { background: #f8fafc; }
+    .admin-autocomplete-item:not(:last-child) { border-bottom: 1px solid #f1f5f9; }
     .admin-autocomplete-empty {
       padding: 0.75rem 0.875rem;
       color: #64748b;
       font-size: 0.9rem;
     }
-
-    .admin-autocomplete-input.is-invalid {
+    .admin-autocomplete-input.is-invalid,
+    .js-admin-autocomplete-input.is-invalid,
+    .org-target-selector select.is-invalid,
+    .org-target-selector input.is-invalid {
       border-color: #dc3545;
       box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.08);
     }
-
-    .request-card-section {
-      border: 1px solid #e5e7eb;
-      border-radius: 0.75rem;
-      background: #fff;
-    }
-
     .cta-action-card {
       background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
       color: #fff;
       border-radius: 1rem;
     }
-
     .cta-action-card .btn-outline-light:hover {
       color: #1d4ed8;
       background: #fff;
       border-color: #fff;
     }
-
-    .processed-request-row-rejected {
-      background-color: #f3f4f6 !important;
-    }
-
-    .document-management-row-failed {
-      background-color: #fef2f2 !important;
-    }
-
+    .processed-request-row-rejected { background-color: #f3f4f6 !important; }
+    .document-management-row-failed { background-color: #fef2f2 !important; }
   </style>
 </head>
 
@@ -167,101 +178,132 @@
             <p class="text-muted fw-bold mb-1">AI 관리 현황</p>
             <h3 class="fw-bold mb-2">지식 베이스 및 RAG 관리</h3>
             <p class="text-muted mb-0">
-              지식 베이스와 RAG 관리 현황을 확인하고, 필요한 경우 자료 요청과 접근 권한을 함께 관리합니다.
+              지식 베이스와 RAG 처리 현황을 확인하고, 사용자 자료 등록 요청과 접근 권한을 함께 관리합니다.
             </p>
           </div>
         </div>
 
-        <div th:if="${reviewSuccessMessage}"
-             class="alert alert-success mb-3"
-             role="alert"
-             th:text="${reviewSuccessMessage}">
-          자료 등록 요청이 처리되었습니다.
+        <div th:if="${reviewSuccessMessage}" class="alert alert-success mb-3" role="alert" th:text="${reviewSuccessMessage}">
+          자료 등록 요청을 처리했습니다.
         </div>
-        <div th:if="${reviewErrorMessage}"
-             class="alert alert-danger mb-3"
-             role="alert"
-             th:text="${reviewErrorMessage}">
+        <div th:if="${reviewErrorMessage}" class="alert alert-danger mb-3" role="alert" th:text="${reviewErrorMessage}">
           자료 등록 요청 처리에 실패했습니다.
         </div>
 
-        <div class="row g-3 mb-4" th:if="${embeddingSummary != null and !#lists.isEmpty(embeddingSummary)}">
-          <div class="col-xl-3 col-md-6" th:each="item : ${embeddingSummary}">
-            <div class="card shadow-sm border-0 h-100">
-              <div class="card-body">
-                <div class="d-flex align-items-center gap-2 mb-2">
-                  <p class="text-muted fw-bold mb-0" th:text="${item.title}">임베딩 현황</p>
-                  <button type="button"
-                          class="btn btn-sm btn-light border rounded-circle p-0"
-                          style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
-                          data-bs-toggle="tooltip"
-                          data-bs-placement="top"
-                          th:attr="title=${item.description}">
-                    i
-                  </button>
+        <th:block th:with="
+            ragDocuments=${documentManagementRows.?[rowType == 'DOCUMENT']},
+            ragTotalCount=${#lists.size(ragDocuments)},
+            ragProcessingCount=${#lists.size(ragDocuments.?[status == 'CHUNKING' or status == 'EMBEDDING'])},
+            ragPendingCount=${#lists.size(ragDocuments.?[status == 'UPLOADED' or status == 'APPROVAL_PENDING'])},
+            ragPublishedCount=${#lists.size(ragDocuments.?[status == 'PUBLISHED'])}">
+          <div class="row g-3 mb-4">
+            <div class="col-xl-3 col-md-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <p class="text-muted fw-bold mb-0">전체 RAG 문서</p>
+                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
+                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                            data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="챗봇/RAG 검색 대상으로 관리되는 AI_RAG 문서 전체 수입니다. 온보딩 문서는 포함하지 않습니다. 집계 기준: UPLOADED, CHUNKING, CHUNK_FAILED, EMBEDDING, EMBED_FAILED, APPROVAL_PENDING, PUBLISHED.">i</button>
+                  </div>
+                  <div class="d-flex align-items-end gap-2 mb-2">
+                    <h3 class="fw-bold mb-0" th:text="${ragTotalCount}">0</h3>
+                    <span class="fw-bold text-muted mb-1">건</span>
+                  </div>
                 </div>
-                <div class="d-flex align-items-end gap-2 mb-2">
-                  <h3 class="fw-bold mb-0" th:text="${item.count}">2</h3>
-                  <span class="fw-bold text-muted mb-1">건</span>
+              </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <p class="text-muted fw-bold mb-0">처리 진행</p>
+                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
+                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                            data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="본문 추출, 청크 분할 또는 임베딩 생성이 진행 중인 문서 수입니다. 집계 기준: CHUNKING, EMBEDDING.">i</button>
+                  </div>
+                  <div class="d-flex align-items-end gap-2 mb-2">
+                    <h3 class="fw-bold mb-0" th:text="${ragProcessingCount}">0</h3>
+                    <span class="fw-bold text-muted mb-1">건</span>
+                  </div>
                 </div>
-                <small class="text-muted">임베딩 작업의 현재 상태를 확인합니다.</small>
+              </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <p class="text-muted fw-bold mb-0">반영 대기</p>
+                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
+                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                            data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="업로드 후 처리 시작 전이거나, 임베딩 완료 후 관리자 활성화를 기다리는 문서 수입니다. 집계 기준: UPLOADED, APPROVAL_PENDING.">i</button>
+                  </div>
+                  <div class="d-flex align-items-end gap-2 mb-2">
+                    <h3 class="fw-bold mb-0" th:text="${ragPendingCount}">0</h3>
+                    <span class="fw-bold text-muted mb-1">건</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="col-xl-3 col-md-6">
+              <div class="card shadow-sm border-0 h-100">
+                <div class="card-body">
+                  <div class="d-flex align-items-center gap-2 mb-2">
+                    <p class="text-muted fw-bold mb-0">RAG 반영 완료</p>
+                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
+                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                            data-bs-toggle="tooltip" data-bs-placement="top"
+                            title="챗봇 RAG 검색에 실제로 사용 가능한 문서 수입니다. 집계 기준: PUBLISHED.">i</button>
+                  </div>
+                  <div class="d-flex align-items-end gap-2 mb-2">
+                    <h3 class="fw-bold mb-0" th:text="${ragPublishedCount}">0</h3>
+                    <span class="fw-bold text-muted mb-1">건</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-
-        <div class="alert alert-secondary mb-4" th:if="${embeddingSummary == null or #lists.isEmpty(embeddingSummary)}">
-          자료 등록 요청과 권한 정책을 함께 검토할 수 있습니다.
-        </div>
+        </th:block>
 
         <div class="card shadow-sm border-0 mb-4">
           <div class="card-header bg-white">
-                <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
-                  <div>
-                    <h5 class="fw-bold mb-1">자료 등록 요청 관리</h5>
-                    <p class="text-muted mb-0">
-                      관리자 검토가 필요한 사용자 자료 등록 요청을 확인합니다.
-                    </p>
-                  </div>
-                </div>
+            <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
+              <div>
+                <h5 class="fw-bold mb-1">자료 등록 요청 관리</h5>
+                <p class="text-muted mb-0">관리자의 검토가 필요한 사용자 자료 등록 요청을 확인합니다.</p>
+              </div>
+            </div>
 
-            <form th:action="@{/admin/AiSecretary/rag}" method="get"
-                  class="d-flex flex-wrap align-items-end gap-2">
-                            <div class="d-flex flex-wrap align-items-center gap-2">
+            <form th:action="@{/admin/AiSecretary/rag}" method="get" class="d-flex flex-wrap align-items-end gap-2">
+              <div class="d-flex flex-wrap align-items-center gap-2">
                 <select class="form-select form-select-sm" name="requestStatus" style="width: 130px;">
                   <option value="" th:selected="${#strings.isEmpty(selectedRequestStatus)}">전체</option>
-                  <option value="PENDING" th:selected="${'PENDING'.equalsIgnoreCase(selectedRequestStatus)}">대기중</option>
-                  <option value="APPROVED" th:selected="${'APPROVED'.equalsIgnoreCase(selectedRequestStatus)}">승인</option>
-                  <option value="REJECTED" th:selected="${'REJECTED'.equalsIgnoreCase(selectedRequestStatus)}">반려</option>
-                  <option value="PUBLISHED" th:selected="${'PUBLISHED'.equalsIgnoreCase(selectedRequestStatus)}">반영 완료</option>
+                  <option value="PENDING" th:selected="${#strings.equalsIgnoreCase(selectedRequestStatus, 'PENDING')}">대기중</option>
+                  <option value="APPROVED" th:selected="${#strings.equalsIgnoreCase(selectedRequestStatus, 'APPROVED')}">승인</option>
+                  <option value="REJECTED" th:selected="${#strings.equalsIgnoreCase(selectedRequestStatus, 'REJECTED')}">반려</option>
+                  <option value="PUBLISHED" th:selected="${#strings.equalsIgnoreCase(selectedRequestStatus, 'PUBLISHED')}">반영 완료</option>
                 </select>
 
                 <select class="form-select form-select-sm" name="requestType" style="width: 180px;">
                   <option value="" th:selected="${#strings.isEmpty(selectedRequestType)}">전체 유형</option>
                   <option th:if="${!#strings.isEmpty(selectedRequestType) and !requestTypeOptions.contains(selectedRequestType)}"
-                          th:value="${selectedRequestType}"
-                          th:text="${selectedRequestType}"
-                          selected>
-                  </option>
-                  <option th:each="type : ${requestTypeOptions}"
-                          th:value="${type}"
-                          th:text="${type}"
-                          th:selected="${type == selectedRequestType}">
-                  </option>
+                          th:value="${selectedRequestType}" th:text="${selectedRequestType}" selected></option>
+                  <option th:each="type : ${requestTypeOptions}" th:value="${type}" th:text="${type}"
+                          th:selected="${type == selectedRequestType}"></option>
                 </select>
 
                 <select class="form-select form-select-sm" name="requestCategory" style="width: 160px;">
                   <option value="" th:selected="${#strings.isEmpty(selectedRequestCategory)}">전체 카테고리</option>
                   <option th:if="${!#strings.isEmpty(selectedRequestCategory) and !categoryOptions.contains(selectedRequestCategory)}"
-                          th:value="${selectedRequestCategory}"
-                          th:text="${selectedRequestCategory}"
-                          selected>
-                  </option>
-                  <option th:each="category : ${categoryOptions}"
-                          th:value="${category}"
-                          th:text="${category}"
-                          th:selected="${category == selectedRequestCategory}">
-                  </option>
+                          th:value="${selectedRequestCategory}" th:text="${selectedRequestCategory}" selected></option>
+                  <option th:each="category : ${categoryOptions}" th:value="${category}" th:text="${category}"
+                          th:selected="${category == selectedRequestCategory}"></option>
                 </select>
 
                 <span class="small fw-bold text-muted px-1">상태 필터</span>
@@ -269,38 +311,23 @@
 
               <div class="d-flex align-items-center gap-2 ms-auto flex-wrap">
                 <span class="small fw-bold text-muted">기간</span>
-
                 <div class="dropdown">
                   <button class="btn btn-sm btn-outline-secondary dropdown-toggle js-date-range-label"
-                          type="button"
-                          data-bs-toggle="dropdown"
-                          data-default-label="전체 기간">
-                    <span th:text="${#strings.isEmpty(requestStartDate) and #strings.isEmpty(requestEndDate) ? '전체 기간' : requestStartDate + ' - ' + requestEndDate}">
-                      전체 기간
-                    </span>
+                          type="button" data-bs-toggle="dropdown" data-default-label="전체 기간">
+                    <span th:text="${#strings.isEmpty(requestStartDate) and #strings.isEmpty(requestEndDate) ? '전체 기간' : requestStartDate + ' - ' + requestEndDate}">전체 기간</span>
                   </button>
-
                   <div class="dropdown-menu dropdown-menu-end p-3" style="min-width: 280px;">
                     <div class="mb-2">
                       <label class="form-label small fw-bold text-muted">시작일</label>
-                      <input type="date"
-                             class="form-control form-control-sm js-date-start"
-                             name="requestStartDate"
-                             th:value="${requestStartDate}">
+                      <input type="date" class="form-control form-control-sm js-date-start" name="requestStartDate" th:value="${requestStartDate}">
                     </div>
-
                     <div class="mb-3">
                       <label class="form-label small fw-bold text-muted">종료일</label>
-                      <input type="date"
-                             class="form-control form-control-sm js-date-end"
-                             name="requestEndDate"
-                             th:value="${requestEndDate}">
+                      <input type="date" class="form-control form-control-sm js-date-end" name="requestEndDate" th:value="${requestEndDate}">
                     </div>
-
                     <button type="submit" class="btn btn-sm btn-primary w-100">조회</button>
                   </div>
                 </div>
-
                 <button type="submit" class="btn btn-sm btn-primary px-4">조회</button>
                 <a th:href="@{/admin/AiSecretary/rag}" class="btn btn-sm btn-outline-secondary px-4">초기화</a>
               </div>
@@ -326,9 +353,7 @@
                 <td>
                   <span class="badge"
                         th:classappend="${request.status == 'APPROVED'} ? ' text-bg-success' : (${request.status == 'REJECTED'} ? ' text-bg-danger' : (${request.status == 'PUBLISHED'} ? ' text-bg-info' : ' text-bg-secondary'))"
-                        th:text="${request.statusLabel == null ? '대기중' : request.statusLabel}">
-                    대기중
-                  </span>
+                        th:text="${request.statusLabel == null ? '대기중' : request.statusLabel}">대기중</span>
                 </td>
                 <td class="fw-bold" th:text="${request.title == null ? '-' : request.title}">-</td>
                 <td th:text="${request.category == null ? '-' : request.category}">-</td>
@@ -339,15 +364,13 @@
                           class="btn btn-sm btn-outline-secondary js-knowledge-request-detail"
                           data-bs-toggle="modal"
                           data-bs-target="#knowledgeRequestDetailModal"
-                          th:attr="data-request-id=${request.knowledgeRequestId},data-title=${request.title},data-request-type=${request.requestType},data-category=${request.category},data-requester-name=${request.requesterName},data-created-at=${request.createdAt == null ? '-' : #temporals.format(request.createdAt, 'yyyy-MM-dd HH:mm')},data-reason=${request.reason},data-sample-question=${request.sampleQuestion},data-reference-url=${request.referenceUrl},data-access-level=${request.accessLevel},data-target-dept=${request.targetDept},data-status=${request.status},data-status-label=${request.statusLabel},data-admin-comment=${request.adminComment}">
+                          th:attr="data-request-id=${request.knowledgeRequestId},data-title=${request.title},data-request-type=${request.requestType},data-category=${request.category},data-requester-name=${request.requesterName},data-reviewer-name=${request.reviewerName},data-created-at=${request.createdAt == null ? '-' : #temporals.format(request.createdAt, 'yyyy-MM-dd HH:mm')},data-reason=${request.reason},data-sample-question=${request.sampleQuestion},data-reference-url=${request.referenceUrl},data-access-level=${request.accessLevel},data-target-dept=${request.targetDept},data-status=${request.status},data-status-label=${request.statusLabel},data-admin-comment=${request.adminComment}">
                     상세
                   </button>
                 </td>
               </tr>
-
               <tr th:if="${knowledgeRequests == null or #lists.isEmpty(knowledgeRequests)}">
-                <td colspan="7"
-                    class="text-center text-muted py-4"
+                <td colspan="7" class="text-center text-muted py-4"
                     th:text="${#strings.equalsIgnoreCase(selectedRequestStatus, 'PENDING') || #strings.isEmpty(selectedRequestStatus) ? '대기중인 자료 등록 요청이 없습니다.' : '조회된 자료 등록 요청이 없습니다.'}">
                   대기중인 자료 등록 요청이 없습니다.
                 </td>
@@ -358,31 +381,17 @@
 
           <div class="card-footer bg-white">
             <div class="d-flex justify-content-between align-items-center">
-              <small class="text-muted" th:text="'총 ' + ${requestTotalCount} + '건'">총 0건</small>
+              <small class="text-muted" th:text="|총 ${requestTotalCount}건|">총 0건</small>
               <nav th:if="${requestTotalPages > 1}" aria-label="자료 등록 요청 페이지 이동">
                 <ul class="pagination pagination-sm mb-0">
                   <li class="page-item" th:classappend="${requestPage <= 1} ? ' disabled'">
-                    <a class="page-link"
-                       th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage - 1})}">
-                      이전
-                    </a>
+                    <a class="page-link" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage - 1})}">이전</a>
                   </li>
-
-                  <li class="page-item"
-                      th:each="pageNo : ${#numbers.sequence(1, requestTotalPages)}"
-                      th:classappend="${pageNo == requestPage} ? ' active'">
-                    <a class="page-link"
-                       th:text="${pageNo}"
-                       th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${pageNo})}">
-                      1
-                    </a>
+                  <li class="page-item" th:each="pageNo : ${#numbers.sequence(1, requestTotalPages)}" th:classappend="${pageNo == requestPage} ? ' active'">
+                    <a class="page-link" th:text="${pageNo}" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${pageNo})}">1</a>
                   </li>
-
                   <li class="page-item" th:classappend="${requestPage >= requestTotalPages} ? ' disabled'">
-                    <a class="page-link"
-                       th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage + 1})}">
-                      다음
-                    </a>
+                    <a class="page-link" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage + 1})}">다음</a>
                   </li>
                 </ul>
               </nav>
@@ -397,37 +406,26 @@
                 <div class="row align-items-center g-3">
                   <div class="col-md-4">
                     <div class="d-grid gap-2">
-                      <button type="button"
-                              class="btn btn-light btn-lg fw-bold text-primary"
-                              data-bs-toggle="modal"
-                              data-bs-target="#uploadDocumentModal">
+                      <button type="button" class="btn btn-primary btn-lg fw-bold text-white"
+                              data-bs-toggle="modal" data-bs-target="#uploadDocumentModal">
                         새 문서 업로드
                       </button>
-
-                      <button type="button"
-                              class="btn btn-outline-light fw-bold"
-                              data-bs-toggle="modal"
-                              data-bs-target="#adminActionGuideModal">
+                      <button type="button" class="btn btn-outline-light fw-bold"
+                              data-bs-toggle="modal" data-bs-target="#adminActionGuideModal">
                         관리자 처리 기준 안내
                       </button>
                     </div>
                   </div>
-
                   <div class="col-md-8">
                     <h4 class="fw-bold mb-2">새 문서 업로드</h4>
-                    <p class="mb-2">
-                      관리자가 직접 사내 문서를 업로드하거나, 사용자 요청 승인 전에 처리 기준을 확인할 수 있습니다.
-                    </p>
-                    <p class="mb-0 opacity-75">
-                      사용자 요청 검토 흐름과 별도로 새 문서를 바로 등록할 수 있도록 진입점을 유지합니다.
-                    </p>
+                    <p class="mb-2">관리자가 직접 사내 문서를 업로드하거나, 사용자 요청 승인 후 처리 기준을 확인할 수 있습니다.</p>
+                    <p class="mb-0 opacity-75">사용자 요청 검토 흐름과 별도로 문서를 바로 등록할 수 있도록 진입점을 제공합니다.</p>
                   </div>
                 </div>
               </div>
             </div>
           </div>
         </div>
-
 
         <div class="row mb-4">
           <div class="col-12">
@@ -436,10 +434,10 @@
                 <div class="d-flex justify-content-between align-items-start gap-3 mb-3">
                   <div>
                     <h5 class="fw-bold mb-1">문서 및 RAG 데이터 관리</h5>
-                    <p class="text-muted mb-0">RAG 검색에 활용되는 AI 지식 문서와 처리 상태를 관리합니다.</p>
+                    <p class="text-muted mb-0">RAG 검색에 사용되는 AI 지식 문서와 처리 상태를 관리합니다.</p>
                   </div>
                   <div class="d-flex flex-column align-items-end gap-2">
-                    <small class="text-muted" th:text="'총 ' + ${documentManagementCount} + '건'">총 0건</small>
+                    <small class="text-muted" th:text="|총 ${documentManagementCount}건|">총 0건</small>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="downloadDocumentCsvBtn">CSV 다운로드</button>
                   </div>
                 </div>
@@ -462,27 +460,25 @@
                   </thead>
                   <tbody>
                   <tr th:each="row : ${documentManagementRows}"
-                      th:classappend="${row.retryable == true} ? ' document-management-row-failed' : ''">
-                    <td th:text="${row.registeredAt == null ? '-' : #temporals.format(row.registeredAt, 'yyyy-MM-dd HH:mm')}">2026-05-18 10:42</td>
+                      th:classappend="${row['retryable'] == true} ? ' document-management-row-failed' : ''">
+                    <td th:text="${row['registeredAt'] == null ? '-' : #temporals.format(row['registeredAt'], 'yyyy-MM-dd HH:mm')}">2026-05-18 10:42</td>
                     <td>
                       <span class="badge"
-                            th:classappend="${row.status == 'CHUNK_FAILED' or row.status == 'EMBED_FAILED'} ? ' text-bg-danger' : (${row.status == 'PUBLISHED' or row.status == 'APPROVED' or row.status == 'UPLOADED'} ? ' text-bg-success' : (${row.status == 'APPROVAL_PENDING'} ? ' text-bg-warning' : (${row.status == 'CHUNKING' or row.status == 'EMBEDDING'} ? ' text-bg-primary' : ' text-bg-secondary')))"
-                            th:text="${row.statusLabel == null ? '-' : row.statusLabel}">
-                        -
-                      </span>
+                            th:classappend="${row['status'] == 'CHUNK_FAILED' or row['status'] == 'EMBED_FAILED'} ? ' text-bg-danger' : (${row['status'] == 'PUBLISHED' or row['status'] == 'APPROVED' or row['status'] == 'UPLOADED'} ? ' text-bg-success' : (${row['status'] == 'APPROVAL_PENDING'} ? ' text-bg-warning' : (${row['status'] == 'CHUNKING' or row['status'] == 'EMBEDDING'} ? ' text-bg-primary' : ' text-bg-secondary')))"
+                            th:text="${row['statusLabel'] == null ? '-' : row['statusLabel']}">-</span>
                     </td>
-                    <td class="fw-bold" th:text="${row.title == null ? '-' : row.title}">-</td>
-                    <td th:text="${row.category == null ? '-' : row.category}">-</td>
-                    <td th:text="${row.requestType == null ? '-' : row.requestType}">-</td>
-                    <td th:text="${row.approverName == null ? '-' : row.approverName}">-</td>
-                    <td th:text="${row.chunkCount == null ? 0 : row.chunkCount}">0</td>
-                    <td th:text="${row.vectorCount == null ? 0 : row.vectorCount}">0</td>
+                    <td class="fw-bold" th:text="${row['title'] == null ? '-' : row['title']}">-</td>
+                    <td th:text="${row['category'] == null ? '-' : row['category']}">-</td>
+                    <td th:text="${row['requestType'] == null ? '-' : row['requestType']}">-</td>
+                    <td th:text="${row['approverName'] == null ? '-' : row['approverName']}">-</td>
+                    <td th:text="${row['chunkCount'] == null ? 0 : row['chunkCount']}">0</td>
+                    <td th:text="${row['vectorCount'] == null ? 0 : row['vectorCount']}">0</td>
                     <td class="text-center">
                       <button type="button"
                               class="btn btn-sm btn-outline-secondary js-document-management-detail"
                               data-bs-toggle="modal"
                               data-bs-target="#documentManagementDetailModal"
-                              th:attr="data-row-type=${row.rowType},data-document-domain=${row.documentDomain},data-document-id=${row.documentId},data-request-id=${row.requestId},data-title=${row.title},data-request-type=${row.requestType},data-category=${row.category},data-approver-name=${row.approverName},data-registered-at=${row.registeredAt == null ? '-' : #temporals.format(row.registeredAt, 'yyyy-MM-dd HH:mm')},data-requester-name=${row.requesterName},data-request-date=${row.requestDate == null ? '-' : #temporals.format(row.requestDate, 'yyyy-MM-dd HH:mm')},data-reason=${row.reason},data-sample-question=${row.sampleQuestion},data-reference-url=${row.referenceUrl},data-summary=${row.summary},data-admin-comment=${row.adminComment},data-access-level=${row.accessLevel},data-target-dept=${row.targetDept},data-chunk-count=${row.chunkCount},data-vector-count=${row.vectorCount},data-failure-reason=${row.failureReason},data-status=${row.status},data-status-label=${row.statusLabel},data-retryable=${row.retryable}">
+                              th:attr="data-row-type=${row['rowType']},data-document-domain=${row['documentDomain']},data-document-id=${row['documentId']},data-request-id=${row['requestId']},data-title=${row['title']},data-request-type=${row['requestType']},data-category=${row['category']},data-approver-name=${row['approverName']},data-registered-at=${row['registeredAt'] == null ? '-' : #temporals.format(row['registeredAt'], 'yyyy-MM-dd HH:mm')},data-requester-name=${row['requesterName']},data-request-date=${row['requestDate'] == null ? '-' : #temporals.format(row['requestDate'], 'yyyy-MM-dd HH:mm')},data-reason=${row['reason']},data-sample-question=${row['sampleQuestion']},data-summary=${row['summary']},data-admin-comment=${row['adminComment']},data-access-level=${row['accessLevel']},data-target-dept=${row['targetDept']},data-chunk-count=${row['chunkCount']},data-vector-count=${row['vectorCount']},data-chunks=${#maps.containsKey(row, 'chunkDetailsJson') ? row['chunkDetailsJson'] : '[]'},data-vectors=${#maps.containsKey(row, 'vectorDetailsJson') ? row['vectorDetailsJson'] : '[]'},data-failure-reason=${row['failureReason']},data-status=${row['status']},data-status-label=${row['statusLabel']},data-retryable=${row['retryable']}">
                         상세
                       </button>
                     </td>
@@ -502,7 +498,7 @@
             <div class="card shadow-sm border-0">
               <div class="card-header bg-white">
                 <h5 class="fw-bold mb-1">권한 차단 로그</h5>
-                <p class="text-muted mb-0">권한 조건이 맞지 않아 차단된 접근 기록을 확인합니다.</p>
+                <p class="text-muted mb-0">권한 조건에 맞지 않아 차단된 접근 기록을 확인합니다.</p>
               </div>
               <div class="table-responsive">
                 <table class="table table-hover align-middle mb-0">
@@ -551,214 +547,152 @@
               <div class="modal-body">
                 <div class="d-flex flex-column gap-3">
                   <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3">요청 기본 정보</h6>
+                    <h6 class="fw-bold mb-3">문서 정보</h6>
 
                     <div class="mb-3">
                       <label class="form-label fw-bold">문서명</label>
                       <input type="text" class="form-control" id="knowledgeRequestTitle">
                     </div>
 
-                    <div class="mb-3">
-                      <div class="d-flex align-items-center gap-2 mb-1">
-                        <label class="form-label fw-bold mb-0"><span class="text-danger me-1">*</span>자료 유형</label>
-                        <span class="text-muted small">기존 유형을 선택하거나 새 유형을 직접 입력할 수 있습니다.</span>
+                    <div class="row g-3 mb-3">
+                      <div class="col-md-4">
+                        <label class="form-label fw-bold">요청일</label>
+                        <input type="text" class="form-control" id="knowledgeRequestCreatedAt" readonly value="-">
                       </div>
-                      <div class="admin-autocomplete" data-autocomplete="requestType">
-                        <input type="text"
-                               class="form-control js-admin-autocomplete-input"
-                               id="knowledgeRequestType"
-                               placeholder="예: 사내 규정, FAQ, 서비스 이용 안내"
-                               autocomplete="off">
-                        <div class="admin-autocomplete-dropdown js-admin-autocomplete-dropdown" aria-hidden="true"></div>
+                      <div class="col-md-4">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                          <label class="form-label fw-bold mb-0"><span class="text-danger me-1">*</span>자료 유형</label>
+                          <button type="button"
+                                  class="btn btn-sm btn-light border rounded-circle p-0 flex-shrink-0"
+                                  style="width:20px;height:20px;font-size:12px;line-height:1;"
+                                  data-bs-toggle="tooltip"
+                                  data-bs-placement="top"
+                                  title="요청 자료가 어떤 업무 자료인지 구분하는 값입니다. 예: 사내 규정, 업무 매뉴얼, FAQ, 서비스 이용 안내">
+                            i
+                          </button>
+                        </div>
+                        <div class="admin-autocomplete" data-autocomplete="requestType">
+                          <input type="text"
+                                 class="form-control js-admin-autocomplete-input"
+                                 id="knowledgeRequestType"
+                                 placeholder="예: 사내 규정, FAQ, 서비스 이용 안내"
+                                 autocomplete="off">
+                          <div class="admin-autocomplete-dropdown js-admin-autocomplete-dropdown" aria-hidden="true"></div>
+                        </div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                          <label class="form-label fw-bold mb-0"><span class="text-danger me-1">*</span>카테고리</label>
+                          <button type="button"
+                                  class="btn btn-sm btn-light border rounded-circle p-0 flex-shrink-0"
+                                  style="width:20px;height:20px;font-size:12px;line-height:1;"
+                                  data-bs-toggle="tooltip"
+                                  data-bs-placement="top"
+                                  title="자료가 속한 업무 영역입니다. 예: 근태, 인사, 전자결재, 교육, 보안">
+                            i
+                          </button>
+                        </div>
+                        <div class="admin-autocomplete" data-autocomplete="category">
+                          <input type="text"
+                                 class="form-control js-admin-autocomplete-input"
+                                 id="knowledgeRequestCategory"
+                                 placeholder="예: 근태, 인사, 전자결재, 보안"
+                                 autocomplete="off">
+                          <div class="admin-autocomplete-dropdown js-admin-autocomplete-dropdown" aria-hidden="true"></div>
+                        </div>
                       </div>
                     </div>
 
                     <div class="mb-3">
-                      <div class="d-flex align-items-center gap-2 mb-1">
-                        <label class="form-label fw-bold mb-0"><span class="text-danger me-1">*</span>카테고리</label>
-                        <span class="text-muted small">기존 카테고리를 선택하거나 새 카테고리를 직접 입력할 수 있습니다.</span>
-                      </div>
-                      <div class="admin-autocomplete" data-autocomplete="category">
-                        <input type="text"
-                               class="form-control js-admin-autocomplete-input"
-                               id="knowledgeRequestCategory"
-                               placeholder="예: 근태, 인사, 전자결재, 보안"
-                               autocomplete="off">
-                        <div class="admin-autocomplete-dropdown js-admin-autocomplete-dropdown" aria-hidden="true"></div>
+                      <label class="form-label fw-bold">파일 URL 또는 콘텐츠 경로</label>
+                      <div class="border rounded-3 p-3 bg-light request-reference-box">
+                        <a href="#"
+                           class="fw-bold text-decoration-none request-reference-link d-none"
+                           id="knowledgeRequestReferenceLink"
+                           target="_blank"
+                           rel="noopener noreferrer"></a>
+                        <div class="fw-bold request-reference-text" id="knowledgeRequestReferenceText">등록된 파일 URL 또는 콘텐츠 경로가 없습니다.</div>
                       </div>
                     </div>
+                  </section>
 
+                  <section class="request-detail-section">
+                    <h6 class="fw-bold mb-3">요청 정보</h6>
                     <div class="mb-3">
                       <label class="form-label fw-bold">요청자</label>
                       <input type="text" class="form-control" id="knowledgeRequestRequesterName" readonly value="-">
                     </div>
-
+                    <div class="mb-3">
+                      <label class="form-label fw-bold">요청 사유</label>
+                      <textarea class="form-control" rows="4" id="knowledgeRequestReason" readonly>-</textarea>
+                    </div>
+                    <div class="mb-3">
+                      <label class="form-label fw-bold">챗봇 질문 예시</label>
+                      <textarea class="form-control" rows="4" id="knowledgeRequestSampleQuestion" readonly>-</textarea>
+                    </div>
                     <div class="mb-0">
-                      <label class="form-label fw-bold">요청일</label>
-                      <input type="text" class="form-control" id="knowledgeRequestCreatedAt" readonly value="-">
+                      <label class="form-label fw-bold">권한 희망 조건</label>
+                      <input type="text" class="form-control mb-2" id="knowledgeRequestUserHopeAccessLevel" readonly value="-">
+                      <div class="border rounded-3 bg-light p-3 text-break" id="knowledgeRequestUserHopeCondition">-</div>
+                      <div class="form-text mt-2">사용자가 요청 시 선택한 기본 접근 권한과 희망 조건입니다. 최종 접근 권한은 관리자 검토 후 확정합니다.</div>
                     </div>
                   </section>
 
                   <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3">요청 사유</h6>
-                    <textarea class="form-control" rows="4" id="knowledgeRequestReason" readonly>-</textarea>
-                  </section>
-
-                  <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3">챗봇 질문 예시</h6>
-                    <textarea class="form-control" rows="4" id="knowledgeRequestSampleQuestion" readonly>-</textarea>
-                  </section>
-
-                  <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3">참고 URL 또는 콘텐츠 경로</h6>
-                    <div class="border rounded-3 p-3 bg-light request-reference-box">
-                      <a href="#"
-                         class="fw-bold text-decoration-none request-reference-link d-none"
-                         id="knowledgeRequestReferenceLink"
-                         target="_blank"
-                         rel="noopener noreferrer"></a>
-                      <div class="fw-bold request-reference-text" id="knowledgeRequestReferenceText">등록된 참고 자료가 없습니다.</div>
-                    </div>
-                    <div class="form-text mt-2">사용자가 입력한 URL 또는 콘텐츠 경로를 확인합니다.</div>
-                  </section>
-
-                  <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3">사용자 희망 조건</h6>
-                    <input type="text" class="form-control mb-2" id="knowledgeRequestUserHopeAccessLevel" readonly value="-">
-                    <div class="border rounded-3 bg-light p-3 text-break" id="knowledgeRequestUserHopeCondition">-</div>
-                    <div class="form-text mt-2">사용자가 요청 시 선택한 기본 접근 권한과 희망 조건입니다. 최종 접근 권한은 관리자 검토 후 확정됩니다.</div>
-                  </section>
-
-                  <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3"><span class="text-danger me-1">*</span>관리자 최종 권한 조건</h6>
-                    <div class="form-text mb-2">승인 시 문서에 적용할 기본 접근 권한을 지정합니다. 등록 후 보안 및 권한 제어 화면에서 세부 수정할 수 있습니다.</div>
-
-                    <select class="form-select mb-3" name="requestDefaultAccessLevel" id="requestDefaultAccessLevel">
-                      <option value="PUBLIC">전체 공개</option>
-                      <option value="CUSTOM">조건 조합</option>
-                      <option value="ADMIN_ONLY">관리자 전용</option>
-                    </select>
-
-                    <div class="mb-3 js-request-access-guide" id="requestPublicGuide">
-                      <div class="alert alert-secondary py-2 mb-0">
-                        전체 공개 문서는 모든 직원이 챗봇/RAG 검색 결과로 접근할 수 있습니다.
-                      </div>
+                    <h6 class="fw-bold mb-3">관리자 검토 정보</h6>
+                    <div class="mb-3">
+                      <label class="form-label fw-bold">관리자명</label>
+                      <input type="text"
+                             class="form-control"
+                             id="knowledgeRequestAdminName"
+                             th:value="${currentAdminName != null ? currentAdminName : '-'}"
+                             readonly>
                     </div>
 
-                    <div class="mb-3 js-request-access-guide d-none" id="requestAdminOnlyGuide">
-                      <div class="alert alert-warning py-2 mb-0">
-                        관리자 전용 문서는 관리자 권한 사용자만 챗봇/RAG 검색 결과로 접근할 수 있습니다.
-                      </div>
-                    </div>
-
-                    <div class="border rounded-3 p-3 bg-light d-none" id="requestCustomAccessWrap">
-                      <div class="mb-3">
-                        <div class="fw-bold">조건 조합</div>
-                        <div class="text-muted small">선택한 조건은 관리자 검토 시 기본 접근 권한 참고 정보로 활용됩니다. 최종 접근 권한은 관리자 검토 후 확정됩니다.</div>
-                      </div>
-
-                      <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">대상 팀</label>
-                        <select class="form-select form-select-sm" name="requestDefaultTargetDeptId">
-                          <option value="">전체</option>
-                          <option th:each="dept : ${departmentOptions}"
-                                  th:value="${dept.id}"
-                                  th:text="${dept.name}">
-                            경영지원팀
-                          </option>
-                        </select>
-                      </div>
-
-                      <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">대상 역할</label>
-                        <select class="form-select form-select-sm" name="requestDefaultTargetRoleId">
-                          <option value="">전체</option>
-                          <option th:each="role : ${roleOptions}"
-                                  th:value="${role.id}"
-                                  th:text="${role.name}">
-                            TEAM_LEADER
-                          </option>
-                        </select>
-                      </div>
-
-                      <div class="mb-3">
-                        <label class="form-label small fw-bold text-muted">직책 기준</label>
-                        <select class="form-select form-select-sm" name="requestDefaultMinPositionId">
-                          <option value="">전체</option>
-                          <option th:each="position : ${positionOptions}"
-                                  th:value="${position.id}"
-                                  th:text="${position.name}">
-                            전원
-                          </option>
-                        </select>
-                      </div>
-
-                      <div class="mb-0">
-                        <label class="form-label small fw-bold text-muted">등급 기준</label>
-                        <select class="form-select form-select-sm" name="requestDefaultMinGradeId">
-                          <option value="">전체</option>
-                          <option th:each="grade : ${gradeOptions}"
-                                  th:value="${grade.id}"
-                                  th:text="${grade.name}">
-                            G1
-                          </option>
-                        </select>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3">요청 내용 축약본</h6>
-                    <div class="request-summary-box">
-                      <div class="row g-3">
-                        <div class="col-md-6">
-                          <div class="request-summary-label">문서명</div>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummaryTitle">-</div>
-                        </div>
-                        <div class="col-md-6">
-                          <div class="request-summary-label">자료 유형</div>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummaryType">-</div>
-                        </div>
-                        <div class="col-md-6">
-                          <div class="request-summary-label">카테고리</div>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummaryCategory">-</div>
-                        </div>
-                        <div class="col-md-6">
-                          <div class="request-summary-label">기본 열람 권한</div>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummaryAccessLevel">-</div>
-                        </div>
-                        <div class="col-md-12">
-                          <div class="request-summary-label">참고 자료</div>
-                          <a href="#"
-                             class="request-reference-link request-summary-value request-summary-clamp-2 d-none"
-                             id="knowledgeRequestSummaryReferenceLink"
-                             target="_blank"
-                             rel="noopener noreferrer"></a>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummaryReferenceText">등록된 참고 자료가 없습니다.</div>
-                        </div>
-                        <div class="col-md-12">
-                          <div class="request-summary-label">요청 요약</div>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummaryReason">-</div>
-                        </div>
-                        <div class="col-md-12">
-                          <div class="request-summary-label">질문 예시</div>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummarySampleQuestion">-</div>
-                        </div>
-                        <div class="col-md-12">
-                          <div class="request-summary-label">사용자 희망 조건</div>
-                          <div class="request-summary-value request-summary-clamp-2" id="knowledgeRequestSummaryHopeCondition">-</div>
-                        </div>
-                      </div>
-                    </div>
-                  </section>
-
-                  <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3"><span class="text-danger me-1">*</span>관리자 검토 메모</h6>
                     <form id="knowledgeRequestReviewForm"
                           method="post"
                           th:attr="data-review-base-url=@{/admin/AiSecretary/rag/knowledge-requests}">
                       <input type="hidden" name="status" id="knowledgeRequestReviewStatus">
-                      <textarea class="form-control" rows="3" name="adminComment" placeholder="관리자 검토 메모를 입력해 주세요."></textarea>
+
+                      <div class="mb-3">
+                        <label class="form-label fw-bold"><span class="text-danger me-1">*</span>관리자 검토 메모</label>
+                        <textarea class="form-control" rows="4" name="adminComment" placeholder="승인 또는 반려 사유를 입력해 주세요."></textarea>
+                      </div>
+
+                      <div class="mb-3">
+                        <label class="form-label fw-bold"><span class="text-danger me-1">*</span>최종 권한 조건</label>
+                        <div class="form-text mb-2">보고 대상 선택과 동일한 구조로 대상 본부 → 팀 → 직책 기준을 선택합니다.</div>
+
+                        <div class="org-target-selector border rounded-3 bg-light p-3" id="requestFinalTargetSelector">
+                          <div class="row g-3">
+                            <div class="col-md-4">
+                              <label class="form-label small fw-bold text-muted">대상 본부 선택</label>
+                              <select class="form-select form-select-sm js-request-final-headquarter" id="knowledgeRequestHeadquarterSelect">
+                                <option value="">대상 본부를 선택하세요</option>
+                              </select>
+                            </div>
+                            <div class="col-md-4">
+                              <label class="form-label small fw-bold text-muted">팀 선택</label>
+                              <select class="form-select form-select-sm js-request-final-team" id="knowledgeRequestTeamSelect" disabled>
+                                <option value="">팀을 선택하세요</option>
+                              </select>
+                            </div>
+                            <div class="col-md-4">
+                              <label class="form-label small fw-bold text-muted">직책 기준 선택</label>
+                              <select class="form-select form-select-sm js-request-final-position" id="knowledgeRequestPositionSelect" disabled>
+                                <option value="">직책을 선택하세요</option>
+                              </select>
+                            </div>
+                          </div>
+                        </div>
+
+                        <input type="hidden" name="targetDept" id="requestFinalTargetSummary">
+                        <input type="hidden" name="targetHeadDeptId" id="requestFinalHeadquarterId">
+                        <input type="hidden" name="targetTeamDeptIds" id="requestFinalTeamDeptIds">
+                        <input type="hidden" name="targetPositionId" id="requestFinalPositionId">
+                        <input type="hidden" name="targetEmpNo" id="requestFinalEmpNo" value="">
+                      </div>
+
                       <div class="d-flex justify-content-end gap-2 mt-3">
                         <button type="button" class="btn btn-success js-knowledge-request-approve">승인</button>
                         <button type="button" class="btn btn-danger js-knowledge-request-reject">반려</button>
@@ -790,7 +724,7 @@
               <div class="modal-body">
                 <div class="d-flex flex-column gap-3">
                   <section class="request-detail-section">
-                    <h6 class="fw-bold mb-3">문서 기본 정보</h6>
+                    <h6 class="fw-bold mb-3">문서 정보</h6>
                     <div class="row g-3">
                       <div class="col-md-4">
                         <label class="form-label fw-bold">문서 ID</label>
@@ -802,9 +736,7 @@
                       </div>
                       <div class="col-md-4">
                         <label class="form-label fw-bold">상태</label>
-                        <div>
-                          <span class="badge text-bg-secondary" id="documentManagementStatusBadge">-</span>
-                        </div>
+                        <div><span class="badge text-bg-secondary" id="documentManagementTopStatusBadge">-</span></div>
                       </div>
                       <div class="col-md-6">
                         <label class="form-label fw-bold">문서명</label>
@@ -824,12 +756,39 @@
                       </div>
                       <div class="col-md-3">
                         <label class="form-label fw-bold">청크</label>
-                        <input type="text" class="form-control" id="documentManagementChunkCount" readonly value="0">
+                        <div class="d-flex gap-2 align-items-center">
+                          <input type="text" class="form-control" id="documentManagementChunkCount" readonly value="0">
+                          <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 js-document-detail-toggle" data-detail-target="chunk">상세</button>
+                        </div>
                       </div>
                       <div class="col-md-3">
                         <label class="form-label fw-bold">벡터</label>
-                        <input type="text" class="form-control" id="documentManagementVectorCount" readonly value="0">
+                        <div class="d-flex gap-2 align-items-center">
+                          <input type="text" class="form-control" id="documentManagementVectorCount" readonly value="0">
+                          <button type="button" class="btn btn-outline-secondary btn-sm flex-shrink-0 js-document-detail-toggle" data-detail-target="vector">상세</button>
+                        </div>
                       </div>
+                    </div>
+
+                    <div class="mt-3 d-none document-management-detail-panel" id="documentManagementChunkDetailWrap">
+                      <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                        <div class="fw-bold">청크 상세</div>
+                        <small class="text-muted">본문 일부와 임베딩 정보를 확인합니다.</small>
+                      </div>
+                      <div class="document-management-detail-list" id="documentManagementChunkDetailBody"></div>
+                    </div>
+
+                    <div class="mt-3 d-none document-management-detail-panel" id="documentManagementVectorDetailWrap">
+                      <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                        <div class="fw-bold">벡터 상세</div>
+                        <small class="text-muted">임베딩 모델과 차원을 확인합니다.</small>
+                      </div>
+                      <div class="document-management-detail-list" id="documentManagementVectorDetailBody"></div>
+                    </div>
+
+                    <div class="mt-3">
+                      <div class="fw-bold mb-2">본문 미리보기</div>
+                      <div class="request-summary-value request-summary-clamp-5" id="documentManagementSummary">본문 미리보기가 없습니다.</div>
                     </div>
                   </section>
 
@@ -853,27 +812,32 @@
                         <textarea class="form-control" rows="3" id="documentManagementSampleQuestion" readonly>-</textarea>
                       </div>
                       <div class="col-md-12">
-                        <label class="form-label fw-bold">파일 URL 또는 콘텐츠 경로</label>
-                        <div class="border rounded-3 p-3 bg-light request-reference-box">
-                          <a href="#"
-                             class="fw-bold text-decoration-none request-reference-link d-none"
-                             id="documentManagementReferenceLink"
-                             target="_blank"
-                             rel="noopener noreferrer"></a>
-                          <div class="fw-bold request-reference-text" id="documentManagementReferenceText">등록된 참고 자료가 없습니다.</div>
-                        </div>
+                        <label class="form-label fw-bold">권한 희망 조건</label>
+                        <div class="border rounded-3 bg-light p-3 text-break request-summary-value" id="documentManagementHopeCondition">-</div>
                       </div>
-                      <div class="col-md-12">
-                        <label class="form-label fw-bold">요약</label>
-                        <div class="border rounded-3 bg-light p-3 text-break request-summary-value" id="documentManagementSummary">-</div>
+                    </div>
+                  </section>
+
+                  <section class="request-detail-section">
+                    <h6 class="fw-bold mb-3">관리자 검토 정보</h6>
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label class="form-label fw-bold">관리자명</label>
+                        <input type="text" class="form-control" id="documentManagementAdminName" readonly value="-">
                       </div>
                       <div class="col-md-12">
                         <label class="form-label fw-bold">관리자 검토 메모</label>
                         <div class="border rounded-3 bg-light p-3 text-break request-summary-value" id="documentManagementAdminComment">-</div>
                       </div>
                       <div class="col-md-12">
-                        <label class="form-label fw-bold">권한 조건</label>
-                        <div class="border rounded-3 bg-light p-3 text-break request-summary-value" id="documentManagementAccessCondition">-</div>
+                        <label class="form-label fw-bold">최종 권한 조건</label>
+                        <div class="form-text mb-2">보고 대상 선택과 동일한 구조로 대상 본부 → 팀 → 직책 기준을 확인합니다.</div>
+                        <div class="org-target-selector border rounded-3 bg-light p-3" id="documentManagementFinalTargetSelector"></div>
+                        <input type="hidden" id="documentManagementFinalTargetSummary">
+                        <input type="hidden" id="documentManagementFinalHeadquarterId">
+                        <input type="hidden" id="documentManagementFinalTeamDeptIds">
+                        <input type="hidden" id="documentManagementFinalPositionId">
+                        <input type="hidden" id="documentManagementFinalEmpNo" value="">
                       </div>
                     </div>
                   </section>
@@ -881,23 +845,41 @@
                   <section class="request-detail-section">
                     <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap">
                       <div>
-                        <h6 class="fw-bold mb-1">처리 상태 정보</h6>
-                        <div class="text-muted small">처리 실패 상태에서만 재시도를 활성화합니다. 실제 재시도 API는 후속 구현입니다.</div>
+                        <h6 class="fw-bold mb-1">처리 상태</h6>
+                        <div class="text-muted small">단계별 문서 처리 진행 상황을 확인합니다.</div>
                       </div>
-                      <button type="button" class="btn btn-outline-danger d-none js-document-retry" id="documentManagementRetryButton">재시도</button>
+                      <span class="badge text-bg-secondary" id="documentManagementStatusBadge">-</span>
                     </div>
-                    <div class="row g-3 mt-2">
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold">실패 사유</label>
-                        <div class="border rounded-3 bg-light p-3 text-break request-summary-value" id="documentManagementFailureReason">-</div>
-                      </div>
-                      <div class="col-md-4">
+                    <div class="document-management-stage-wrap mt-3" id="documentManagementStageWrap"></div>
+                    <div class="row g-3 mt-3">
+                      <div class="col-md-12">
                         <label class="form-label fw-bold">상태 라벨</label>
                         <input type="text" class="form-control" id="documentManagementStatusLabel" readonly value="-">
                       </div>
-                      <div class="col-md-4">
-                        <label class="form-label fw-bold">자료 출처</label>
-                        <input type="text" class="form-control" id="documentManagementSourceType" readonly value="-">
+                    </div>
+                  </section>
+
+                  <section class="request-detail-section d-none" id="documentManagementFailureSection">
+                    <div class="document-management-failure-box">
+                      <div class="d-flex justify-content-between align-items-center gap-3 flex-wrap mb-3">
+                        <div>
+                          <h6 class="fw-bold mb-1 text-danger">문서 처리 중 오류가 발생했습니다.</h6>
+                          <div class="text-muted small">실패 상태에서만 이 영역을 표시합니다.</div>
+                        </div>
+                      </div>
+                      <div class="row g-3">
+                        <div class="col-md-4">
+                          <label class="form-label fw-bold">실패 사유</label>
+                          <div class="border rounded-3 bg-light p-3 text-break request-summary-value" id="documentManagementFailureReason">-</div>
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label fw-bold">실패 단계</label>
+                          <input type="text" class="form-control" id="documentManagementFailureStatusLabel" readonly value="-">
+                        </div>
+                        <div class="col-md-4">
+                          <label class="form-label fw-bold">처리 일시</label>
+                          <input type="text" class="form-control" id="documentManagementFailureAt" readonly value="-">
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -905,7 +887,16 @@
               </div>
 
               <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                <div class="d-flex flex-wrap justify-content-end gap-2 w-100">
+                  <button type="button"
+                          class="btn btn-outline-secondary"
+                          id="documentManagementToggleActiveButton"
+                          th:attr="data-activation-base-url=@{/admin/AiSecretary/rag/documents}">
+                    활성화 / 비활성화
+                  </button>
+                  <button type="button" class="btn btn-primary" id="documentManagementSaveButton" disabled>저장</button>
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
               </div>
             </div>
           </div>
@@ -918,62 +909,115 @@
              aria-hidden="true">
           <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
             <div class="modal-content">
-              <div class="modal-header">
-                <div>
-                  <h5 class="modal-title fw-bold" id="uploadDocumentModalLabel">새 문서 업로드</h5>
-                  <p class="text-muted mb-0 small">관리자가 직접 사내 문서를 등록하는 화면입니다. 실제 저장 기능은 후속 구현입니다.</p>
-                </div>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
-              </div>
-
-              <div class="modal-body">
-                <div class="alert alert-light border mb-3">
-                  문서 등록 입력값만 구성해 두었으며, 실제 업로드 저장은 다음 단계에서 연결합니다.
+              <form id="uploadDocumentForm"
+                    method="post"
+                    th:action="@{/admin/AiSecretary/rag/documents/direct}">
+                <div class="modal-header">
+                  <div>
+                    <h5 class="modal-title fw-bold" id="uploadDocumentModalLabel">새 문서 업로드</h5>
+                    <p class="text-muted mb-0 small">관리자가 직접 챗봇/RAG 지식 문서를 등록합니다.</p>
+                  </div>
+                  <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
                 </div>
 
-                <div class="request-detail-section mb-3">
-                  <h6 class="fw-bold mb-3">문서 기본 정보</h6>
-                  <div class="mb-3">
-                    <label class="form-label fw-bold">문서명</label>
-                    <input type="text" class="form-control" placeholder="예) 근태관리 사용자 매뉴얼">
+                <div class="modal-body">
+                  <div class="alert alert-light border mb-3">
+                    등록한 문서는 문서 및 RAG 데이터 관리 목록에 표시되며, 관리자 검토 메모에는 “*관리자 직접 등록”으로 기록됩니다.
                   </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-bold">문서 유형</label>
-                    <select class="form-select">
-                      <option value="">문서 유형을 선택하세요</option>
-                      <option th:each="type : ${requestTypeOptions}" th:value="${type}" th:text="${type}">사내 규정</option>
-                    </select>
-                  </div>
-                  <div class="mb-3">
-                    <label class="form-label fw-bold">카테고리</label>
-                    <select class="form-select">
-                      <option value="">카테고리를 선택하세요</option>
-                      <option th:each="category : ${categoryOptions}" th:value="${category}" th:text="${category}">근태</option>
-                    </select>
-                  </div>
-                  <div class="mb-0">
-                    <label class="form-label fw-bold">파일</label>
-                    <input type="file" class="form-control">
-                  </div>
+
+                  <input type="hidden" name="adminComment" value="*관리자 직접 등록">
+                  <input type="hidden" name="documentDomain" value="AI_RAG">
+                  <input type="hidden" name="currentStage" value="UPLOADED">
+
+                  <section class="request-detail-section mb-3">
+                    <h6 class="fw-bold mb-3">문서 정보</h6>
+
+                    <div class="mb-3">
+                      <label class="form-label fw-bold"><span class="text-danger me-1">*</span>문서명</label>
+                      <input type="text"
+                             class="form-control"
+                             id="uploadDocumentTitle"
+                             name="title"
+                             placeholder="문서명을 입력해 주세요.">
+                    </div>
+
+                    <div class="row g-3">
+                      <div class="col-md-6">
+                        <label class="form-label fw-bold"><span class="text-danger me-1">*</span>문서 유형</label>
+                        <select class="form-select" id="uploadDocumentType" name="requestType">
+                          <option value="">문서 유형을 선택하세요.</option>
+                          <option th:each="type : ${requestTypeOptions}"
+                                  th:value="${type}"
+                                  th:text="${type}">
+                            사내 규정
+                          </option>
+                        </select>
+                      </div>
+
+                      <div class="col-md-6">
+                        <label class="form-label fw-bold"><span class="text-danger me-1">*</span>카테고리</label>
+                        <select class="form-select" id="uploadDocumentCategory" name="category">
+                          <option value="">카테고리를 선택하세요.</option>
+                          <option th:each="category : ${categoryOptions}"
+                                  th:value="${category}"
+                                  th:text="${category}">
+                            근태
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section class="request-detail-section mb-3">
+                    <h6 class="fw-bold mb-3">요청 정보</h6>
+
+                    <div class="mb-3">
+                      <label class="form-label fw-bold"><span class="text-danger me-1">*</span>요청 사유</label>
+                      <textarea class="form-control"
+                                rows="4"
+                                id="uploadDocumentReason"
+                                name="reason"
+                                placeholder="해당 문서를 챗봇 지식으로 등록해야 하는 이유를 입력해 주세요."></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                      <label class="form-label fw-bold"><span class="text-danger me-1">*</span>챗봇 질문 예시</label>
+                      <textarea class="form-control"
+                                rows="4"
+                                id="uploadDocumentSampleQuestion"
+                                name="sampleQuestion"
+                                placeholder="예: 연차 신청은 어디서 하나요?"></textarea>
+                    </div>
+
+                    <div class="mb-0">
+                      <label class="form-label fw-bold"><span class="text-danger me-1">*</span>참고 URL 또는 콘텐츠 경로</label>
+                      <input type="text"
+                             class="form-control"
+                             id="uploadDocumentReferenceUrl"
+                             name="referenceUrl"
+                             placeholder="예: https://... 또는 /files/manual/hr-guide.pdf">
+                    </div>
+                  </section>
+
+                  <section class="request-detail-section mb-3">
+                    <h6 class="fw-bold mb-3">권한 희망 조건</h6>
+                    <div class="form-text mb-2">보고 대상 선택과 동일한 구조로 대상 본부 → 팀 → 직책 기준을 선택합니다.</div>
+                    <div class="org-target-selector border rounded-3 bg-light p-3" id="uploadDocumentTargetSelector"></div>
+
+                    <input type="hidden" name="targetDept" id="uploadDocumentTargetSummary">
+                    <input type="hidden" name="targetHeadDeptId" id="uploadDocumentHeadquarterId">
+                    <input type="hidden" name="targetTeamDeptIds" id="uploadDocumentTeamDeptIds">
+                    <input type="hidden" name="targetPositionId" id="uploadDocumentPositionId">
+                    <input type="hidden" name="targetEmpNo" id="uploadDocumentEmpNo" value="">
+                    <input type="hidden" name="accessLevel" value="CUSTOM">
+                  </section>
                 </div>
 
-                <div class="request-detail-section mb-3">
-                  <h6 class="fw-bold mb-3">기본 열람 권한</h6>
-                  <div class="form-text mb-2">업로드 시 설정한 기본 열람 권한은 등록 후 보안 및 권한 제어 화면에서 세부 수정할 수 있습니다.</div>
-                  <select class="form-select mb-3">
-                    <option value="PUBLIC">전체 공개</option>
-                    <option value="CUSTOM">조건 조합</option>
-                    <option value="ADMIN_ONLY">관리자 전용</option>
-                  </select>
-                  <div class="alert alert-secondary py-2 mb-0">
-                    새 문서 업로드 흐름은 승인/반려와 별개로 문서 등록 절차에서 사용합니다.
-                  </div>
+                <div class="modal-footer">
+                  <button type="submit" class="btn btn-primary" id="uploadDocumentSubmitButton">등록</button>
+                  <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
                 </div>
-              </div>
-
-              <div class="modal-footer">
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
-              </div>
+              </form>
             </div>
           </div>
         </div>
@@ -999,7 +1043,7 @@
                     <li class="mb-2">참고 URL 또는 콘텐츠 경로를 검토합니다.</li>
                     <li class="mb-2">문서명, 자료 유형, 카테고리를 필요 시 수정합니다.</li>
                     <li class="mb-2">기본 열람 권한과 최종 권한 조건을 확인합니다.</li>
-                    <li class="mb-2">승인 시 후속 문서 등록 또는 RAG 반영 절차로 이동합니다.</li>
+                    <li class="mb-2">승인 후 후속 문서 등록 또는 RAG 반영 절차로 이동합니다.</li>
                     <li class="mb-0">반려 시 관리자 검토 메모에 사유를 남깁니다.</li>
                   </ol>
                 </div>
@@ -1010,6 +1054,11 @@
             </div>
           </div>
         </div>
+
+      </div>
+    </div>
+  </main>
+</div>
 
 <th:block th:replace="~{/admin/common/commonJs}"></th:block>
 <script th:inline="javascript">
@@ -1022,725 +1071,9 @@
     grades: /*[[${gradeOptions}]]*/ []
   };
 </script>
-<script>
-  document.addEventListener("DOMContentLoaded", function () {
-    if (window.bootstrap) {
-      document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (tooltipEl) {
-        bootstrap.Tooltip.getOrCreateInstance(tooltipEl);
-      });
-    }
+<script th:src="@{/js/aiSecretary/adAiRagManage.js}"></script>
 
-    document.querySelectorAll(".dropdown").forEach(function (dropdown) {
-      const labelButton = dropdown.querySelector(".js-date-range-label");
-      const startInput = dropdown.querySelector(".js-date-start");
-      const endInput = dropdown.querySelector(".js-date-end");
-
-      if (!labelButton || !startInput || !endInput) return;
-
-      const labelSpan = labelButton.querySelector("span");
-
-      function formatDate(value) {
-        if (!value) return "";
-        return value.replaceAll("-", ".");
-      }
-
-      function updateDateRangeLabel() {
-        if (!labelSpan) return;
-
-        const hasStart = !!startInput.value;
-        const hasEnd = !!endInput.value;
-        if (!hasStart && !hasEnd) {
-          labelSpan.textContent = "전체 기간";
-          return;
-        }
-
-        if (hasStart && hasEnd) {
-          labelSpan.textContent = formatDate(startInput.value) + " - " + formatDate(endInput.value);
-          return;
-        }
-        labelSpan.textContent = (hasStart ? formatDate(startInput.value) : "전체 기간") + " - " + (hasEnd ? formatDate(endInput.value) : "전체 기간");
-
-      }
-
-      startInput.addEventListener("change", updateDateRangeLabel);
-      endInput.addEventListener("change", updateDateRangeLabel);
-      updateDateRangeLabel();
-    });
-
-    const requestDetailModal = document.getElementById("knowledgeRequestDetailModal");
-    if (!requestDetailModal) {
-      return;
-    }
-
-    const titleInput = requestDetailModal.querySelector("#knowledgeRequestTitle");
-    const requestTypeInput = requestDetailModal.querySelector("#knowledgeRequestType");
-    const categoryInput = requestDetailModal.querySelector("#knowledgeRequestCategory");
-    const requesterInput = requestDetailModal.querySelector("#knowledgeRequestRequesterName");
-    const createdAtInput = requestDetailModal.querySelector("#knowledgeRequestCreatedAt");
-    const reasonInput = requestDetailModal.querySelector("#knowledgeRequestReason");
-    const sampleQuestionInput = requestDetailModal.querySelector("#knowledgeRequestSampleQuestion");
-    const userHopeAccessLevelInput = requestDetailModal.querySelector("#knowledgeRequestUserHopeAccessLevel");
-    const userHopeConditionInput = requestDetailModal.querySelector("#knowledgeRequestUserHopeCondition");
-    const referenceLink = requestDetailModal.querySelector("#knowledgeRequestReferenceLink");
-    const referenceText = requestDetailModal.querySelector("#knowledgeRequestReferenceText");
-    const summaryTitle = requestDetailModal.querySelector("#knowledgeRequestSummaryTitle");
-    const summaryType = requestDetailModal.querySelector("#knowledgeRequestSummaryType");
-    const summaryCategory = requestDetailModal.querySelector("#knowledgeRequestSummaryCategory");
-    const summaryAccessLevel = requestDetailModal.querySelector("#knowledgeRequestSummaryAccessLevel");
-    const summaryReferenceLink = requestDetailModal.querySelector("#knowledgeRequestSummaryReferenceLink");
-    const summaryReferenceText = requestDetailModal.querySelector("#knowledgeRequestSummaryReferenceText");
-    const summaryReason = requestDetailModal.querySelector("#knowledgeRequestSummaryReason");
-    const summarySampleQuestion = requestDetailModal.querySelector("#knowledgeRequestSummarySampleQuestion");
-    const summaryHopeCondition = requestDetailModal.querySelector("#knowledgeRequestSummaryHopeCondition");
-    const requestDefaultAccessLevel = requestDetailModal.querySelector("#requestDefaultAccessLevel");
-    const requestPublicGuide = requestDetailModal.querySelector("#requestPublicGuide");
-    const requestAdminOnlyGuide = requestDetailModal.querySelector("#requestAdminOnlyGuide");
-    const requestCustomAccessWrap = requestDetailModal.querySelector("#requestCustomAccessWrap");
-    const requestDefaultTargetDept = requestDetailModal.querySelector('[name="requestDefaultTargetDeptId"]');
-    const requestDefaultTargetRole = requestDetailModal.querySelector('[name="requestDefaultTargetRoleId"]');
-    const requestDefaultMinPosition = requestDetailModal.querySelector('[name="requestDefaultMinPositionId"]');
-    const requestDefaultMinGrade = requestDetailModal.querySelector('[name="requestDefaultMinGradeId"]');
-    const reviewForm = requestDetailModal.querySelector("#knowledgeRequestReviewForm");
-    const reviewStatusInput = requestDetailModal.querySelector("#knowledgeRequestReviewStatus");
-    const adminReviewMemo = requestDetailModal.querySelector('[name="adminComment"]');
-    const approveBtn = requestDetailModal.querySelector(".js-knowledge-request-approve");
-    const rejectBtn = requestDetailModal.querySelector(".js-knowledge-request-reject");
-    const autocompleteWrappers = Array.from(requestDetailModal.querySelectorAll(".admin-autocomplete"));
-
-    const documentManagementModal = document.getElementById("documentManagementDetailModal");
-    const documentManagementDocumentId = documentManagementModal?.querySelector("#documentManagementDocumentId");
-    const documentManagementRegisteredAt = documentManagementModal?.querySelector("#documentManagementRegisteredAt");
-    const documentManagementStatusBadge = documentManagementModal?.querySelector("#documentManagementStatusBadge");
-    const documentManagementTitle = documentManagementModal?.querySelector("#documentManagementTitle");
-    const documentManagementType = documentManagementModal?.querySelector("#documentManagementType");
-    const documentManagementCategory = documentManagementModal?.querySelector("#documentManagementCategory");
-    const documentManagementApproverName = documentManagementModal?.querySelector("#documentManagementApproverName");
-    const documentManagementChunkCount = documentManagementModal?.querySelector("#documentManagementChunkCount");
-    const documentManagementVectorCount = documentManagementModal?.querySelector("#documentManagementVectorCount");
-    const documentManagementRequesterName = documentManagementModal?.querySelector("#documentManagementRequesterName");
-    const documentManagementRequestDate = documentManagementModal?.querySelector("#documentManagementRequestDate");
-    const documentManagementReason = documentManagementModal?.querySelector("#documentManagementReason");
-    const documentManagementSampleQuestion = documentManagementModal?.querySelector("#documentManagementSampleQuestion");
-    const documentManagementReferenceLink = documentManagementModal?.querySelector("#documentManagementReferenceLink");
-    const documentManagementReferenceText = documentManagementModal?.querySelector("#documentManagementReferenceText");
-    const documentManagementSummary = documentManagementModal?.querySelector("#documentManagementSummary");
-    const documentManagementAdminComment = documentManagementModal?.querySelector("#documentManagementAdminComment");
-    const documentManagementAccessCondition = documentManagementModal?.querySelector("#documentManagementAccessCondition");
-    const documentManagementFailureReason = documentManagementModal?.querySelector("#documentManagementFailureReason");
-    const documentManagementStatusLabel = documentManagementModal?.querySelector("#documentManagementStatusLabel");
-    const documentManagementSourceType = documentManagementModal?.querySelector("#documentManagementSourceType");
-    const documentManagementRetryButton = documentManagementModal?.querySelector("#documentManagementRetryButton");
-
-    const accessLevelLabels = {
-      PUBLIC: "전체 공개",
-      CUSTOM: "조건 조합",
-      ADMIN_ONLY: "관리자 전용"
-    };
-
-    const baseRequestTypeSuggestions = ["사내 규정", "업무 매뉴얼", "FAQ", "서비스 이용 안내", "기타"];
-    const baseCategorySuggestions = ["근태", "인사", "전자결재", "교육", "복지", "시스템", "보안", "기타"];
-
-    let requestTypeSuggestions = buildSuggestionList(baseRequestTypeSuggestions, window.adAiRagManageSuggestions?.requestTypes);
-    let categorySuggestions = buildSuggestionList(baseCategorySuggestions, window.adAiRagManageSuggestions?.categories);
-
-    function setEditableInputValue(element, value) {
-      if (!element) return;
-      element.value = value && String(value).trim() ? String(value).trim() : "";
-    }
-
-    function safeDatasetValue(value, fallback = "") {
-      const normalized = value == null ? "" : String(value).trim();
-      return normalized || fallback;
-    }
-
-    function setReadonlyValue(element, value, fallback = "-") {
-      if (!element) return;
-      element.value = value && String(value).trim() ? String(value).trim() : fallback;
-    }
-
-    function setDisplayValue(element, value, fallback = "-") {
-      if (!element) return;
-      element.textContent = value && String(value).trim() ? String(value).trim() : fallback;
-    }
-
-    function buildSuggestionList(baseList, extraList) {
-      const values = [];
-      const seen = new Set();
-
-      [...(baseList || []), ...(extraList || [])].forEach(function (item) {
-        const value = String(item || "").trim();
-        if (!value || seen.has(value)) return;
-        seen.add(value);
-        values.push(value);
-      });
-
-      return values;
-    }
-
-    function addSuggestionValue(list, value) {
-      const normalized = String(value || "").trim();
-      if (!normalized || list.includes(normalized)) return;
-      list.push(normalized);
-    }
-
-    function filterSuggestions(list, query) {
-      const normalizedQuery = String(query || "").trim().toLowerCase();
-      if (!normalizedQuery) return list.slice();
-
-      return list.filter(function (item) {
-        return String(item).toLowerCase().includes(normalizedQuery);
-      });
-    }
-
-    function setFieldInvalid(element, invalid) {
-      if (!element) return;
-      element.classList.toggle("is-invalid", !!invalid);
-    }
-
-    function showReferenceValue(value) {
-      if (!referenceLink || !referenceText) return;
-
-      const textValue = value && String(value).trim() ? String(value).trim() : "";
-      if (!textValue) {
-        referenceLink.classList.add("d-none");
-        referenceLink.removeAttribute("href");
-        referenceLink.textContent = "";
-        referenceLink.removeAttribute("title");
-        referenceText.textContent = "등록된 참고 자료가 없습니다.";
-
-        referenceText.removeAttribute("title");
-        if (summaryReferenceLink) {
-          summaryReferenceLink.classList.add("d-none");
-          summaryReferenceLink.removeAttribute("href");
-          summaryReferenceLink.textContent = "";
-          summaryReferenceLink.removeAttribute("title");
-        }
-        if (summaryReferenceText) {
-          summaryReferenceText.classList.remove("d-none");
-          summaryReferenceText.textContent = "등록된 참고 자료가 없습니다.";
-          summaryReferenceText.removeAttribute("title");
-        }
-        return;
-      }
-
-      if (/^https?:\/\//i.test(textValue)) {
-        referenceLink.href = textValue;
-        referenceLink.textContent = textValue;
-        referenceLink.title = textValue;
-        referenceLink.classList.remove("d-none");
-        referenceText.classList.add("d-none");
-        referenceText.textContent = "";
-        referenceText.removeAttribute("title");
-        if (summaryReferenceLink) {
-          summaryReferenceLink.href = textValue;
-          summaryReferenceLink.textContent = textValue;
-          summaryReferenceLink.title = textValue;
-          summaryReferenceLink.classList.remove("d-none");
-        }
-        if (summaryReferenceText) {
-          summaryReferenceText.classList.add("d-none");
-          summaryReferenceText.textContent = "";
-          summaryReferenceText.removeAttribute("title");
-        }
-        return;
-      }
-
-      referenceLink.classList.add("d-none");
-      referenceLink.removeAttribute("href");
-      referenceLink.textContent = "";
-      referenceLink.removeAttribute("title");
-      referenceText.classList.remove("d-none");
-      referenceText.textContent = textValue;
-      referenceText.title = textValue;
-      if (summaryReferenceLink) {
-        summaryReferenceLink.classList.add("d-none");
-        summaryReferenceLink.removeAttribute("href");
-        summaryReferenceLink.textContent = "";
-        summaryReferenceLink.removeAttribute("title");
-      }
-      if (summaryReferenceText) {
-        summaryReferenceText.classList.remove("d-none");
-        summaryReferenceText.textContent = textValue;
-        summaryReferenceText.title = textValue;
-      }
-    }
-
-    function showDocumentReferenceValue(value) {
-      if (!documentManagementReferenceLink || !documentManagementReferenceText) return;
-
-      const textValue = value && String(value).trim() ? String(value).trim() : "";
-      if (!textValue) {
-        documentManagementReferenceLink.classList.add("d-none");
-        documentManagementReferenceLink.removeAttribute("href");
-        documentManagementReferenceLink.textContent = "";
-        documentManagementReferenceText.textContent = "등록된 참고 자료가 없습니다.";
-        documentManagementReferenceText.removeAttribute("title");
-        return;
-      }
-
-      if (/^https?:\/\//i.test(textValue)) {
-        documentManagementReferenceLink.href = textValue;
-        documentManagementReferenceLink.textContent = textValue;
-        documentManagementReferenceLink.title = textValue;
-        documentManagementReferenceLink.classList.remove("d-none");
-        documentManagementReferenceText.textContent = "";
-        documentManagementReferenceText.classList.add("d-none");
-        return;
-      }
-
-      documentManagementReferenceLink.classList.add("d-none");
-      documentManagementReferenceLink.removeAttribute("href");
-      documentManagementReferenceLink.textContent = "";
-      documentManagementReferenceLink.removeAttribute("title");
-      documentManagementReferenceText.classList.remove("d-none");
-      documentManagementReferenceText.textContent = textValue;
-      documentManagementReferenceText.title = textValue;
-    }
-
-    function applyDocumentStatusBadge(status, label) {
-      if (!documentManagementStatusBadge) return;
-
-      documentManagementStatusBadge.className = "badge";
-      const normalizedStatus = safeDatasetValue(status).toUpperCase();
-
-      if (normalizedStatus === "CHUNK_FAILED" || normalizedStatus === "EMBED_FAILED" || normalizedStatus === "REJECTED") {
-        documentManagementStatusBadge.classList.add("text-bg-danger");
-      } else if (normalizedStatus === "PUBLISHED") {
-        documentManagementStatusBadge.classList.add("text-bg-success");
-      } else if (normalizedStatus === "APPROVAL_PENDING") {
-        documentManagementStatusBadge.classList.add("text-bg-warning");
-      } else if (normalizedStatus === "CHUNKING" || normalizedStatus === "EMBEDDING") {
-        documentManagementStatusBadge.classList.add("text-bg-primary");
-      } else if (normalizedStatus === "UPLOADED" || normalizedStatus === "APPROVED") {
-        documentManagementStatusBadge.classList.add("text-bg-success");
-      } else {
-        documentManagementStatusBadge.classList.add("text-bg-secondary");
-      }
-
-      documentManagementStatusBadge.textContent = safeDatasetValue(label, "-");
-    }
-
-    function closeAutocomplete(wrapper) {
-      if (!wrapper) return;
-      const dropdown = wrapper.querySelector(".js-admin-autocomplete-dropdown");
-      if (!dropdown) return;
-      dropdown.classList.remove("show");
-      dropdown.setAttribute("aria-hidden", "true");
-      dropdown.innerHTML = "";
-    }
-
-    function closeAllAutocomplete() {
-      autocompleteWrappers.forEach(closeAutocomplete);
-    }
-
-    function renderAutocomplete(wrapper, items, input) {
-      const dropdown = wrapper?.querySelector(".js-admin-autocomplete-dropdown");
-      if (!dropdown || !input) return;
-
-      dropdown.innerHTML = "";
-      const currentValue = String(input.value || "").trim();
-
-      if (!items.length) {
-        const empty = document.createElement("div");
-        empty.textContent = "새 값으로 입력됩니다.";
-
-        dropdown.appendChild(empty);
-        dropdown.classList.add("show");
-        dropdown.setAttribute("aria-hidden", "false");
-        return;
-      }
-
-      items.forEach(function (item) {
-        const option = document.createElement("button");
-        option.className = "admin-autocomplete-item";
-        option.type = "button";
-        option.textContent = item;
-        option.setAttribute("role", "option");
-        option.setAttribute("aria-selected", String(currentValue === item));
-        option.tabIndex = -1;
-        option.dataset.value = item;
-        if (currentValue === item) {
-          option.classList.add("active");
-        }
-        option.addEventListener("mousedown", function (event) {
-          event.preventDefault();
-          input.value = item;
-          input.dispatchEvent(new Event("input", { bubbles: true }));
-          closeAutocomplete(wrapper);
-        });
-        dropdown.appendChild(option);
-      });
-
-      dropdown.classList.add("show");
-      dropdown.setAttribute("aria-hidden", "false");
-    }
-
-    function openAutocomplete(wrapper) {
-      if (!wrapper) return;
-      const input = wrapper.querySelector(".js-admin-autocomplete-input");
-      if (!input) return;
-
-      const suggestionList = wrapper.dataset.autocomplete === "category" ? categorySuggestions : requestTypeSuggestions;
-      const filtered = filterSuggestions(suggestionList, input.value);
-      renderAutocomplete(wrapper, filtered, input);
-    }
-
-    function initAutocomplete(wrapper) {
-      const input = wrapper.querySelector(".js-admin-autocomplete-input");
-      if (!input) return;
-
-      input.addEventListener("focus", function () {
-        openAutocomplete(wrapper);
-      });
-
-      input.addEventListener("input", function () {
-        openAutocomplete(wrapper);
-      });
-
-      input.addEventListener("keydown", function (event) {
-        if (event.key === "Escape") {
-          closeAutocomplete(wrapper);
-        }
-      });
-
-      document.addEventListener("mousedown", function (event) {
-        if (!wrapper.contains(event.target)) {
-          closeAutocomplete(wrapper);
-        }
-      });
-    }
-
-    function updateRequestAccessArea() {
-      if (!requestDefaultAccessLevel) return;
-
-      requestPublicGuide?.classList.add("d-none");
-      requestAdminOnlyGuide?.classList.add("d-none");
-      requestCustomAccessWrap?.classList.add("d-none");
-
-      if (requestDefaultAccessLevel.value === "PUBLIC") {
-        requestPublicGuide?.classList.remove("d-none");
-      } else if (requestDefaultAccessLevel.value === "CUSTOM") {
-        requestCustomAccessWrap?.classList.remove("d-none");
-      } else if (requestDefaultAccessLevel.value === "ADMIN_ONLY") {
-        requestAdminOnlyGuide?.classList.remove("d-none");
-      }
-    }
-
-    function setSelectByText(selectElement, textValue) {
-      if (!selectElement || !textValue) return;
-
-      const normalizedText = String(textValue).trim();
-      const option = Array.from(selectElement.options).find(function (item) {
-        return item.textContent.trim() === normalizedText;
-      });
-
-      if (option) {
-        selectElement.value = option.value;
-      }
-    }
-
-    function setSelectByValue(selectElement, value) {
-      if (!selectElement) return;
-      const normalized = String(value || "").trim();
-      if (!normalized) return;
-
-      const option = Array.from(selectElement.options).find(function (item) {
-        return String(item.value || "").trim() === normalized || String(item.textContent || "").trim() === normalized;
-      });
-
-      if (option) {
-        selectElement.value = option.value;
-      }
-    }
-
-    function extractSummaryValue(summary, label) {
-      if (!summary || !label) return "";
-
-      const pattern = new RegExp(label + "\\s*:\\s*([^/]+)");
-      const match = String(summary).match(pattern);
-      return match ? match[1].trim() : "";
-    }
-
-    function clearValidationState() {
-      [titleInput, requestTypeInput, categoryInput, adminReviewMemo, requestDefaultAccessLevel, requestDefaultTargetDept, requestDefaultTargetRole, requestDefaultMinPosition, requestDefaultMinGrade].forEach(function (element) {
-        setFieldInvalid(element, false);
-      });
-    }
-
-    function validateAdminAction(action) {
-      clearValidationState();
-
-      const typeValue = safeDatasetValue(requestTypeInput?.value);
-      const categoryValue = safeDatasetValue(categoryInput?.value);
-      const memoValue = safeDatasetValue(adminReviewMemo?.value);
-      const accessLevelValue = safeDatasetValue(requestDefaultAccessLevel?.value);
-      const currentRequestId = safeDatasetValue(reviewForm?.dataset?.currentRequestId);
-
-      if (!typeValue) {
-        alert("자료 유형을 입력해 주세요.");
-
-        requestTypeInput?.focus();
-        return false;
-      }
-
-      if (!categoryValue) {
-        alert("카테고리를 입력해 주세요.");
-
-        categoryInput?.focus();
-        return false;
-      }
-
-      if (!accessLevelValue) {
-        alert("관리자 최종 권한 조건을 선택해 주세요.");
-
-        requestDefaultAccessLevel?.focus();
-        return false;
-      }
-
-      if (accessLevelValue === "CUSTOM") {
-        const hasCondition = [requestDefaultTargetDept, requestDefaultTargetRole, requestDefaultMinPosition, requestDefaultMinGrade].some(function (element) {
-          return safeDatasetValue(element?.value) !== "";
-        });
-
-        if (!hasCondition) {
-          [requestDefaultTargetDept, requestDefaultTargetRole, requestDefaultMinPosition, requestDefaultMinGrade].forEach(function (element) {
-            setFieldInvalid(element, true);
-          });
-          alert("조건을 하나 이상 선택해 주세요.");
-
-          requestDefaultTargetDept?.focus();
-          return false;
-        }
-      }
-
-      if (!memoValue) {
-        alert("관리자 검토 메모를 입력해 주세요.");
-
-        adminReviewMemo?.focus();
-        return false;
-      }
-
-      if (!reviewForm || !reviewStatusInput) {
-        alert("승인/반려 처리를 위한 폼을 찾을 수 없습니다.");
-        return false;
-      }
-
-      if (!currentRequestId) {
-        alert("요청 ID가 없어 승인/반려를 처리할 수 없습니다.");
-        return false;
-      }
-
-      reviewStatusInput.value = action;
-      reviewForm.action = reviewForm.dataset.reviewBaseUrl.replace(/\/$/, "") + "/" + encodeURIComponent(currentRequestId) + "/review";
-      if (typeof reviewForm.requestSubmit === "function") {
-        reviewForm.requestSubmit();
-      } else {
-        reviewForm.submit();
-      }
-
-      return true;
-    }
-
-    function populateDocumentManagementModal(button) {
-      const data = button?.dataset || {};
-
-      setReadonlyValue(documentManagementDocumentId, safeDatasetValue(data.documentId));
-      setReadonlyValue(documentManagementRegisteredAt, safeDatasetValue(data.registeredAt));
-      applyDocumentStatusBadge(data.status, data.statusLabel);
-      setReadonlyValue(documentManagementTitle, safeDatasetValue(data.title));
-      setReadonlyValue(documentManagementType, safeDatasetValue(data.requestType));
-      setReadonlyValue(documentManagementCategory, safeDatasetValue(data.category));
-      setReadonlyValue(documentManagementApproverName, safeDatasetValue(data.approverName));
-      setReadonlyValue(documentManagementChunkCount, safeDatasetValue(data.chunkCount, "0"));
-      setReadonlyValue(documentManagementVectorCount, safeDatasetValue(data.vectorCount, "0"));
-      setReadonlyValue(documentManagementRequesterName, safeDatasetValue(data.requesterName));
-      setReadonlyValue(documentManagementRequestDate, safeDatasetValue(data.requestDate));
-      setReadonlyValue(documentManagementReason, safeDatasetValue(data.reason));
-      setReadonlyValue(documentManagementSampleQuestion, safeDatasetValue(data.sampleQuestion));
-      setDisplayValue(documentManagementSummary, safeDatasetValue(data.summary));
-      setDisplayValue(documentManagementAdminComment, safeDatasetValue(data.adminComment));
-      setDisplayValue(documentManagementAccessCondition, safeDatasetValue(data.accessCondition || data.accessLevel));
-      setDisplayValue(documentManagementFailureReason, safeDatasetValue(data.failureReason, "실패 사유가 기록되지 않았습니다."));
-      setReadonlyValue(documentManagementStatusLabel, safeDatasetValue(data.statusLabel));
-      setReadonlyValue(documentManagementSourceType, safeDatasetValue(data.rowType === "REQUEST" ? "승인 요청" : "문서"));
-      showDocumentReferenceValue(safeDatasetValue(data.referenceUrl));
-
-      const isRetryable = safeDatasetValue(data.retryable) === "true";
-      if (documentManagementRetryButton) {
-        documentManagementRetryButton.classList.toggle("d-none", !isRetryable);
-        documentManagementRetryButton.disabled = !isRetryable;
-      }
-    }
-
-    function populateDetailModal(button) {
-      const data = button?.dataset || {};
-
-      setEditableInputValue(titleInput, safeDatasetValue(data.title));
-      setEditableInputValue(requestTypeInput, safeDatasetValue(data.requestType));
-      setEditableInputValue(categoryInput, safeDatasetValue(data.category));
-      setReadonlyValue(requesterInput, safeDatasetValue(data.requesterName));
-      setReadonlyValue(createdAtInput, safeDatasetValue(data.createdAt));
-      setReadonlyValue(reasonInput, safeDatasetValue(data.reason));
-      setReadonlyValue(sampleQuestionInput, safeDatasetValue(data.sampleQuestion));
-      setDisplayValue(summaryTitle, safeDatasetValue(data.title, "-"));
-      setDisplayValue(summaryType, safeDatasetValue(data.requestType, "-"));
-      setDisplayValue(summaryCategory, safeDatasetValue(data.category, "-"));
-      setDisplayValue(summaryAccessLevel, accessLevelLabels[safeDatasetValue(data.accessLevel)] || safeDatasetValue(data.accessLevel) || "-");
-      setDisplayValue(summaryReason, safeDatasetValue(data.reason, "-"));
-      setDisplayValue(summarySampleQuestion, safeDatasetValue(data.sampleQuestion, "-"));
-      setDisplayValue(summaryHopeCondition, safeDatasetValue(data.targetDept, "-"));
-
-      const userAccessLevelText = accessLevelLabels[safeDatasetValue(data.accessLevel)] || safeDatasetValue(data.accessLevel) || "-";
-      setReadonlyValue(userHopeAccessLevelInput, userAccessLevelText);
-      setDisplayValue(userHopeConditionInput, safeDatasetValue(data.targetDept, "-"));
-      showReferenceValue(safeDatasetValue(data.referenceUrl));
-
-      if (requestDefaultAccessLevel) {
-        requestDefaultAccessLevel.value = safeDatasetValue(data.accessLevel, "PUBLIC");
-      }
-      updateRequestAccessArea();
-
-      const targetDeptText = safeDatasetValue(data.targetDept);
-      if (requestDefaultAccessLevel?.value === "CUSTOM" && targetDeptText) {
-        const teamName = extractSummaryValue(targetDeptText, "대상 팀");
-        const roleName = extractSummaryValue(targetDeptText, "대상 역할");
-        const positionName = extractSummaryValue(targetDeptText, "직책 기준");
-        const gradeName = extractSummaryValue(targetDeptText, "등급 기준");
-
-        setSelectByText(requestDefaultTargetDept, teamName);
-        setSelectByText(requestDefaultTargetRole, roleName);
-        setSelectByText(requestDefaultMinPosition, positionName);
-        setSelectByText(requestDefaultMinGrade, gradeName);
-      } else {
-        if (requestDefaultTargetDept) requestDefaultTargetDept.value = "";
-        if (requestDefaultTargetRole) requestDefaultTargetRole.value = "";
-        if (requestDefaultMinPosition) requestDefaultMinPosition.value = "";
-        if (requestDefaultMinGrade) requestDefaultMinGrade.value = "";
-      }
-
-      if (adminReviewMemo) {
-        adminReviewMemo.value = safeDatasetValue(data.adminComment);
-      }
-
-      if (reviewForm && reviewForm.dataset.reviewBaseUrl && data.requestId) {
-        reviewForm.dataset.currentRequestId = safeDatasetValue(data.requestId);
-        reviewForm.action = reviewForm.dataset.reviewBaseUrl.replace(/\/$/, "") + "/" + encodeURIComponent(safeDatasetValue(data.requestId)) + "/review";
-      } else if (reviewForm) {
-        reviewForm.dataset.currentRequestId = "";
-        reviewForm.removeAttribute("action");
-      }
-
-      if (reviewStatusInput) {
-        reviewStatusInput.value = "";
-      }
-
-      addSuggestionValue(requestTypeSuggestions, safeDatasetValue(data.requestType));
-      addSuggestionValue(categorySuggestions, safeDatasetValue(data.category));
-    }
-
-    requestDetailModal.addEventListener("show.bs.modal", function (event) {
-      const trigger = event.relatedTarget;
-      if (!trigger || !trigger.classList.contains("js-knowledge-request-detail")) {
-        return;
-      }
-      populateDetailModal(trigger);
-    });
-
-    requestDetailModal.addEventListener("hidden.bs.modal", function () {
-      closeAllAutocomplete();
-      clearValidationState();
-      if (reviewStatusInput) {
-        reviewStatusInput.value = "";
-      }
-      if (reviewForm) {
-        reviewForm.dataset.currentRequestId = "";
-        reviewForm.removeAttribute("action");
-      }
-    });
-
-    documentManagementModal?.addEventListener("show.bs.modal", function (event) {
-      const trigger = event.relatedTarget;
-      if (!trigger || !trigger.classList.contains("js-document-management-detail")) {
-        return;
-      }
-      populateDocumentManagementModal(trigger);
-    });
-
-    documentManagementModal?.addEventListener("hidden.bs.modal", function () {
-      if (documentManagementRetryButton) {
-        documentManagementRetryButton.classList.add("d-none");
-        documentManagementRetryButton.disabled = true;
-      }
-      [
-        documentManagementDocumentId,
-        documentManagementRegisteredAt,
-        documentManagementTitle,
-        documentManagementType,
-        documentManagementCategory,
-        documentManagementApproverName,
-        documentManagementChunkCount,
-        documentManagementVectorCount,
-        documentManagementRequesterName,
-        documentManagementRequestDate,
-        documentManagementReason,
-        documentManagementSampleQuestion,
-        documentManagementStatusLabel,
-        documentManagementSourceType
-      ].forEach(function (element) {
-        setReadonlyValue(element, "-");
-      });
-      setDisplayValue(documentManagementSummary, "-");
-      setDisplayValue(documentManagementAdminComment, "-");
-      setDisplayValue(documentManagementAccessCondition, "-");
-      setDisplayValue(documentManagementFailureReason, "-");
-      if (documentManagementReferenceLink) {
-        documentManagementReferenceLink.classList.add("d-none");
-        documentManagementReferenceLink.removeAttribute("href");
-        documentManagementReferenceLink.textContent = "";
-      }
-      if (documentManagementReferenceText) {
-        documentManagementReferenceText.classList.remove("d-none");
-        documentManagementReferenceText.textContent = "등록된 참고 자료가 없습니다.";
-      }
-      if (documentManagementStatusBadge) {
-        documentManagementStatusBadge.className = "badge text-bg-secondary";
-        documentManagementStatusBadge.textContent = "-";
-      }
-    });
-
-    requestDefaultAccessLevel?.addEventListener("change", updateRequestAccessArea);
-    updateRequestAccessArea();
-
-    autocompleteWrappers.forEach(initAutocomplete);
-
-    [titleInput, requestTypeInput, categoryInput, adminReviewMemo].forEach(function (element) {
-      element?.addEventListener("input", function () {
-        setFieldInvalid(element, false);
-      });
-    });
-
-    [requestDefaultAccessLevel, requestDefaultTargetDept, requestDefaultTargetRole, requestDefaultMinPosition, requestDefaultMinGrade].forEach(function (element) {
-      element?.addEventListener("change", function () {
-        setFieldInvalid(element, false);
-      });
-    });
-
-    approveBtn?.addEventListener("click", function () {
-      validateAdminAction("APPROVED");
-    });
-
-    rejectBtn?.addEventListener("click", function () {
-      validateAdminAction("REJECTED");
-    });
-
-    documentManagementRetryButton?.addEventListener("click", function () {
-      if (documentManagementRetryButton.disabled) {
-        return;
-      }
-      alert("재시도 기능은 후속 구현 예정입니다.");
-    });
-  });
-</script>
 
 </body>
 </html>
+

@@ -1,18 +1,13 @@
 /**
  * @FileName : KnowledgeRequestScreen.js
- * @Description : AiSecretary.js 전용 지식 추가 화면
- * @Author : 송혜진
- * @Date : 2026. 04. 30
- * @Modification_History
- * @
- * @ 수정일       수정자       수정내용
- * @ ----------  ---------   ----------------------------------------
- * @ 2026.04.30  송혜진       최초 생성
+ * @Description : AiSecretary.js 전용 지식 등록 요청 화면
  */
 
-import React, { useState } from "react";
-import Chip from "../components/Chip";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import AppButton from "../components/AppButton";
+import AutocompleteInput from "../components/AutocompleteInput";
 import Field from "../components/Field";
+import OrganizationSelector from "../components/OrganizationSelector";
 import TextInput from "../components/TextInput";
 import {
   createKnowledgeRequest,
@@ -20,20 +15,113 @@ import {
   getMyKnowledgeRequests,
   unwrapApiData,
 } from "../api/aiSecretaryApi";
+import { I, Icon } from "../constants/aiSecretaryIcons";
 import { C, styles } from "../styles/aiSecretaryTheme";
 
-export default function KnowledgeRequestScreen() {
-  const [form, setForm] = useState({
-    title: "",
-    requestType: "",
-    category: "",
-    reason: "",
-    sampleQuestion: "",
-    referenceUrl: "",
-    accessLevel: "",
-    customDept: "",
-    customPosition: "",
-  };
+const STATUS_LABEL_MAP = {
+  PENDING: "대기중",
+  APPROVED: "승인",
+  REJECTED: "반려",
+  PUBLISHED: "반영 완료",
+};
+
+const STATUS_TONE_MAP = {
+  PENDING: {
+    background: "#EFF6FF",
+    color: "#1D4ED8",
+    border: "#BFDBFE",
+  },
+  APPROVED: {
+    background: "#ECFDF5",
+    color: "#047857",
+    border: "#A7F3D0",
+  },
+  REJECTED: {
+    background: "#F3F4F6",
+    color: "#374151",
+    border: "#E5E7EB",
+  },
+  PUBLISHED: {
+    background: "#EEF2FF",
+    color: "#4338CA",
+    border: "#C7D2FE",
+  },
+};
+
+const INFO_BOX_STYLE = {
+  borderRadius: 16,
+  padding: 16,
+  border: `1px solid ${C.border}`,
+  background: "#fff",
+};
+
+const fieldErrorStyle = {
+  marginTop: 8,
+  fontSize: 12,
+  color: "#DC2626",
+  fontWeight: 700,
+  lineHeight: 1.5,
+};
+
+
+const DEFAULT_REQUEST_TYPES = [
+  "FAQ",
+  "업무 규정",
+  "절차 안내",
+  "신청 방법",
+  "기타",
+];
+
+const DEFAULT_CATEGORIES = [
+  "인사",
+  "총무",
+  "IT",
+  "회계",
+  "교육",
+  "복지",
+  "보안",
+  "기타",
+];
+
+function normalizeText(value) {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value).trim();
+}
+
+function normalizeSuggestionList(defaults, values) {
+  const merged = new Set();
+
+  [...(Array.isArray(defaults) ? defaults : []), ...(Array.isArray(values) ? values : [])].forEach((value) => {
+    const normalized = normalizeText(value);
+    if (normalized) {
+      merged.add(normalized);
+    }
+  });
+
+  return Array.from(merged);
+}
+
+function formatDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "-";
+  }
+
+  return new Intl.DateTimeFormat("ko-KR", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatToday() {
+  return formatDateTime(new Date());
 }
 
 function getRequesterLabel(userInfo, empNo) {
@@ -64,65 +152,293 @@ function getStatusTone(status) {
   };
 }
 
-function getAccessLevelLabel(value) {
-  const key = normalizeText(value).toUpperCase();
-  if (key === "PUBLIC") {
-    return "전체 공개";
+function buildTargetDeptSummary(form) {
+  const audience = normalizeText(form?.audience);
+  const targets = Array.isArray(form?.targets)
+    ? form.targets.map((item) => normalizeText(item)).filter(Boolean)
+    : [];
+
+  if (targets.length > 0) {
+    return targets.join(" / ");
   }
-  if (key === "CUSTOM") {
-    return "조건 조합";
-  }
-  if (key === "ADMIN_ONLY") {
-    return "관리자 전용";
-  }
-  return normalizeText(value) || "-";
+
+  return audience;
 }
 
-function getAccessLevelGuide(value) {
-  if (value === "PUBLIC") {
-    return "전체 공개 문서는 모든 직원이 챗봇/RAG 검색 결과로 접근할 수 있습니다.";
+function KnowledgeRequestFieldError({ error }) {
+  if (!error) {
+    return null;
   }
-  if (value === "CUSTOM") {
-    return "선택한 조건은 관리자 검토 시 기본 접근 권한 참고 정보로 활용됩니다. 최종 접근 권한은 관리자 검토 후 확정됩니다.";
-  }
-  if (value === "ADMIN_ONLY") {
-    return "관리자 전용 문서는 관리자 권한 사용자만 챗봇/RAG 검색 결과로 접근할 수 있습니다.";
-  }
-  return "기본 열람 권한을 선택하면 챗봇/RAG 검색 결과 접근 범위를 확인할 수 있습니다.";
+
+  return <div style={fieldErrorStyle}>{error}</div>;
 }
 
-function buildCustomTargetDept(form) {
-  const team = normalizeText(form.customDept);
-  const position = normalizeText(form.customPosition);
-  const parts = [];
+export default function KnowledgeRequestScreen({ userInfo }) {
+  const empNo = useMemo(
+    () => normalizeText(userInfo?.empNo ?? userInfo?.emp_no ?? ""),
+    [userInfo]
+  );
+  const requesterName = useMemo(
+    () => normalizeText(userInfo?.name || userInfo?.empName || userInfo?.userName),
+    [userInfo]
+  );
+  const requesterLabel = useMemo(
+    () => getRequesterLabel(userInfo, empNo),
+    [userInfo, empNo]
+  );
 
-  if (team) {
-    parts.push(`대상 팀: ${team}`);
-  }
-  if (position) {
-    parts.push(`직책 기준: ${position}`);
-  }
-
-  return parts.join(" / ");
-}
-
-function normalizeSuggestionList(defaults, values) {
-  const merged = new Set();
-
-  [...(Array.isArray(defaults) ? defaults : []), ...(Array.isArray(values) ? values : [])].forEach((value) => {
-    const normalized = normalizeText(value);
-    if (normalized) {
-      merged.add(normalized);
-    }
+  const [form, setForm] = useState({
+    title: "",
+    requestType: "",
+    category: "",
+    reason: "",
+    sampleQuestion: "",
+    referenceUrl: "",
+    audience: "",
+    targets: [],
+    accessLevel: "CUSTOM",
+  });
+  const [errors, setErrors] = useState({});
+  const [feedback, setFeedback] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [loadingRequests, setLoadingRequests] = useState(false);
+  const [requests, setRequests] = useState([]);
+  const [suggestions, setSuggestions] = useState({
+    requestTypes: normalizeSuggestionList(DEFAULT_REQUEST_TYPES, []),
+    categories: normalizeSuggestionList(DEFAULT_CATEGORIES, []),
   });
 
-  const scopeOptions = ["전사 공개", "부서 공개", "특정 권한"];
+  const updateField = useCallback((field, value) => {
+    setForm((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
+    setErrors((prev) => ({
+      ...prev,
+      [field]: undefined,
+    }));
+  }, []);
+
+  const resetForm = useCallback(
+    ({ preserveFeedback = false } = {}) => {
+      setForm({
+        title: "",
+        requestType: "",
+        category: "",
+        reason: "",
+        sampleQuestion: "",
+        referenceUrl: "",
+        audience: "",
+        targets: [],
+        accessLevel: "CUSTOM",
+      });
+      setErrors({});
+      if (!preserveFeedback) {
+        setFeedback(null);
+      }
+    },
+    []
+  );
+
+  const validateForm = useCallback(
+    (nextForm) => {
+      const nextErrors = {};
+      const title = normalizeText(nextForm.title);
+      const requestType = normalizeText(nextForm.requestType);
+      const category = normalizeText(nextForm.category);
+      const reason = normalizeText(nextForm.reason);
+      const sampleQuestion = normalizeText(nextForm.sampleQuestion);
+      const targetDept = buildTargetDeptSummary(nextForm);
+
+      if (!empNo) {
+        nextErrors.requester = "??? ??? ??? ?? ? ????.";
+      }
+      if (!title) {
+        nextErrors.title = "??? ?? ?? ??? ?????.";
+      }
+      if (!requestType) {
+        nextErrors.requestType = "?? ??? ?????.";
+      }
+      if (!category) {
+        nextErrors.category = "????? ?????.";
+      }
+      if (!reason) {
+        nextErrors.reason = "?? ??? ?????.";
+      }
+      if (!sampleQuestion) {
+        nextErrors.sampleQuestion = "?? ?? ??? ?????.";
+      }
+      if (!targetDept) {
+        nextErrors.targets = "?? ?? ??? ??? ???.";
+      }
+
+      return nextErrors;
+    },
+    [empNo]
+  );
+
+  const fetchSuggestions = useCallback(async () => {
+    setLoadingSuggestions(true);
+    try {
+      const response = await getKnowledgeRequestSuggestions();
+      const data = unwrapApiData(response);
+      setSuggestions({
+        requestTypes: normalizeSuggestionList(
+          DEFAULT_REQUEST_TYPES,
+          data?.requestTypes
+        ),
+        categories: normalizeSuggestionList(
+          DEFAULT_CATEGORIES,
+          data?.categories
+        ),
+      });
+    } catch (error) {
+      setSuggestions({
+        requestTypes: normalizeSuggestionList(DEFAULT_REQUEST_TYPES, []),
+        categories: normalizeSuggestionList(DEFAULT_CATEGORIES, []),
+      });
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, []);
+
+  const fetchRequests = useCallback(async () => {
+    if (!empNo) {
+      setRequests([]);
+      return;
+    }
+
+    setLoadingRequests(true);
+    try {
+      const response = await getMyKnowledgeRequests(empNo);
+      const data = unwrapApiData(response);
+      setRequests(Array.isArray(data) ? data : []);
+    } catch (error) {
+      setRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
+  }, [empNo]);
+
+  useEffect(() => {
+    fetchSuggestions();
+    fetchRequests();
+  }, [fetchSuggestions, fetchRequests]);
+
+  const handleSubmit = useCallback(
+    async (event) => {
+      event.preventDefault();
+
+      if (saving) {
+        return;
+      }
+
+      const nextErrors = validateForm(form);
+      if (Object.keys(nextErrors).length > 0) {
+        setErrors(nextErrors);
+        setFeedback({
+          type: "error",
+          text: "입력값을 다시 확인해 주세요.",
+        });
+        return;
+      }
+
+      const targetDept = buildTargetDeptSummary(form);
+      const payload = {
+        requesterNo: empNo,
+        title: normalizeText(form.title),
+        requestType: normalizeText(form.requestType),
+        category: normalizeText(form.category),
+        targetDept: targetDept || null,
+        reason: normalizeText(form.reason),
+        sampleQuestion: normalizeText(form.sampleQuestion),
+        referenceUrl: normalizeText(form.referenceUrl) || null,
+        accessLevel: normalizeText(form.accessLevel) || "CUSTOM",
+      };
+
+      setSaving(true);
+      try {
+        await createKnowledgeRequest(payload);
+        resetForm({ preserveFeedback: true });
+        setFeedback({
+          type: "success",
+          text: "?? ?? ??? ???????.",
+        });
+        await fetchRequests();
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          text: "?? ?? ?? ??? ??????.",
+        });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [empNo, fetchRequests, form, resetForm, saving, validateForm]
+  );
+
+  const renderAutocompleteInput = (
+    fieldName,
+    placeholder,
+    suggestionList,
+    helperText
+  ) => (
+    <div style={{ display: "grid", gap: 8 }}>
+      <AutocompleteInput
+        value={form[fieldName]}
+        onChange={(nextValue) => updateField(fieldName, nextValue)}
+        suggestions={suggestionList}
+        placeholder={placeholder}
+        helperText={helperText}
+        emptyText="직접 입력해 주세요."
+      />
+      {helperText ? <div style={{ fontSize: 12, color: C.sub }}>{helperText}</div> : null}
+    </div>
+  );
+
+  const renderSelect = (fieldName, options, placeholder) => (
+    <select
+      value={form[fieldName]}
+      onChange={(event) => updateField(fieldName, event.target.value)}
+      style={{
+        width: "100%",
+        minHeight: 46,
+        border: `1px solid ${C.border}`,
+        borderRadius: 12,
+        outline: "none",
+        background: "#fff",
+        color: C.text,
+        fontSize: 14,
+        padding: "0 14px",
+        boxSizing: "border-box",
+      }}
+    >
+      <option value="">{placeholder}</option>
+      {(Array.isArray(options) ? options : []).map((option) => {
+        const value =
+          typeof option === "string" ? option : normalizeText(option?.value);
+        const label =
+          typeof option === "string" ? option : normalizeText(option?.label || option?.value);
+
+        if (!value) {
+          return null;
+        }
+
+        return (
+          <option key={value} value={value}>
+            {label || value}
+          </option>
+        );
+      })}
+    </select>
+  );
 
   return (
     <div style={styles.page}>
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 16, color: C.sub, fontWeight: 700 }}>
-          지식 추가 요청
+          자료 등록 요청
         </div>
         <h1
           style={{
@@ -132,10 +448,10 @@ function normalizeSuggestionList(defaults, values) {
             letterSpacing: -1,
           }}
         >
-          챗봇 지식 추가 요청
+          챗봇 자료 등록 요청
         </h1>
         <p style={{ margin: "10px 0 0", color: C.sub, fontSize: 16 }}>
-          관리자 검토 후 등록이 완료되면, 챗봇이 해당 데이터를 학습하여 스마트한 답변을 제공합니다.
+          관리자가 검토할 자료를 입력하면, 문서 처리 흐름으로 이어질 수 있도록 요청을 접수합니다.
         </p>
       </div>
 
@@ -154,37 +470,25 @@ function normalizeSuggestionList(defaults, values) {
             gap: 16,
           }}
         >
-          <div
-            style={{
-              ...INFO_BOX_STYLE,
-              display: "grid",
-              gap: 10,
-            }}
-          >
+          <div style={{ ...INFO_BOX_STYLE, display: "grid", gap: 10 }}>
             <div style={{ color: C.accent, fontWeight: 900, fontSize: 15 }}>
-              상세 항목을 입력해 주세요.
+              상세 요청 정보를 입력해 주세요
             </div>
             <div style={{ color: C.sub, fontSize: 14, lineHeight: 1.7 }}>
-              입력하신 정보는 관리자 RAG 시스템의 상세 구조로 저장되어, 더욱 정확하고 풍부한 챗봇 답변의 밑바탕이 됩니다.
+              입력한 정보는 관리자 RAG 검토의 기준이 됩니다. 문서 유형이나 카테고리는 추천 목록에서 선택하거나 직접 입력할 수 있습니다.
             </div>
             <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-              현재 단계에서는 파일 본문 자동 분석 대신 참고 URL 또는 파일명을 기반으로 검토가 진행됩니다.
+              현재 추천 목록은 {loadingSuggestions ? "불러오는 중입니다." : "즉시 사용 가능합니다."}
             </div>
           </div>
 
-          <div
-            style={{
-              ...INFO_BOX_STYLE,
-              display: "grid",
-              gap: 10,
-            }}
-          >
+          <div style={{ ...INFO_BOX_STYLE, display: "grid", gap: 10 }}>
             <div style={{ color: C.accent, fontWeight: 900, fontSize: 15 }}>
               요청자 정보
             </div>
             <div style={{ display: "grid", gap: 8, fontSize: 14, color: C.text }}>
               <div>
-                <span style={{ color: C.sub, fontWeight: 700 }}>사용자명: </span>
+                <span style={{ color: C.sub, fontWeight: 700 }}>요청자명: </span>
                 {requesterName || "-"}
               </div>
               <div>
@@ -197,13 +501,13 @@ function normalizeSuggestionList(defaults, values) {
               </div>
             </div>
             <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
-              요청자 정보는 로그인 사용자 기준으로 자동 표시됩니다.
+              요청자 정보는 목록과 상세에서 함께 활용됩니다.
             </div>
           </div>
         </div>
       </div>
 
-      {feedback && (
+      {feedback ? (
         <div
           style={{
             ...styles.card,
@@ -217,7 +521,7 @@ function normalizeSuggestionList(defaults, values) {
         >
           {feedback.text}
         </div>
-      )}
+      ) : null}
 
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 18 }}>
         <div style={{ ...styles.card, padding: 24 }}>
@@ -225,7 +529,7 @@ function normalizeSuggestionList(defaults, values) {
             <Field label="문서명" required>
               <div>
                 <TextInput
-                  placeholder="예: 2026 근태 지침"
+                  placeholder="예: 2026 연차 규정"
                   value={form.title}
                   onChange={(e) => updateField("title", e.target.value)}
                 />
@@ -237,9 +541,9 @@ function normalizeSuggestionList(defaults, values) {
               <div>
                 {renderAutocompleteInput(
                   "requestType",
-                  "예: 업무 매뉴얼, FAQ, 서비스 이용 안내",
+                  "예: 업무 매뉴얼, FAQ, 제도 안내",
                   suggestions.requestTypes,
-                  "기존 유형을 선택하거나 새 유형을 직접 입력할 수 있습니다."
+                  "추천 목록에서 선택하거나 직접 입력할 수 있습니다."
                 )}
                 <KnowledgeRequestFieldError error={errors.requestType} />
               </div>
@@ -249,9 +553,9 @@ function normalizeSuggestionList(defaults, values) {
               <div>
                 {renderAutocompleteInput(
                   "category",
-                  "예: 근태, 인사, 전자결재, 시스템",
+                  "예: 인사, 총무, IT, 복지",
                   suggestions.categories,
-                  "기존 카테고리를 선택하거나 새 카테고리를 직접 입력할 수 있습니다."
+                  "추천 목록에서 선택하거나 직접 입력할 수 있습니다."
                 )}
                 <KnowledgeRequestFieldError error={errors.category} />
               </div>
@@ -261,7 +565,7 @@ function normalizeSuggestionList(defaults, values) {
               <div>
                 <TextInput
                   textarea
-                  placeholder="어떤 업무에서 필요하고, 어떤 질문에 도움이 되는지 자세히 적어 주세요."
+                  placeholder="어떤 업무에서 필요하고, 어떤 내용을 알고 싶은지 구체적으로 적어 주세요."
                   value={form.reason}
                   onChange={(e) => updateField("reason", e.target.value)}
                 />
@@ -273,7 +577,7 @@ function normalizeSuggestionList(defaults, values) {
               <div>
                 <TextInput
                   textarea
-                  placeholder="예: 조퇴 신청은 어떻게 하나요?"
+                  placeholder="예: 연차 신청은 어디서 하나요?"
                   value={form.sampleQuestion}
                   onChange={(e) => updateField("sampleQuestion", e.target.value)}
                 />
@@ -284,100 +588,33 @@ function normalizeSuggestionList(defaults, values) {
             <Field label="참고 URL 또는 콘텐츠 경로">
               <div style={{ display: "grid", gap: 10 }}>
                 <TextInput
-                  placeholder="예: https://company.notion.site/leave-policy 또는 /docs/hr/근태관리_조퇴신청_기준.pdf"
+                  placeholder="예: https://company... 또는 /docs/hr/연차규정.pdf"
                   value={form.referenceUrl}
                   onChange={(e) => updateField("referenceUrl", e.target.value)}
                 />
                 <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>
-                  현재 단계에서는 파일 본문 자동 분석이나 실제 업로드는 지원하지 않으며, 입력한 URL 또는 콘텐츠 경로를 기준으로 관리자가 검토합니다.
+                  참고할 문서가 있다면 공개 URL 또는 내부 콘텐츠 경로를 입력해 주세요.
                 </div>
               </div>
             </Field>
 
-            <Field label="기본 열람 권한" required>
+            <Field label="권한 희망 조건" required>
               <div style={{ display: "grid", gap: 10 }}>
-                {renderSelect(
-                  "accessLevel",
-                  ACCESS_LEVEL_OPTIONS,
-                  "기본 열람 권한을 선택해 주세요."
-                )}
-                <KnowledgeRequestFieldError error={errors.accessLevel} />
-                <div
-                  style={{
-                    borderRadius: 12,
-                    padding: "12px 14px",
-                    background:
-                      form.accessLevel === "PUBLIC"
-                        ? "#ECFDF5"
-                        : form.accessLevel === "ADMIN_ONLY"
-                          ? "#EFF6FF"
-                          : form.accessLevel === "CUSTOM"
-                            ? "#F8FAFC"
-                            : "#F8FAFC",
-                    color:
-                      form.accessLevel === "PUBLIC"
-                        ? "#047857"
-                        : form.accessLevel === "ADMIN_ONLY"
-                          ? "#1D4ED8"
-                          : C.sub,
-                    fontSize: 13,
-                    lineHeight: 1.6,
-                    border: `1px solid ${
-                      form.accessLevel === "PUBLIC"
-                        ? "#A7F3D0"
-                        : form.accessLevel === "ADMIN_ONLY"
-                          ? "#BFDBFE"
-                          : C.border
-                    }`,
-                  }}
-                >
-                  {accessLevelGuide}
+                <OrganizationSelector
+                  formType="REPORT"
+                  audience={form.audience}
+                  targets={form.targets}
+                  onChangeFormData={updateField}
+                  showReferenceNote={false}
+                />
+                <KnowledgeRequestFieldError error={errors.targets} />
+                <div className="form-text">
+                  대상 본부, 팀, 직책 기준, 사원 선택을 순서대로 지정해 주세요.
                 </div>
-
-                {showCustomSection && (
-                  <div
-                    style={{
-                      marginTop: 4,
-                      borderRadius: 12,
-                      padding: 14,
-                      background: "#F8FAFC",
-                      border: `1px solid ${C.border}`,
-                      display: "grid",
-                      gap: 12,
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 14, fontWeight: 900, color: C.text }}>
-                        조건 조합
-                      </div>
-                      <div style={{ marginTop: 4, fontSize: 12, color: C.sub, lineHeight: 1.6 }}>
-                        선택한 조건은 관리자 검토 시 기본 접근 권한 참고 정보로 활용됩니다. 최종 접근 권한은 관리자 검토 후 확정됩니다.
-                      </div>
-                    </div>
-
-                    <div style={{ display: "grid", gap: 12 }}>
-                      <Field label="대상 팀">
-                        <div>
-                          {renderSelect("customDept", TEAM_OPTIONS, "대상 팀을 선택해 주세요.")}
-                        </div>
-                      </Field>
-
-                      <Field label="직책 기준">
-                        <div>
-                          {renderSelect("customPosition", POSITION_OPTIONS, "직책 기준을 선택해 주세요.")}
-                        </div>
-                      </Field>
-                    </div>
-
-                    <KnowledgeRequestFieldError error={errors.customDept || errors.customPosition} />
-                  </div>
-                )}
               </div>
             </Field>
 
-            {errors.requester && (
-              <div style={{ ...fieldErrorStyle, marginTop: 0 }}>{errors.requester}</div>
-            )}
+            <KnowledgeRequestFieldError error={errors.requester} />
           </div>
 
           <div
@@ -392,16 +629,13 @@ function normalizeSuggestionList(defaults, values) {
             <AppButton
               type="button"
               variant="secondary"
-              onClick={() => {
-                resetForm();
-                setFeedback(null);
-              }}
+              onClick={() => resetForm()}
             >
               초기화
             </AppButton>
             <AppButton type="submit" disabled={saving || !empNo}>
               <Icon>{I.send}</Icon>
-              {saving ? "제출 중..." : "제출"}
+              {saving ? "전송 중..." : "전송"}
             </AppButton>
           </div>
         </div>
@@ -412,7 +646,7 @@ function normalizeSuggestionList(defaults, values) {
           <div>
             <h3 style={styles.sectionTitle}>내 요청 목록</h3>
             <div style={styles.sectionSub}>
-              최근 제출한 요청을 확인하고, 현재 처리 상태와 관리자 메모를 볼 수 있습니다.
+              최근 제출한 요청과 현재 처리 상태를 확인할 수 있습니다.
             </div>
           </div>
 
@@ -447,10 +681,13 @@ function normalizeSuggestionList(defaults, values) {
           ) : null}
 
           {requests.map((request) => {
-            const tone = getStatusTone(request.status);
+            const tone = getStatusTone(request?.status);
+            const title = normalizeText(request?.title) || "-";
+            const requester = normalizeText(request?.requesterName) || requesterLabel;
+
             return (
               <div
-                key={request.knowledgeRequestId || `${request.title}-${request.createdAt}`}
+                key={request?.knowledgeRequestId || `${title}-${request?.createdAt || request?.requestDate || Math.random()}`}
                 style={{
                   border: `1px solid ${C.border}`,
                   borderRadius: 16,
@@ -469,10 +706,10 @@ function normalizeSuggestionList(defaults, values) {
                 >
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 18, fontWeight: 900, color: C.text, marginBottom: 6 }}>
-                      {normalizeText(request.title) || "-"}
+                      {title}
                     </div>
                     <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>
-                      {formatDateTime(request.createdAt)} · {normalizeText(request.requesterName) || requesterLabel}
+                      {formatDateTime(request?.createdAt || request?.requestDate)} · {requester}
                     </div>
                   </div>
 
@@ -488,7 +725,7 @@ function normalizeSuggestionList(defaults, values) {
                       flexShrink: 0,
                     }}
                   >
-                    {getStatusLabel(request.status, request.statusLabel)}
+                    {getStatusLabel(request?.status, request?.statusLabel)}
                   </span>
                 </div>
 
@@ -503,21 +740,21 @@ function normalizeSuggestionList(defaults, values) {
                   <div>
                     <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>문서 유형</div>
                     <div style={{ marginTop: 4, fontSize: 14, color: C.text }}>
-                      {normalizeText(request.requestType) || "-"}
+                      {normalizeText(request?.requestType) || "-"}
                     </div>
                   </div>
 
                   <div>
                     <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>카테고리</div>
                     <div style={{ marginTop: 4, fontSize: 14, color: C.text }}>
-                      {normalizeText(request.category) || "-"}
+                      {normalizeText(request?.category) || "-"}
                     </div>
                   </div>
 
                   <div>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>기본 열람 권한</div>
+                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>권한 희망 조건</div>
                     <div style={{ marginTop: 4, fontSize: 14, color: C.text }}>
-                      {getAccessLevelLabel(request.accessLevel)}
+                      {normalizeText(request?.targetDept) || "-"}
                     </div>
                   </div>
 
@@ -526,7 +763,7 @@ function normalizeSuggestionList(defaults, values) {
                       참고 URL 또는 콘텐츠 경로
                     </div>
                     <div style={{ marginTop: 4, fontSize: 14, color: C.text, wordBreak: "break-all" }}>
-                      {normalizeText(request.referenceUrl) || "-"}
+                      {normalizeText(request?.referenceUrl) || "-"}
                     </div>
                   </div>
                 </div>
@@ -542,7 +779,7 @@ function normalizeSuggestionList(defaults, values) {
                       whiteSpace: "pre-wrap",
                     }}
                   >
-                    {normalizeText(request.reason) || "-"}
+                    {normalizeText(request?.reason) || "-"}
                   </div>
                 </div>
 
@@ -557,11 +794,11 @@ function normalizeSuggestionList(defaults, values) {
                       whiteSpace: "pre-wrap",
                     }}
                   >
-                    {normalizeText(request.sampleQuestion) || "-"}
+                    {normalizeText(request?.sampleQuestion) || "-"}
                   </div>
                 </div>
 
-                {normalizeText(request.adminComment) && (
+                {normalizeText(request?.adminComment) ? (
                   <div
                     style={{
                       marginTop: 14,
@@ -584,7 +821,7 @@ function normalizeSuggestionList(defaults, values) {
                       {request.adminComment}
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             );
           })}
