@@ -51,6 +51,7 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
     private final AiDocumentRepository aiDocumentRepository;
     private final AiKnowledgeRequestRepository aiKnowledgeRequestRepository;
     private final EmpRepository empRepository;
+    private final ThreadLocal<Map<String, String>> lastPermissionDeniedInfo = new ThreadLocal<>();
 
     @Value("${ai.server.base-url:http://localhost:8000}")
     private String aiServerBaseUrl;
@@ -59,6 +60,7 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
     public List<RagRetrievedChunkDto> retrieveTopChunks(String question, int topK, String empNo) {
         String normalizedQuestion = safe(question);
         String normalizedEmpNo = safe(empNo);
+        lastPermissionDeniedInfo.remove();
         log.debug(
                 "[RAG retrieval] start empNo={}, topK={}, questionLength={}",
                 normalizedEmpNo,
@@ -137,6 +139,9 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
                     allowedDocIds,
                     blockedDocIds
             );
+            if (!allowedDocuments.isEmpty()) {
+                lastPermissionDeniedInfo.remove();
+            }
 
             List<ScoredChunk> scoredChunks = new ArrayList<>();
             int candidateChunkCount = 0;
@@ -326,6 +331,7 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
             );
             return retrievedChunks;
         } catch (Exception e) {
+            lastPermissionDeniedInfo.remove();
             log.warn(
                     "[RAG retrieval] failed. empNo={}, questionLength={}, errorType={}, message={}",
                     normalizedEmpNo,
@@ -336,6 +342,13 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
             );
             return List.of();
         }
+    }
+
+    @Override
+    public Map<String, String> consumeLastPermissionDeniedInfo() {
+        Map<String, String> deniedInfo = lastPermissionDeniedInfo.get();
+        lastPermissionDeniedInfo.remove();
+        return deniedInfo == null ? Map.of() : deniedInfo;
     }
 
     private AiEmbeddingResponseDto requestQuestionEmbedding(String question) {
@@ -553,6 +566,7 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
 
         TargetDeptCondition condition = parseTargetDeptCondition(targetDept);
         if (condition.parseFailed()) {
+            recordPermissionDeniedInfoIfAbsent(document, targetDept, employeeAccessContext, "parse-failed");
             log.debug(
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
@@ -578,6 +592,7 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
 
         if (!isWildcard(condition.requiredHeadquarter())
                 && !condition.requiredHeadquarter().equals(employeeAccessContext.headquarterName())) {
+            recordPermissionDeniedInfoIfAbsent(document, targetDept, employeeAccessContext, "headquarter-mismatch");
             log.debug(
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
@@ -595,6 +610,7 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
 
         if (!isWildcard(condition.requiredTeam())
                 && !condition.requiredTeam().equals(employeeAccessContext.teamName())) {
+            recordPermissionDeniedInfoIfAbsent(document, targetDept, employeeAccessContext, "team-mismatch");
             log.debug(
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
@@ -612,6 +628,7 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
 
         if (!isWildcard(condition.requiredPosition())
                 && !condition.requiredPosition().equals(employeeAccessContext.positionName())) {
+            recordPermissionDeniedInfoIfAbsent(document, targetDept, employeeAccessContext, "position-mismatch");
             log.debug(
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
@@ -640,6 +657,31 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
                 "matched"
         );
         return true;
+    }
+
+    private void recordPermissionDeniedInfoIfAbsent(
+            DocumentEntity document,
+            String targetDept,
+            EmployeeAccessContext employeeAccessContext,
+            String deniedReason
+    ) {
+        if (document == null || document.getDocId() == null || employeeAccessContext == null) {
+            return;
+        }
+        if (lastPermissionDeniedInfo.get() != null && !lastPermissionDeniedInfo.get().isEmpty()) {
+            return;
+        }
+
+        Map<String, String> deniedInfo = new LinkedHashMap<>();
+        deniedInfo.put("permissionDenied", "true");
+        deniedInfo.put("deniedReason", safe(deniedReason));
+        deniedInfo.put("deniedDocId", String.valueOf(document.getDocId()));
+        deniedInfo.put("deniedDocTitle", safe(document.getTitle()));
+        deniedInfo.put("userHeadquarter", safe(employeeAccessContext.headquarterName()));
+        deniedInfo.put("userTeam", safe(employeeAccessContext.teamName()));
+        deniedInfo.put("userPosition", safe(employeeAccessContext.positionName()));
+        deniedInfo.put("targetDept", safe(targetDept));
+        lastPermissionDeniedInfo.set(deniedInfo);
     }
 
     private TargetDeptCondition parseTargetDeptCondition(String targetDept) {

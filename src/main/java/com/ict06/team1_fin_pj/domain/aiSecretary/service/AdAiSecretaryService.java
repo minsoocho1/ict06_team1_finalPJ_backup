@@ -52,7 +52,29 @@ public interface AdAiSecretaryService {
             String requestCategory
     );
 
-    List<Map<String, Object>> getDocumentManagementRows(List<KnowledgeResponseDto> knowledgeRequests);
+    List<Map<String, Object>> getDocumentManagementRows(
+            List<KnowledgeResponseDto> knowledgeRequests,
+            String docStage,
+            String accessLevel,
+            String docKeyword
+    );
+
+    byte[] downloadDocumentManagementCsv(
+            String docStage,
+            String accessLevel,
+            String docKeyword
+    );
+
+    Map<String, Object> updateDocumentManagementDetail(
+            Integer documentId,
+            String title,
+            String requestType,
+            String category,
+            String targetDept,
+            String adminComment
+    );
+
+    List<Map<String, Object>> getAccessBlockLogs();
 
     KnowledgeResponseDto reviewKnowledgeRequest(
             Long requestId,
