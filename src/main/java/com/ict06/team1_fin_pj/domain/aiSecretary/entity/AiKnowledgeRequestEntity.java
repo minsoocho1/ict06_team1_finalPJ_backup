@@ -82,4 +82,16 @@ public class AiKnowledgeRequestEntity extends BaseTimeEntity {
         this.status = AiKnowledgeStatus.PUBLISHED;
         this.targetDoc = targetDoc;
     }
+
+    public void updateAdminDocumentSettings(
+            String requestType,
+            String category,
+            String targetDept,
+            String adminComment
+    ) {
+        this.requestType = requestType;
+        this.category = category;
+        this.targetDept = targetDept;
+        this.adminComment = adminComment;
+    }
 }

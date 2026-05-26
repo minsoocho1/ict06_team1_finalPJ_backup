@@ -42,10 +42,10 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AdAiSecretaryController {
 
-    // service ?몄텧
+    // service 주입
     private final AdAiSecretaryService adAiSecretaryService;
 
-    // AI 鍮꾩꽌 愿由ъ옄 ??쒕낫???붾㈃ 議고쉶
+    // AI 비서 관리자 대시보드 화면 조회
     @GetMapping("/dashboard")
     public String aiDashboard(
             @RequestParam(defaultValue = "7") int period,
@@ -87,7 +87,7 @@ public class AdAiSecretaryController {
         return "admin/aiSecretary/adAiDashboard";
     }
 
-    // ??쒕낫??理쒓렐 濡쒓렇 CSV ?ㅼ슫濡쒕뱶
+    // 대시보드 최근 로그 CSV 다운로드
     @GetMapping("/dashboard/download/csv")
     public ResponseEntity<byte[]> downloadDashboardCsv(
             @RequestParam(defaultValue = "7") int period,
@@ -109,7 +109,7 @@ public class AdAiSecretaryController {
                 .body(csvBytes == null ? new byte[0] : csvBytes);
     }
 
-    // AI RAG 吏?앸쿋?댁뒪 愿由??붾㈃ 議고쉶
+    // AI RAG 지식베이스 관리 화면 조회
     @GetMapping("/rag")
     public String aiRagManage(
             @RequestParam(defaultValue = "") String requestStartDate,
@@ -124,17 +124,23 @@ public class AdAiSecretaryController {
             @RequestParam(defaultValue = "") String docCategory,
             @RequestParam(defaultValue = "") String docType,
             @RequestParam(defaultValue = "") String accessLevel,
+            @RequestParam(defaultValue = "") String docKeyword,
             @RequestParam(defaultValue = "1") int docPage,
             Model model
     ) {
-        // 1. 吏???깅줉 ?붿껌 ?곗씠??議고쉶 諛??섏씠吏?泥섎━
+        // 1. 지식 등록 요청 데이터 조회 및 페이지 처리
         List<KnowledgeResponseDto> requestManagementRequests = adAiSecretaryService.getKnowledgeRequestsForAdmin(
                 requestStartDate, requestEndDate, requestStatus, requestType, requestCategory
         );
         List<KnowledgeResponseDto> allKnowledgeRequests = adAiSecretaryService.getKnowledgeRequestsForAdmin(
                 "", "", "", "", ""
         );
-        List<Map<String, Object>> documentManagementRows = adAiSecretaryService.getDocumentManagementRows(allKnowledgeRequests);
+        List<Map<String, Object>> documentManagementRows = adAiSecretaryService.getDocumentManagementRows(
+                allKnowledgeRequests,
+                docStage,
+                accessLevel,
+                docKeyword
+        );
 
         int requestPageSize = 10;
         int requestTotalCount = requestManagementRequests.size();
@@ -157,15 +163,16 @@ public class AdAiSecretaryController {
         model.addAttribute("documentManagementCount", documentManagementRows.size());
         model.addAttribute("documentManagementRows", documentManagementRows);
 
-        // 2. 臾몄꽌 愿由?寃??議곌굔 蹂듭썝
+        // 2. 문서 관리 검색 조건 복원
         model.addAttribute("docStartDate", docStartDate);
         model.addAttribute("docEndDate", docEndDate);
         model.addAttribute("selectedDocStage", docStage);
         model.addAttribute("selectedDocCategory", docCategory);
         model.addAttribute("selectedDocType", docType);
         model.addAttribute("selectedAccessLevel", accessLevel);
+        model.addAttribute("selectedDocKeyword", docKeyword);
 
-        // 3. 臾몄꽌 愿由??붾? ?섏씠吏?
+        // 3. 문서 관리 하단 페이지
         int docPageSize = 10;
         int docTotalCount = 128;
         int docTotalPages = (int) Math.ceil((double) docTotalCount / docPageSize);
@@ -175,7 +182,7 @@ public class AdAiSecretaryController {
         model.addAttribute("docTotalPages", docTotalPages);
         model.addAttribute("docTotalCount", docTotalCount);
 
-        // 4. 怨듯넻 UI ?듭뀡 諛??붾? ?곗씠??媛?몄엯
+        // 4. 공통 UI 옵션 및 하단 데이터 주입
         model.addAttribute("embeddingSummary", List.of(
                 Map.of("title", "전체 임베딩", "count", 27, "description", "전체 임베딩 작업의 현재 상태입니다."),
                 Map.of("title", "임베딩 진행", "count", 4, "description", "현재 문서를 임베딩하는 중입니다."),
@@ -219,15 +226,51 @@ public class AdAiSecretaryController {
 
         model.addAttribute("accessLevelOptions", List.of("전체 공개", "조건 조합", "관리자 전용"));
 
-        model.addAttribute("accessBlockLogs", List.of(
-                Map.of("user", "홍길동", "dept", "인사팀", "documentTitle", "근태 관리 문서", "reason", "권한 조건 불일치", "createdAt", "2026-05-11 14:22"),
-                Map.of("user", "김철수", "dept", "개발1팀(BE)", "documentTitle", "보안 서약 문서", "reason", "관리자 검토 필요", "createdAt", "2026-05-11 13:40")
-        ));
-
+        model.addAttribute("accessBlockLogs", adAiSecretaryService.getAccessBlockLogs());
         return "admin/aiSecretary/adAiRagManage";
     }
 
-    // ?щ궡 吏???깅줉 ?붿껌 ?뱀씤/諛섎젮 泥섎━
+    @GetMapping("/rag/documents/csv")
+    public ResponseEntity<byte[]> downloadDocumentManagementCsv(
+            @RequestParam(defaultValue = "") String docStage,
+            @RequestParam(defaultValue = "") String accessLevel,
+            @RequestParam(defaultValue = "") String docKeyword
+    ) {
+        byte[] csvBytes = adAiSecretaryService.downloadDocumentManagementCsv(docStage, accessLevel, docKeyword);
+        String fileName = "ai_rag_documents_" + LocalDate.now(ZoneId.of("Asia/Seoul")) + ".csv";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv;charset=UTF-8"));
+        headers.add(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(csvBytes == null ? new byte[0] : csvBytes);
+    }
+
+    @PostMapping("/rag/documents/{documentId}/detail")
+    @ResponseBody
+    public ResponseEntity<Map<String, Object>> updateDocumentManagementDetail(
+            @PathVariable Integer documentId,
+            @RequestParam(defaultValue = "") String title,
+            @RequestParam(defaultValue = "") String requestType,
+            @RequestParam(defaultValue = "") String category,
+            @RequestParam(defaultValue = "") String targetDept,
+            @RequestParam(defaultValue = "") String adminComment
+    ) {
+        return ResponseEntity.ok(
+                adAiSecretaryService.updateDocumentManagementDetail(
+                        documentId,
+                        title,
+                        requestType,
+                        category,
+                        targetDept,
+                        adminComment
+                )
+        );
+    }
+
+    // 사내 지식 등록 요청 승인/반려 처리
     @PostMapping("/rag/knowledge-requests/{requestId}/review")
     public String reviewKnowledgeRequest(
             @PathVariable Long requestId,
@@ -264,7 +307,7 @@ public class AdAiSecretaryController {
         return "redirect:/admin/AiSecretary/rag";
     }
 
-    // 愿由ъ옄 吏곸젒 RAG 臾몄꽌 ?깅줉 泥섎━
+    // 관리자 직접 RAG 문서 등록 처리
     @PostMapping("/rag/documents/direct")
     public String createDirectRagDocument(
             @RequestParam(defaultValue = "") String title,
@@ -369,11 +412,11 @@ public class AdAiSecretaryController {
                 && "REJECTED".equalsIgnoreCase(request.getStatus().trim());
     }
 
-    // AI 蹂댁븞 諛??묎렐 沅뚰븳 愿由??붾㈃ 議고쉶
+    // AI 보안 및 접근 권한 관리 화면 조회
     @GetMapping("/security")
     public String aiSecurity(
             // ==========================================
-            // [洹몃９ 1] 臾몄꽌 怨듦컻 ?뺤콉(Policy) 愿??寃??諛??섏씠吏??뚮씪誘명꽣
+            // [그룹 1] 문서 공개 정책(Policy) 관련 검색 및 페이지 파라미터
             // ==========================================
             @RequestParam(defaultValue = "") String policyStartDate,
             @RequestParam(defaultValue = "") String policyEndDate,
@@ -383,7 +426,7 @@ public class AdAiSecretaryController {
             @RequestParam(defaultValue = "1") int policyPage,
 
             // ==========================================
-            // [洹몃９ 2] 沅뚰븳 李⑤떒 濡쒓렇(Block Log) 愿??寃??諛??섏씠吏??뚮씪誘명꽣
+            // [그룹 2] 권한 차단 로그(Block Log) 관련 검색 및 페이지 파라미터
             // ==========================================
             @RequestParam(defaultValue = "") String blockStartDate,
             @RequestParam(defaultValue = "") String blockEndDate,
@@ -392,7 +435,7 @@ public class AdAiSecretaryController {
             @RequestParam(defaultValue = "1") int blockPage,
             Model model
     ) {
-        // 1. ?곷떒 ?듦퀎 ?꾪솴????쒕낫??移대뱶) ?곗씠??諛붿씤??
+        // 1. 상단 통계 요약용 대시보드 카드 데이터 바인딩
         model.addAttribute("policySummary", List.of(
                 Map.of("label", "전체 공개 문서", "value", "18", "description", "모든 직원이 접근 가능한 문서입니다."),
                 Map.of("label", "조건 조합 문서", "value", "12", "description", "선택한 조건에 따라 접근 대상이 달라지는 문서입니다."),
@@ -400,41 +443,41 @@ public class AdAiSecretaryController {
                 Map.of("label", "접근 차단 로그", "value", "5", "description", "권한이 맞지 않아 차단된 기록입니다.")
         ));
 
-        // 2. 臾몄꽌 ?뺤콉 寃???꾪꽣???쒕∼?ㅼ슫(Select Box) ?듭뀡 由ъ뒪??
+        // 2. 문서 정책 검색 필터용 드롭다운(Select Box) 옵션 리스트
         model.addAttribute("documentTypeOptions", List.of("사내 규정", "업무 매뉴얼", "FAQ", "서비스 이용 안내", "기타"));
         model.addAttribute("accessLevelOptions", List.of("전체 공개", "조건 조합", "관리자 전용"));
         model.addAttribute("activeStatusOptions", List.of("ACTIVE", "INACTIVE"));
 
-        // 3. 臾몄꽌 ?뺤콉 洹몃━??由ъ뒪?몄뿉 肉뚮젮以??곗씠???뚯씠釉?媛吏??곗씠??(?ν썑 DB 議고쉶 寃곌낵濡??泥대맆 ?곸뿭)
+        // 3. 문서 정책 그리드 리스트에 뿌려줄 데이터 테이블 가짜 데이터 (추후 DB 조회 결과로 대체할 영역)
         model.addAttribute("documentPolicies", List.of(
                 Map.of("title", "전체 공개 문서", "documentType", "전체 공개", "accessLevel", "전체 공개", "target", "전체 직원", "activeStatus", "ACTIVE", "activeLabel", "활성", "updatedAt", "2026-05-09"),
                 Map.of("title", "조건 조합 문서", "documentType", "조건 조합", "accessLevel", "조건 조합", "target", "TEAM_LEADER, ADMIN", "activeStatus", "ACTIVE", "activeLabel", "활성", "updatedAt", "2026-05-08"),
                 Map.of("title", "관리자 전용 문서", "documentType", "관리자 전용", "accessLevel", "관리자 전용", "target", "ADMIN", "activeStatus", "INACTIVE", "activeLabel", "비활성", "updatedAt", "2026-05-07")
         ));
 
-        // 4. 臾몄꽌 ?뺤콉 紐⑸줉???섏씠吏??뺣낫 諛붿씤??
+        // 4. 문서 정책 목록의 페이지 정보 바인딩
         model.addAttribute("policyPage", policyPage);
         model.addAttribute("policyPageSize", 10);
         model.addAttribute("policyTotalCount", 28);
         model.addAttribute("policyTotalPages", 3);
 
-        // 5. ?ъ슜?먭? ?좏깮?덈뜕 寃??議곌굔???좎??섍린 ?꾪빐 媛??ㅼ떆 紐⑤뜽??二쇱엯 (?붾㈃ input/select ?쒓렇 value 留ㅽ븨??
+        // 5. 사용자가 선택했던 검색 조건을 유지하기 위해 값을 다시 모델에 주입 (화면 input/select 태그 value 매핑용)
         model.addAttribute("selectedPolicyDocType", selectedPolicyDocType);
         model.addAttribute("selectedPolicyAccessLevel", selectedPolicyAccessLevel);
         model.addAttribute("selectedPolicyActiveStatus", selectedPolicyActiveStatus);
         model.addAttribute("policyStartDate", policyStartDate);
         model.addAttribute("policyEndDate", policyEndDate);
 
-        // 6. 沅뚰븳 李⑤떒 濡쒓렇 ?꾪꽣????됲듃 諛뺤뒪 ?듭뀡
+        // 6. 권한 차단 로그 필터 셀렉트 박스 옵션
         model.addAttribute("blockReasonOptions", List.of("권한 조건 불일치", "비공개 문서 접근", "잘못된 부서 접근", "관리자 검토 필요"));
 
-        // 7. ?섎떒 ?곸뿭???몄텧???ㅼ젣 沅뚰븳 李⑤떒 濡쒓렇 由ъ뒪??媛吏??곗씠??
+        // 7. 하단 영역에 출력할 실제 권한 차단 로그 리스트 가짜 데이터
         model.addAttribute("accessBlockLogs", List.of(
                 Map.of("user", "홍길동", "dept", "인사팀", "documentTitle", "근태 관리 문서", "reason", "권한 조건 불일치", "createdAt", "2026-05-11 14:22"),
                 Map.of("user", "김철수", "dept", "개발1팀(BE)", "documentTitle", "보안 서약 문서", "reason", "관리자 검토 필요", "createdAt", "2026-05-11 13:40")
         ));
 
-        // 8. 沅뚰븳 李⑤떒 濡쒓렇 紐⑸줉???섏씠吏?諛??좎????꾪꽣 ?뺣낫 諛붿씤??
+        // 8. 권한 차단 로그 목록의 페이지 및 선택한 필터 정보 바인딩
         model.addAttribute("blockPage", blockPage);
         model.addAttribute("blockPageSize", 10);
         model.addAttribute("blockTotalCount", 2);
@@ -444,8 +487,8 @@ public class AdAiSecretaryController {
         model.addAttribute("selectedBlockDept", selectedBlockDept);
         model.addAttribute("selectedBlockReason", selectedBlockReason);
 
-        // 9. 愿由ъ옄 紐⑤떖李?議곌굔 ?ㅼ젙 ?앹뾽) ?깆뿉???ъ슜??怨듯넻 ?몄궗 湲곗? ?곗씠?곗뀑
-        // 遺??Department) 由ъ뒪???듭뀡
+        // 9. 관리자 모달창 조건 설정 팝업에서 사용할 공통 인사 기준 데이터셋
+        // 부서(Department) 리스트 옵션
         model.addAttribute("departmentOptions", List.of(
                 Map.of("id", 1, "name", "경영지원팀"),
                 Map.of("id", 2, "name", "인사팀"),
@@ -454,14 +497,14 @@ public class AdAiSecretaryController {
                 Map.of("id", 5, "name", "디자인팀")
         ));
 
-        // ??븷 沅뚰븳(Role) 由ъ뒪???듭뀡
+        // 역할 권한(Role) 리스트 옵션
         model.addAttribute("roleOptions", List.of(
                 Map.of("id", 1, "name", "ADMIN"),
                 Map.of("id", 2, "name", "TEAM_LEADER"),
                 Map.of("id", 3, "name", "USER")
         ));
 
-        // 吏곸쐞/吏곴툒(Position) 由ъ뒪???듭뀡
+        // 직위/직급(Position) 리스트 옵션
         model.addAttribute("positionOptions", List.of(
                 Map.of("id", 1, "name", "임원"),
                 Map.of("id", 2, "name", "사원"),
@@ -471,7 +514,7 @@ public class AdAiSecretaryController {
                 Map.of("id", 6, "name", "수석")
         ));
 
-        // ?몄궗 ?깃툒(Grade) 由ъ뒪???듭뀡
+        // 인사 등급(Grade) 리스트 옵션
         model.addAttribute("gradeOptions", List.of(
                 Map.of("id", "G1", "name", "G1"),
                 Map.of("id", "G2", "name", "G2"),
@@ -480,46 +523,46 @@ public class AdAiSecretaryController {
                 Map.of("id", "G5", "name", "G5")
         ));
 
-        // 10. 理쒖쥌 ?붾㈃ 留ㅽ븨 ?뚯씪 諛섑솚 (src/main/resources/templates/admin/aiSecretary/adAiSecurity.html ?몄텧)
+        // 10. 최종 화면 매핑 파일 반환 (src/main/resources/templates/admin/aiSecretary/adAiSecurity.html 연결)
         return "admin/aiSecretary/adAiSecurity";
     }
 
-    /* [helper ?⑥닔] ----------------------------------------------------- */
-    // ?좏깮???좎쭨 ?꾪꽣 議곌굔???곕씪 ?붾㈃???쒖떆??湲곌컙 ?쇰꺼(Label) 臾몄옄?댁쓣 ?앹꽦
+    /* [helper 함수] ----------------------------------------------------- */
+    // 선택한 날짜 필터 조건에 따라 화면에 표시할 기간 라벨 문자열을 생성
     private String buildDateFilterLabel(int period, String startDate, String endDate) {
-        // [1] ?ъ슜?먭? ?쒖옉?쇨낵 醫낅즺?쇱쓣 ????吏곸젒 ?낅젰/ ?좏깮??寃쎌슦
-        // hasText()瑜??듯빐 怨듬갚?대굹 null???꾨땶 ?좏슚??臾몄옄?댁씤吏 寃利?
+        // [1] 사용자가 시작일과 종료일을 직접 입력/선택한 경우
+        // hasText()를 통해 공백이나 null이 아닌 유효한 문자열인지 검증
         if (hasText(startDate) && hasText(endDate)) {
             return "Period: " + startDate + " ~ " + endDate;
         }
 
-        // [2] 吏곸젒 ?낅젰???좎쭨 踰붿쐞媛 ?녾퀬, 怨좎젙 湲곌컙 ?좏깮 以?'理쒓렐 30?????좏깮??寃쎌슦
+        // [2] 직접 입력한 날짜 범위가 없고, 고정 기간 선택 중 '최근 30일'을 선택한 경우
         if (period == 30) {
             return "Period: Recent 30 days";
         }
 
-        // [3] ??紐⑤뱺 議곌굔???대떦?섏? ?딆? 寃쎌슦 (湲곕낯 媛?理쒓렐 7??
+        // [3] 위 조건에 해당하지 않는 경우 (기본값: 최근 7일)
         return "Period: Recent 7 days";
     }
 
-    // ?낅젰??臾몄옄?댁씠 null???꾨땲怨? 怨듬갚(Space)???쒖쇅???ㅼ젣 ?좏슚???띿뒪?몃? ?ы븿?섍퀬 ?덈뒗吏 寃??
+    // 입력된 문자열이 null이 아니고 공백을 제외한 실제 유효한 텍스트를 포함하고 있는지 검사
     private boolean hasText(String value) {
-        // '?ㅼ젣 湲?먭? 議댁옱?섎뒗 ?곹깭'濡??먮떒?섎㈃ true瑜?諛섑솚
-        // 媛믪씠 null?닿굅??鍮?媛믪씠硫?fulse瑜?諛섑솚
+        // '실제 글자가 존재하는 상태'로 판단되면 true를 반환
+        // 값이 null이거나 빈 값이면 false를 반환
         return value != null && !value.isBlank();
     }
 
-    // ??쒕낫?쒖쓽 ?좎쭨 ?꾪꽣 珥덇린?????대룞??URL 二쇱냼瑜??앹꽦
+    // 대시보드의 날짜 필터 초기화 후 이동할 URL 주소를 생성
     private String buildDateFilterResetUrl(int period, String department, String aiType, String result) {
-        return UriComponentsBuilder.fromPath("/admin/AiSecretary/dashboard") // [1] 湲곕낯???섎뒗 踰좎씠??二쇱냼(Path) ?ㅼ젙
-                .queryParam("period", 7)        // [2] 湲곌컙??湲곕낯 媛믪씤 7濡?媛뺤젣 ?명똿
-                .queryParam("department", department)  // [3] 湲곗〈???좏깮?섏뼱 ?덈뜕 遺??媛믪? ?뚮씪誘명꽣濡??댁뼱諛쏆븘 二쇱냼??洹몃?濡??좎?
-                .queryParam("aiType", aiType)          // [4] 湲곗〈 AI ?좏삎 ?좏깮 媛??좎?
-                .queryParam("result", result)          // [5] 湲곗〈 泥섎━ 寃곌낵(?깃났/ ?ㅽ뙣 ?? 媛??좎?
-                .queryParam("page", 1)          // [6] ?섏씠吏?珥덇린??(泥??섏씠吏濡?珥덇린??
-                .build()          // [7] ?ㅼ젙???⑥뒪? ?뚮씪誘명꽣?ㅼ쓣 議고빀?섏뿬 ?섎굹??URI 媛앹껜濡?鍮뚮뱶
-                .encode()         // [8] 二쇱냼李쎌쓽 ?쒓??대굹 ?뱀닔臾몄옄媛 ?ы븿 ??寃쎌슦 源⑥?吏 ?딅룄濡?UTF-8濡??덉쟾?섍쾶 ?몄퐫??
-                .toUriString();   // [9] 理쒖쥌 ?꾩꽦 ??二쇱냼瑜??띿뒪??String) ?뺥깭濡?蹂?섑븯??諛섑솚
+        return UriComponentsBuilder.fromPath("/admin/AiSecretary/dashboard") // [1] 기본이 되는 베이스 주소(Path) 설정
+                .queryParam("period", 7)        // [2] 기간은 기본값인 7로 강제 세팅
+                .queryParam("department", department)  // [3] 기존에 선택되어 있던 부서 값을 파라미터로 이어받아 주소에 그대로 유지
+                .queryParam("aiType", aiType)          // [4] 기존 AI 유형 선택 값 유지
+                .queryParam("result", result)          // [5] 기존 처리 결과(성공/실패 등) 값 유지
+                .queryParam("page", 1)          // [6] 페이지 초기화 (첫 페이지로 초기화)
+                .build()          // [7] 설정한 패스와 파라미터들을 조합하여 하나의 URI 객체로 빌드
+                .encode()         // [8] 주소값의 공백이나 특수문자가 포함될 경우 깨지지 않도록 UTF-8로 안전하게 인코딩
+                .toUriString();   // [9] 최종 완성된 주소를 텍스트(String) 형태로 변환하여 반환
     }
 }
 

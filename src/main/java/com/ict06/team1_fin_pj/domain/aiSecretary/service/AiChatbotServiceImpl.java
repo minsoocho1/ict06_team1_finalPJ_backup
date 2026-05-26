@@ -28,6 +28,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -53,6 +54,7 @@ public class AiChatbotServiceImpl implements AiChatbotService {
         boolean providerSuccess = false;
         boolean fallback = false;
         String errorMessage = null;
+        Map<String, String> permissionDeniedInfo = Map.of();
 
         AiChatMessageEntity userMessage = AiChatMessageEntity.builder()
                 .role(MessageRole.USER)
@@ -74,9 +76,11 @@ public class AiChatbotServiceImpl implements AiChatbotService {
                     .filter(chunk -> chunk != null)
                     .toList();
             log.info("[RAG] context chunk count={}", ragChunks.size());
+            permissionDeniedInfo = ragRetrievalService.consumeLastPermissionDeniedInfo();
         } catch (Exception e) {
             log.warn("[RAG] retrieval failed. fallback to non-RAG prompt. reason={}", e.getMessage());
             ragChunks = List.of();
+            permissionDeniedInfo = Map.of();
         }
 
         String prompt = ragChunks.isEmpty()
@@ -115,7 +119,8 @@ public class AiChatbotServiceImpl implements AiChatbotService {
                 providerSuccess,
                 fallback,
                 durationMs,
-                errorMessage
+                errorMessage,
+                permissionDeniedInfo
         );
 
         log.debug(
