@@ -104,6 +104,10 @@ public class DocumentEntity extends BaseTimeEntity {
         this.summaryPreview = summaryPreview;
     }
 
+    public void updateTitle(String title) {
+        this.title = title;
+    }
+
     @PrePersist
     public void prePersistDocumentDomain() {
         applyDefaultDocumentDomain();
