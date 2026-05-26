@@ -708,6 +708,10 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function createOrgTargetSelector(config) {
+    const allOptionValue = "__ALL__";
+    const allOptionLabel = "전원";
+    const enableTeamAllOption = config.enableTeamAllOption === true;
+    const enablePositionAllOption = config.enablePositionAllOption === true;
     const container = document.getElementById(config.containerId);
     const summaryInput = document.getElementById(config.summaryInputId);
     const headInput = document.getElementById(config.headInputId);
@@ -772,6 +776,45 @@ document.addEventListener("DOMContentLoaded", function () {
       return children.length ? children : [headquarter];
     }
 
+    function isAllOption(labelOrValue) {
+      const normalized = safeDatasetValue(labelOrValue);
+      return normalized === allOptionValue
+        || normalized === allOptionLabel
+        || normalized === "전체"
+        || normalized.toUpperCase() === "ALL";
+    }
+
+    function getRenderableTeamOptions() {
+      return getTeamOptions().filter(function (dept) {
+        return !isAllOption(getDeptName(dept));
+      });
+    }
+
+    function loadEmployeesForSelectedTeam() {
+      if (!state.teamDeptId) {
+        return Promise.resolve([]);
+      }
+
+      if (!enableTeamAllOption || !isAllOption(state.teamDeptId)) {
+        return loadEmployees(state.teamDeptId);
+      }
+
+      const teams = getRenderableTeamOptions();
+      if (!teams.length) {
+        return Promise.resolve([]);
+      }
+
+      return Promise.all(
+        teams.map(function (team) {
+          return loadEmployees(getDeptId(team)).catch(function () {
+            return [];
+          });
+        })
+      ).then(function (rows) {
+        return rows.flat();
+      });
+    }
+
     function renderHeadquarters() {
       const select = getHeadSelect();
       const tree = Array.isArray(orgCache.departmentTree) ? orgCache.departmentTree : [];
@@ -790,17 +833,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function renderTeams() {
       const select = getTeamSelect();
-      const teams = getTeamOptions();
+      const teams = getRenderableTeamOptions();
 
       clearSelect(select, "팀을 선택하세요", !state.headquarterId);
 
       if (!state.headquarterId) return;
 
       if (!teams.length) {
-        clearSelect(select, "선택 가능한 팀이 없습니다", true);
+        if (enableTeamAllOption) {
+          appendOption(select, allOptionValue, allOptionLabel, state.teamDeptId === allOptionValue);
+          select.disabled = false;
+        } else {
+          clearSelect(select, "선택 가능한 팀이 없습니다", true);
+        }
         return;
       }
 
+      if (enableTeamAllOption) {
+        appendOption(select, allOptionValue, allOptionLabel, state.teamDeptId === allOptionValue);
+      }
       teams.forEach(function (dept) {
         appendOption(select, getDeptId(dept), getDeptName(dept), getDeptId(dept) === state.teamDeptId);
       });
@@ -810,16 +861,18 @@ document.addEventListener("DOMContentLoaded", function () {
       const select = getPositionSelect();
       const positions = uniquePositions(state.employees);
 
-      clearSelect(select, "직책을 선택하세요", !state.teamDeptId || !positions.length);
+      clearSelect(select, "직책을 선택하세요", !state.teamDeptId);
 
       if (!state.teamDeptId) return;
 
-      if (!positions.length) {
-        clearSelect(select, "선택 가능한 직책이 없습니다", true);
-        return;
+      if (enablePositionAllOption) {
+        appendOption(select, allOptionValue, allOptionLabel, state.positionId === allOptionValue);
       }
 
       positions.forEach(function (position) {
+        if (enablePositionAllOption && (isAllOption(position.positionName) || isAllOption(position.positionId))) {
+          return;
+        }
         appendOption(select, position.positionId, position.positionName, position.positionId === state.positionId);
       });
     }
@@ -872,7 +925,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
           if (!state.teamDeptId) return;
 
-          loadEmployees(state.teamDeptId)
+          loadEmployeesForSelectedTeam()
             .then(function (employees) {
               state.employees = employees;
               renderPositions();
@@ -908,9 +961,37 @@ document.addEventListener("DOMContentLoaded", function () {
       renderHeadquarters();
       renderTeams();
 
-      const team = findDepartmentByName(getTeamOptions(), seed.teamName);
+      if (enableTeamAllOption && isAllOption(seed.teamName)) {
+        state.teamDeptId = allOptionValue;
+        renderTeams();
+
+        return loadEmployeesForSelectedTeam().then(function (employees) {
+          state.employees = employees;
+
+          if (enablePositionAllOption && isAllOption(seed.positionName)) {
+            state.positionId = allOptionValue;
+          } else {
+            const matchedPosition = uniquePositions(employees).find(function (position) {
+              return position.positionName === seed.positionName;
+            });
+
+            if (matchedPosition) {
+              state.positionId = matchedPosition.positionId;
+            }
+          }
+
+          renderPositions();
+          updateHidden();
+        });
+      }
+
+      const team = findDepartmentByName(getRenderableTeamOptions(), seed.teamName);
 
       if (!team) {
+        if (enablePositionAllOption && isAllOption(seed.positionName)) {
+          state.positionId = allOptionValue;
+          renderPositions();
+        }
         updateHidden();
         return Promise.resolve();
       }
@@ -918,15 +999,19 @@ document.addEventListener("DOMContentLoaded", function () {
       state.teamDeptId = getDeptId(team);
       renderTeams();
 
-      return loadEmployees(state.teamDeptId).then(function (employees) {
+      return loadEmployeesForSelectedTeam().then(function (employees) {
         state.employees = employees;
 
-        const matchedPosition = uniquePositions(employees).find(function (position) {
-          return position.positionName === seed.positionName;
-        });
+        if (enablePositionAllOption && isAllOption(seed.positionName)) {
+          state.positionId = allOptionValue;
+        } else {
+          const matchedPosition = uniquePositions(employees).find(function (position) {
+            return position.positionName === seed.positionName;
+          });
 
-        if (matchedPosition) {
-          state.positionId = matchedPosition.positionId;
+          if (matchedPosition) {
+            state.positionId = matchedPosition.positionId;
+          }
         }
 
         renderPositions();
@@ -1025,7 +1110,9 @@ document.addEventListener("DOMContentLoaded", function () {
     headInputId: "requestFinalHeadquarterId",
     teamInputId: "requestFinalTeamDeptIds",
     positionInputId: "requestFinalPositionId",
-    empInputId: "requestFinalEmpNo"
+    empInputId: "requestFinalEmpNo",
+    enableTeamAllOption: true,
+    enablePositionAllOption: true
   });
 
   const documentOrgSelector = createOrgTargetSelector({
@@ -1037,7 +1124,9 @@ document.addEventListener("DOMContentLoaded", function () {
     headInputId: "documentManagementFinalHeadquarterId",
     teamInputId: "documentManagementFinalTeamDeptIds",
     positionInputId: "documentManagementFinalPositionId",
-    empInputId: "documentManagementFinalEmpNo"
+    empInputId: "documentManagementFinalEmpNo",
+    enableTeamAllOption: true,
+    enablePositionAllOption: true
   });
 
   const uploadOrgSelector = createOrgTargetSelector({
