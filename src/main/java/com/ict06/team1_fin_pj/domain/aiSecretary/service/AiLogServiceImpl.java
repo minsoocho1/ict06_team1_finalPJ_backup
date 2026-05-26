@@ -7,9 +7,11 @@ import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiLogType;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiLogRepository;
 import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiLogServiceImpl implements AiLogService {
@@ -32,8 +34,31 @@ public class AiLogServiceImpl implements AiLogService {
             long durationMs,
             String errorMessage
     ) {
+        saveChatbotLogAndReturn(userMessage, aiMessage, providerSuccess, fallback, durationMs, errorMessage);
+    }
+
+    @Override
+    @Transactional
+    public AiLogEntity saveChatbotLogAndReturn(
+            AiChatMessageEntity userMessage,
+            AiChatMessageEntity aiMessage,
+            boolean providerSuccess,
+            boolean fallback,
+            long durationMs,
+            String errorMessage
+    ) {
         if (userMessage == null || aiMessage == null) {
-            return;
+            log.warn("[AI_LOG] skip save: userMessage or aiMessage is null");
+            return null;
+        }
+
+        if (userMessage.getMessageId() == null || aiMessage.getMessageId() == null) {
+            log.warn(
+                    "[AI_LOG] skip save: missing messageId. userMessageId={}, aiMessageId={}",
+                    userMessage.getMessageId(),
+                    aiMessage.getMessageId()
+            );
+            return null;
         }
 
         AiChatSessionEntity session = aiMessage.getSession();
@@ -54,7 +79,7 @@ public class AiLogServiceImpl implements AiLogService {
                 .errorMessage(trimErrorMessage(errorMessage))
                 .build();
 
-        aiLogRepository.save(log);
+        return aiLogRepository.save(log);
     }
 
     private String buildQueryMeta(AiChatMessageEntity userMessage) {
