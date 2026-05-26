@@ -281,6 +281,9 @@
             </div>
 
             <form th:action="@{/admin/AiSecretary/rag}" method="get" class="d-flex flex-wrap align-items-end gap-2">
+              <input type="hidden" name="docStage" th:value="${selectedDocStage}">
+              <input type="hidden" name="accessLevel" th:value="${selectedAccessLevel}">
+              <input type="hidden" name="docKeyword" th:value="${selectedDocKeyword}">
               <div class="d-flex flex-wrap align-items-center gap-2">
                 <select class="form-select form-select-sm" name="requestStatus" style="width: 130px;">
                   <option value="" th:selected="${#strings.isEmpty(selectedRequestStatus)}">전체</option>
@@ -329,7 +332,7 @@
                   </div>
                 </div>
                 <button type="submit" class="btn btn-sm btn-primary px-4">조회</button>
-                <a th:href="@{/admin/AiSecretary/rag}" class="btn btn-sm btn-outline-secondary px-4">초기화</a>
+                <a th:href="@{/admin/AiSecretary/rag(docStage=${selectedDocStage}, accessLevel=${selectedAccessLevel}, docKeyword=${selectedDocKeyword})}" class="btn btn-sm btn-outline-secondary px-4">초기화</a>
               </div>
             </form>
           </div>
@@ -385,13 +388,13 @@
               <nav th:if="${requestTotalPages > 1}" aria-label="자료 등록 요청 페이지 이동">
                 <ul class="pagination pagination-sm mb-0">
                   <li class="page-item" th:classappend="${requestPage <= 1} ? ' disabled'">
-                    <a class="page-link" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage - 1})}">이전</a>
+                    <a class="page-link" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage - 1}, docStage=${selectedDocStage}, accessLevel=${selectedAccessLevel}, docKeyword=${selectedDocKeyword})}">이전</a>
                   </li>
                   <li class="page-item" th:each="pageNo : ${#numbers.sequence(1, requestTotalPages)}" th:classappend="${pageNo == requestPage} ? ' active'">
-                    <a class="page-link" th:text="${pageNo}" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${pageNo})}">1</a>
+                    <a class="page-link" th:text="${pageNo}" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${pageNo}, docStage=${selectedDocStage}, accessLevel=${selectedAccessLevel}, docKeyword=${selectedDocKeyword})}">1</a>
                   </li>
                   <li class="page-item" th:classappend="${requestPage >= requestTotalPages} ? ' disabled'">
-                    <a class="page-link" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage + 1})}">다음</a>
+                    <a class="page-link" th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestStatus=${selectedRequestStatus}, requestPage=${requestPage + 1}, docStage=${selectedDocStage}, accessLevel=${selectedAccessLevel}, docKeyword=${selectedDocKeyword})}">다음</a>
                   </li>
                 </ul>
               </nav>
@@ -438,9 +441,51 @@
                   </div>
                   <div class="d-flex flex-column align-items-end gap-2">
                     <small class="text-muted" th:text="|총 ${documentManagementCount}건|">총 0건</small>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="downloadDocumentCsvBtn">CSV 다운로드</button>
+                    <a class="btn btn-sm btn-outline-secondary"
+                       id="downloadDocumentCsvBtn"
+                       th:href="@{/admin/AiSecretary/rag/documents/csv(docStage=${selectedDocStage}, accessLevel=${selectedAccessLevel}, docKeyword=${selectedDocKeyword})}">
+                      CSV 다운로드
+                    </a>
                   </div>
                 </div>
+
+                <form th:action="@{/admin/AiSecretary/rag}" method="get" class="d-flex flex-wrap align-items-end gap-2">
+                  <input type="hidden" name="requestStartDate" th:value="${requestStartDate}">
+                  <input type="hidden" name="requestEndDate" th:value="${requestEndDate}">
+                  <input type="hidden" name="requestStatus" th:value="${selectedRequestStatus}">
+                  <input type="hidden" name="requestType" th:value="${selectedRequestType}">
+                  <input type="hidden" name="requestCategory" th:value="${selectedRequestCategory}">
+                  <input type="hidden" name="requestPage" th:value="${requestPage}">
+
+                  <select class="form-select form-select-sm" name="docStage" style="width: 160px;">
+                    <option value="" th:selected="${#strings.isEmpty(selectedDocStage)}">전체 상태</option>
+                    <option value="UPLOADED" th:selected="${#strings.equalsIgnoreCase(selectedDocStage, 'UPLOADED')}">업로드 완료</option>
+                    <option value="CHUNKING" th:selected="${#strings.equalsIgnoreCase(selectedDocStage, 'CHUNKING')}">청크 분할 중</option>
+                    <option value="CHUNK_FAILED" th:selected="${#strings.equalsIgnoreCase(selectedDocStage, 'CHUNK_FAILED')}">청크 분할 실패</option>
+                    <option value="EMBEDDING" th:selected="${#strings.equalsIgnoreCase(selectedDocStage, 'EMBEDDING')}">임베딩 진행 중</option>
+                    <option value="EMBED_FAILED" th:selected="${#strings.equalsIgnoreCase(selectedDocStage, 'EMBED_FAILED')}">임베딩 실패</option>
+                    <option value="APPROVAL_PENDING" th:selected="${#strings.equalsIgnoreCase(selectedDocStage, 'APPROVAL_PENDING')}">반영 대기</option>
+                    <option value="PUBLISHED" th:selected="${#strings.equalsIgnoreCase(selectedDocStage, 'PUBLISHED')}">RAG 반영 완료</option>
+                  </select>
+
+                  <select class="form-select form-select-sm" name="accessLevel" style="width: 150px;">
+                    <option value="" th:selected="${#strings.isEmpty(selectedAccessLevel)}">전체 권한</option>
+                    <option value="PUBLIC" th:selected="${#strings.equalsIgnoreCase(selectedAccessLevel, 'PUBLIC')}">전체 공개</option>
+                    <option value="CUSTOM" th:selected="${#strings.equalsIgnoreCase(selectedAccessLevel, 'CUSTOM')}">조건 조합</option>
+                    <option value="ADMIN_ONLY" th:selected="${#strings.equalsIgnoreCase(selectedAccessLevel, 'ADMIN_ONLY')}">관리자 전용</option>
+                  </select>
+
+                  <input type="text"
+                         class="form-control form-control-sm"
+                         name="docKeyword"
+                         th:value="${selectedDocKeyword}"
+                         placeholder="문서명 검색"
+                         style="width: 220px;">
+
+                  <button type="submit" class="btn btn-sm btn-primary px-4">조회</button>
+                  <a th:href="@{/admin/AiSecretary/rag(requestStartDate=${requestStartDate}, requestEndDate=${requestEndDate}, requestStatus=${selectedRequestStatus}, requestType=${selectedRequestType}, requestCategory=${selectedRequestCategory}, requestPage=${requestPage})}"
+                     class="btn btn-sm btn-outline-secondary px-4">초기화</a>
+                </form>
               </div>
 
               <div class="table-responsive">
@@ -478,7 +523,7 @@
                               class="btn btn-sm btn-outline-secondary js-document-management-detail"
                               data-bs-toggle="modal"
                               data-bs-target="#documentManagementDetailModal"
-                              th:attr="data-row-type=${row['rowType']},data-document-domain=${row['documentDomain']},data-document-id=${row['documentId']},data-request-id=${row['requestId']},data-title=${row['title']},data-request-type=${row['requestType']},data-category=${row['category']},data-approver-name=${row['approverName']},data-registered-at=${row['registeredAt'] == null ? '-' : #temporals.format(row['registeredAt'], 'yyyy-MM-dd HH:mm')},data-requester-name=${row['requesterName']},data-request-date=${row['requestDate'] == null ? '-' : #temporals.format(row['requestDate'], 'yyyy-MM-dd HH:mm')},data-reason=${row['reason']},data-sample-question=${row['sampleQuestion']},data-summary=${row['summary']},data-admin-comment=${row['adminComment']},data-access-level=${row['accessLevel']},data-target-dept=${row['targetDept']},data-chunk-count=${row['chunkCount']},data-vector-count=${row['vectorCount']},data-chunks=${#maps.containsKey(row, 'chunkDetailsJson') ? row['chunkDetailsJson'] : '[]'},data-vectors=${#maps.containsKey(row, 'vectorDetailsJson') ? row['vectorDetailsJson'] : '[]'},data-failure-reason=${row['failureReason']},data-status=${row['status']},data-status-label=${row['statusLabel']},data-retryable=${row['retryable']}">
+                              th:attr="data-row-type=${row['rowType']},data-document-domain=${row['documentDomain']},data-document-id=${row['documentId']},data-request-id=${row['requestId']},data-title=${row['title']},data-request-type=${row['requestType']},data-category=${row['category']},data-approver-name=${row['approverName']},data-registered-at=${row['registeredAt'] == null ? '-' : #temporals.format(row['registeredAt'], 'yyyy-MM-dd HH:mm')},data-requester-name=${row['requesterName']},data-request-date=${row['requestDate'] == null ? '-' : #temporals.format(row['requestDate'], 'yyyy-MM-dd HH:mm')},data-reason=${row['reason']},data-sample-question=${row['sampleQuestion']},data-reference-url=${row['referenceUrl']},data-summary=${row['summary']},data-admin-comment=${row['adminComment']},data-access-level=${row['accessLevel']},data-target-dept=${row['targetDept']},data-permission-updated-at=${row['permissionUpdatedAt'] == null ? '-' : #temporals.format(row['permissionUpdatedAt'], 'yyyy-MM-dd HH:mm')},data-chunk-count=${row['chunkCount']},data-vector-count=${row['vectorCount']},data-chunks=${#maps.containsKey(row, 'chunkDetailsJson') ? row['chunkDetailsJson'] : '[]'},data-vectors=${#maps.containsKey(row, 'vectorDetailsJson') ? row['vectorDetailsJson'] : '[]'},data-failure-reason=${row['failureReason']},data-status=${row['status']},data-status-label=${row['statusLabel']},data-retryable=${row['retryable']}">
                         상세
                       </button>
                     </td>
@@ -740,15 +785,15 @@
                       </div>
                       <div class="col-md-6">
                         <label class="form-label fw-bold">문서명</label>
-                        <input type="text" class="form-control" id="documentManagementTitle" readonly value="-">
+                        <input type="text" class="form-control" id="documentManagementTitle" value="-">
                       </div>
                       <div class="col-md-3">
                         <label class="form-label fw-bold">자료 유형</label>
-                        <input type="text" class="form-control" id="documentManagementType" readonly value="-">
+                        <input type="text" class="form-control" id="documentManagementType" value="-">
                       </div>
                       <div class="col-md-3">
                         <label class="form-label fw-bold">카테고리</label>
-                        <input type="text" class="form-control" id="documentManagementCategory" readonly value="-">
+                        <input type="text" class="form-control" id="documentManagementCategory" value="-">
                       </div>
                       <div class="col-md-6">
                         <label class="form-label fw-bold">승인자</label>
@@ -787,6 +832,15 @@
                     </div>
 
                     <div class="mt-3">
+                      <div class="fw-bold mb-2">본문 URL</div>
+                      <div class="border rounded-3 p-3 bg-light request-reference-box mb-3">
+                        <a href="#"
+                           class="fw-bold text-decoration-none request-reference-link d-none"
+                           id="documentManagementReferenceLink"
+                           target="_blank"
+                           rel="noopener noreferrer"></a>
+                        <div class="fw-bold request-reference-text" id="documentManagementReferenceText">등록된 본문 URL이 없습니다.</div>
+                      </div>
                       <div class="fw-bold mb-2">본문 미리보기</div>
                       <div class="request-summary-value request-summary-clamp-5" id="documentManagementSummary">본문 미리보기가 없습니다.</div>
                     </div>
@@ -827,7 +881,7 @@
                       </div>
                       <div class="col-md-12">
                         <label class="form-label fw-bold">관리자 검토 메모</label>
-                        <div class="border rounded-3 bg-light p-3 text-break request-summary-value" id="documentManagementAdminComment">-</div>
+                        <textarea class="form-control" rows="4" id="documentManagementAdminComment" placeholder="관리자 검토 메모를 입력해 주세요."></textarea>
                       </div>
                       <div class="col-md-12">
                         <label class="form-label fw-bold">최종 권한 조건</label>
@@ -838,6 +892,14 @@
                         <input type="hidden" id="documentManagementFinalTeamDeptIds">
                         <input type="hidden" id="documentManagementFinalPositionId">
                         <input type="hidden" id="documentManagementFinalEmpNo" value="">
+                      </div>
+                      <div class="col-md-12">
+                        <label class="form-label fw-bold">권한 적용 정보</label>
+                        <div class="border rounded-3 bg-light p-3 text-break request-summary-value">
+                          <div class="mb-2"><span class="fw-bold">현재 적용 권한:</span> <span id="documentManagementAppliedTargetDept">-</span></div>
+                          <div class="mb-2"><span class="fw-bold">관리자 검토 메모:</span> <span id="documentManagementAppliedAdminComment">-</span></div>
+                          <div><span class="fw-bold">최근 수정일:</span> <span id="documentManagementAppliedUpdatedAt">-</span></div>
+                        </div>
                       </div>
                     </div>
                   </section>
@@ -894,7 +956,11 @@
                           th:attr="data-activation-base-url=@{/admin/AiSecretary/rag/documents}">
                     활성화 / 비활성화
                   </button>
-                  <button type="button" class="btn btn-primary" id="documentManagementSaveButton" disabled>저장</button>
+                  <button type="button"
+                          class="btn btn-primary"
+                          id="documentManagementSaveButton"
+                          disabled
+                          th:attr="data-detail-base-url=@{/admin/AiSecretary/rag/documents}">저장</button>
                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
                 </div>
               </div>

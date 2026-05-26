@@ -56,6 +56,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -67,6 +68,7 @@ import org.springframework.web.client.RestTemplate;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -822,7 +824,12 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
     }
 
     @Override
-    public List<Map<String, Object>> getDocumentManagementRows(List<KnowledgeResponseDto> knowledgeRequests) {
+    public List<Map<String, Object>> getDocumentManagementRows(
+            List<KnowledgeResponseDto> knowledgeRequests,
+            String docStage,
+            String accessLevel,
+            String docKeyword
+    ) {
         List<Map<String, Object>> rows = new ArrayList<>();
         Map<Integer, KnowledgeResponseDto> requestsByTargetDocId = buildKnowledgeRequestMapByTargetDocId(knowledgeRequests);
 
@@ -845,7 +852,114 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
                 (Map<String, Object> row) -> (LocalDateTime) row.get("registeredAt"),
                 Comparator.nullsLast(Comparator.reverseOrder())
         ));
-        return rows;
+        return applyDocumentManagementFilters(rows, docStage, accessLevel, docKeyword);
+    }
+
+    @Override
+    public byte[] downloadDocumentManagementCsv(
+            String docStage,
+            String accessLevel,
+            String docKeyword
+    ) {
+        List<KnowledgeResponseDto> allKnowledgeRequests = getKnowledgeRequestsForAdmin("", "", "", "", "");
+        List<Map<String, Object>> rows = getDocumentManagementRows(allKnowledgeRequests, docStage, accessLevel, docKeyword);
+
+        StringBuilder csv = new StringBuilder();
+        csv.append('\uFEFF');
+        appendCsvRow(csv,
+                "문서ID",
+                "문서명",
+                "상태",
+                "접근권한",
+                "청크수",
+                "벡터수",
+                "등록일"
+        );
+
+        for (Map<String, Object> row : rows) {
+            if (row == null || !"DOCUMENT".equalsIgnoreCase(safe(row.get("rowType")))) {
+                continue;
+            }
+
+            appendCsvRow(csv,
+                    formatCsvCell(safe(row.get("documentId"), "-")),
+                    formatCsvCell(safe(row.get("title"), "-")),
+                    formatCsvCell(safe(row.get("statusLabel"), "-")),
+                    formatCsvCell(safe(row.get("accessLevel"), "-")),
+                    formatCsvCell(safe(row.get("chunkCount"), "0")),
+                    formatCsvCell(safe(row.get("vectorCount"), "0")),
+                    formatCsvCell(formatRowDateTime((LocalDateTime) row.get("registeredAt")))
+            );
+        }
+
+        return csv.toString().getBytes(StandardCharsets.UTF_8);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> updateDocumentManagementDetail(
+            Integer documentId,
+            String title,
+            String requestType,
+            String category,
+            String targetDept,
+            String adminComment
+    ) {
+        if (documentId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "문서 ID가 필요합니다.");
+        }
+
+        String normalizedTitle = requireText(title, "문서명을 입력해 주세요.");
+        String normalizedRequestType = requireText(requestType, "자료 유형을 입력해 주세요.");
+        String normalizedCategory = requireText(category, "카테고리를 입력해 주세요.");
+        String normalizedTargetDept = requireText(targetDept, "최종 권한 조건을 선택해 주세요.");
+        String normalizedAdminComment = safe(adminComment);
+
+        DocumentEntity document = aiDocumentRepository.findById(documentId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "문서를 찾을 수 없습니다."));
+
+        List<AiKnowledgeRequestEntity> matchedRequests = aiKnowledgeRequestRepository.findByTargetDoc_DocIdInOrderByCreatedAtDesc(List.of(documentId));
+        AiKnowledgeRequestEntity matchedRequest = matchedRequests.stream()
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.CONFLICT, "연결된 자료 등록 요청이 없어 상세 정보를 수정할 수 없습니다."));
+
+        document.updateTitle(normalizedTitle);
+        aiDocumentRepository.save(document);
+
+        matchedRequest.updateAdminDocumentSettings(
+                normalizedRequestType,
+                normalizedCategory,
+                normalizedTargetDept,
+                normalizedAdminComment
+        );
+        aiKnowledgeRequestRepository.saveAndFlush(matchedRequest);
+        aiDocumentRepository.flush();
+
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("success", true);
+        result.put("message", "저장되었습니다.");
+        result.put("documentId", document.getDocId());
+        result.put("title", document.getTitle());
+        result.put("requestType", matchedRequest.getRequestType());
+        result.put("category", matchedRequest.getCategory());
+        result.put("targetDept", matchedRequest.getTargetDept());
+        result.put("adminComment", matchedRequest.getAdminComment());
+        result.put("updatedAt", formatRowDateTime(
+                matchedRequest.getUpdatedAt() != null ? matchedRequest.getUpdatedAt() : document.getUpdatedAt()
+        ));
+        return result;
+    }
+
+    @Override
+    public List<Map<String, Object>> getAccessBlockLogs() {
+        return aiLogRepository.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).stream()
+                .filter(Objects::nonNull)
+                .filter(log -> log.getType() == AiLogType.CHATBOT)
+                .filter(log -> containsIgnoreCase(log.getQuery(), "permissionDenied=true"))
+                .map(this::buildAccessBlockLogRow)
+                .limit(20)
+                .collect(Collectors.toList());
     }
 
     private Map<Integer, KnowledgeResponseDto> buildKnowledgeRequestMapByTargetDocId(List<KnowledgeResponseDto> knowledgeRequests) {
@@ -906,6 +1020,9 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
                 ? "-"
                 : resolveDocumentAccessLevelLabel(document.getAccessLevel().name())));
         row.put("targetDept", matchedRequest != null ? safe(matchedRequest.getTargetDept(), "-") : "-");
+        row.put("permissionUpdatedAt", matchedRequest != null && matchedRequest.getUpdatedAt() != null
+                ? matchedRequest.getUpdatedAt()
+                : (document == null ? null : document.getUpdatedAt()));
         boolean directUpload = matchedRequest == null
                 || DIRECT_ADMIN_COMMENT.equals(safe(matchedRequest.getAdminComment()));
         row.put("sourceType", directUpload ? "관리자 직접 등록 문서" : "사용자 요청 기반 문서");
@@ -951,6 +1068,99 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
         return row;
     }
 
+    private List<Map<String, Object>> applyDocumentManagementFilters(
+            List<Map<String, Object>> rows,
+            String docStage,
+            String accessLevel,
+            String docKeyword
+    ) {
+        String normalizedStage = safe(docStage);
+        String normalizedAccessLevel = safe(accessLevel);
+        String normalizedKeyword = safe(docKeyword);
+
+        return rows.stream()
+                .filter(Objects::nonNull)
+                .filter(row -> matchesDocumentStageFilter(row, normalizedStage))
+                .filter(row -> matchesDocumentAccessFilter(row, normalizedAccessLevel))
+                .filter(row -> matchesDocumentKeywordFilter(row, normalizedKeyword))
+                .collect(Collectors.toList());
+    }
+
+    private boolean matchesDocumentStageFilter(Map<String, Object> row, String docStage) {
+        return docStage.isBlank() || docStage.equalsIgnoreCase(safe(row.get("status")));
+    }
+
+    private boolean matchesDocumentAccessFilter(Map<String, Object> row, String accessLevel) {
+        if (accessLevel.isBlank()) {
+            return true;
+        }
+
+        String accessLabel = safe(row.get("accessLevel"));
+        return switch (accessLevel.toUpperCase(Locale.ROOT)) {
+            case "PUBLIC" -> accessLabel.contains("전체 공개");
+            case "CUSTOM", "DEPT", "ROLE" -> accessLabel.contains("조건") || accessLabel.contains("역할");
+            case "ADMIN_ONLY", "PRIVATE" -> accessLabel.contains("관리자 전용");
+            default -> true;
+        };
+    }
+
+    private boolean matchesDocumentKeywordFilter(Map<String, Object> row, String docKeyword) {
+        return docKeyword.isBlank() || containsIgnoreCase(safe(row.get("title")), docKeyword);
+    }
+
+    private Map<String, Object> buildAccessBlockLogRow(AiLogEntity log) {
+        Map<String, Object> row = new LinkedHashMap<>();
+        String deniedReason = decodeMetaValue(parseTextMeta(log.getQuery(), "deniedReason"));
+        String deniedDocTitle = decodeMetaValue(parseTextMeta(log.getQuery(), "deniedDocTitle"));
+        String deniedDocId = decodeMetaValue(parseTextMeta(log.getQuery(), "deniedDocId"));
+        String userHeadquarter = decodeMetaValue(parseTextMeta(log.getQuery(), "userHeadquarter"));
+        String userTeam = decodeMetaValue(parseTextMeta(log.getQuery(), "userTeam"));
+        String userPosition = decodeMetaValue(parseTextMeta(log.getQuery(), "userPosition"));
+        String targetDept = decodeMetaValue(parseTextMeta(log.getQuery(), "targetDept"));
+
+        String userName = resolveEmployeeName(log);
+        String userEmpNo = log.getEmployee() == null ? "-" : safe(log.getEmployee().getEmpNo(), "-");
+
+        row.put("user", "-".equals(userName) ? userEmpNo : userEmpNo + " / " + userName);
+        row.put("dept", buildAccessBlockDeptText(userHeadquarter, userTeam, userPosition));
+        row.put("documentTitle", deniedDocTitle.isBlank() ? ("문서 ID " + safe(deniedDocId, "-")) : deniedDocTitle);
+        row.put("reason", mapDeniedReasonLabel(deniedReason));
+        row.put("createdAt", formatRowDateTime(log.getCreatedAt()));
+        row.put("targetDept", targetDept.isBlank() ? "-" : targetDept);
+        row.put("deniedDocId", deniedDocId);
+        row.put("deniedReason", deniedReason);
+        row.put("questionSummary", buildRequestSummary(log));
+        return row;
+    }
+
+    private String buildAccessBlockDeptText(String headquarter, String team, String position) {
+        List<String> parts = new ArrayList<>();
+        if (!safe(headquarter).isBlank()) {
+            parts.add(headquarter);
+        }
+        if (!safe(team).isBlank()) {
+            parts.add(team);
+        }
+        if (!safe(position).isBlank()) {
+            parts.add(position);
+        }
+        return parts.isEmpty() ? "-" : String.join(" / ", parts);
+    }
+
+    private String mapDeniedReasonLabel(String deniedReason) {
+        return switch (safe(deniedReason)) {
+            case "headquarter-mismatch" -> "본부 불일치";
+            case "team-mismatch" -> "팀 불일치";
+            case "position-mismatch" -> "직책 불일치";
+            case "parse-failed" -> "권한 조건 해석 실패";
+            default -> "기타";
+        };
+    }
+
+    private String formatRowDateTime(LocalDateTime dateTime) {
+        return dateTime == null ? "-" : dateTime.format(DATE_TIME_FORMATTER);
+    }
+
     private String resolveDocumentStageLabel(DocumentStage stage) {
         if (stage == null) {
             return "-";
@@ -982,7 +1192,7 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
 
         return switch (normalized.toUpperCase(Locale.ROOT)) {
             case "PUBLIC" -> "전체 공개";
-            case "CUSTOM" -> "議곌굔 議고빀";
+            case "CUSTOM" -> "조건 조합";
             case "ADMIN_ONLY" -> "관리자 전용";
             default -> normalized;
         };
@@ -996,7 +1206,7 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
 
         return switch (normalized.toUpperCase(Locale.ROOT)) {
             case "PUBLIC" -> "전체 공개";
-            case "DEPT", "ROLE" -> "議곌굔 議고빀";
+            case "DEPT", "ROLE" -> "조건 조합";
             case "PRIVATE" -> "관리자 전용";
             default -> normalized;
         };
@@ -1594,6 +1804,19 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
         return null;
     }
 
+    private String decodeMetaValue(String value) {
+        String normalized = safe(value);
+        if (normalized.isBlank()) {
+            return "";
+        }
+
+        try {
+            return URLDecoder.decode(normalized, StandardCharsets.UTF_8);
+        } catch (Exception ignored) {
+            return normalized;
+        }
+    }
+
     private boolean containsIgnoreCase(String source, String keyword) {
         if (source == null || keyword == null) {
             return false;
@@ -1819,4 +2042,3 @@ public class AdAiSecretaryServiceImpl implements AdAiSecretaryService {
         private long assistantCount;
     }
 }
-

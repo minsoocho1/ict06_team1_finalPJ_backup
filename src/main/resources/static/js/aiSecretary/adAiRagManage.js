@@ -127,9 +127,14 @@ document.addEventListener("DOMContentLoaded", function () {
   const documentManagementRequestDate = documentManagementModal?.querySelector("#documentManagementRequestDate");
   const documentManagementReason = documentManagementModal?.querySelector("#documentManagementReason");
   const documentManagementSampleQuestion = documentManagementModal?.querySelector("#documentManagementSampleQuestion");
+  const documentManagementReferenceLink = documentManagementModal?.querySelector("#documentManagementReferenceLink");
+  const documentManagementReferenceText = documentManagementModal?.querySelector("#documentManagementReferenceText");
   const documentManagementSummary = documentManagementModal?.querySelector("#documentManagementSummary");
   const documentManagementAdminComment = documentManagementModal?.querySelector("#documentManagementAdminComment");
   const documentManagementHopeCondition = documentManagementModal?.querySelector("#documentManagementHopeCondition");
+  const documentManagementAppliedTargetDept = documentManagementModal?.querySelector("#documentManagementAppliedTargetDept");
+  const documentManagementAppliedAdminComment = documentManagementModal?.querySelector("#documentManagementAppliedAdminComment");
+  const documentManagementAppliedUpdatedAt = documentManagementModal?.querySelector("#documentManagementAppliedUpdatedAt");
   const documentManagementAdminName = documentManagementModal?.querySelector("#documentManagementAdminName");
   const documentManagementStageWrap = documentManagementModal?.querySelector("#documentManagementStageWrap");
   const documentManagementFailureReason = documentManagementModal?.querySelector("#documentManagementFailureReason");
@@ -187,6 +192,7 @@ document.addEventListener("DOMContentLoaded", function () {
   let documentManagementInitialIsActive = false;
   let currentDocumentChunkDetails = [];
   let currentDocumentVectorDetails = [];
+  let documentManagementEditState = null;
 
   const orgCache = {
     departmentTree: null,
@@ -336,6 +342,71 @@ document.addEventListener("DOMContentLoaded", function () {
     referenceText.classList.remove("d-none");
     referenceText.textContent = textValue;
     referenceText.title = textValue;
+  }
+
+  function showDocumentReferenceValue(value) {
+    if (!documentManagementReferenceLink || !documentManagementReferenceText) return;
+
+    const textValue = safeDatasetValue(value);
+
+    if (!textValue) {
+      documentManagementReferenceLink.classList.add("d-none");
+      documentManagementReferenceLink.removeAttribute("href");
+      documentManagementReferenceLink.removeAttribute("title");
+      documentManagementReferenceLink.textContent = "";
+      documentManagementReferenceText.classList.remove("d-none");
+      documentManagementReferenceText.textContent = "등록된 본문 URL이 없습니다.";
+      documentManagementReferenceText.removeAttribute("title");
+      return;
+    }
+
+    documentManagementReferenceLink.href = textValue;
+    documentManagementReferenceLink.textContent = textValue;
+    documentManagementReferenceLink.title = textValue;
+    documentManagementReferenceLink.classList.remove("d-none");
+    documentManagementReferenceText.classList.add("d-none");
+    documentManagementReferenceText.textContent = "";
+    documentManagementReferenceText.removeAttribute("title");
+  }
+
+  function normalizeDocumentManagementEditValue(value) {
+    return safeDatasetValue(value).trim();
+  }
+
+  function collectDocumentManagementEditableState() {
+    return {
+      title: normalizeDocumentManagementEditValue(documentManagementTitle?.value),
+      requestType: normalizeDocumentManagementEditValue(documentManagementType?.value),
+      category: normalizeDocumentManagementEditValue(documentManagementCategory?.value),
+      targetDept: normalizeDocumentManagementEditValue(documentOrgSelector?.getSummary()),
+      adminComment: normalizeDocumentManagementEditValue(documentManagementAdminComment?.value)
+    };
+  }
+
+  function buildDocumentManagementInitialState(data) {
+    return {
+      title: normalizeDocumentManagementEditValue(data.title),
+      requestType: normalizeDocumentManagementEditValue(data.requestType),
+      category: normalizeDocumentManagementEditValue(data.category),
+      targetDept: normalizeDocumentManagementEditValue(data.targetDept),
+      adminComment: normalizeDocumentManagementEditValue(data.adminComment)
+    };
+  }
+
+  function updateDocumentManagementSaveButtonState() {
+    if (!documentManagementSaveButton) return;
+    if (!documentManagementEditState || !documentManagementEditState.documentId) {
+      documentManagementSaveButton.disabled = true;
+      return;
+    }
+
+    const current = collectDocumentManagementEditableState();
+    const initial = documentManagementEditState.initial || {};
+    const changed = Object.keys(initial).some(function (key) {
+      return normalizeDocumentManagementEditValue(current[key]) !== normalizeDocumentManagementEditValue(initial[key]);
+    });
+
+    documentManagementSaveButton.disabled = !changed;
   }
 
   // ------------------------------------------------------------
@@ -1449,9 +1520,9 @@ document.addEventListener("DOMContentLoaded", function () {
     setReadonlyValue(documentManagementDocumentId, data.documentId);
     setReadonlyValue(documentManagementRegisteredAt, data.registeredAt);
     applyDocumentStatusBadge(data.status, data.statusLabel);
-    setReadonlyValue(documentManagementTitle, data.title);
-    setReadonlyValue(documentManagementType, data.requestType);
-    setReadonlyValue(documentManagementCategory, data.category);
+    setEditableInputValue(documentManagementTitle, data.title);
+    setEditableInputValue(documentManagementType, data.requestType);
+    setEditableInputValue(documentManagementCategory, data.category);
     setReadonlyValue(documentManagementApproverName, data.approverName);
     setReadonlyValue(documentManagementChunkCount, data.chunkCount, "0");
     setReadonlyValue(documentManagementVectorCount, data.vectorCount, "0");
@@ -1459,9 +1530,13 @@ document.addEventListener("DOMContentLoaded", function () {
     setReadonlyValue(documentManagementRequestDate, data.requestDate);
     setReadonlyValue(documentManagementReason, data.reason);
     setReadonlyValue(documentManagementSampleQuestion, data.sampleQuestion);
+    showDocumentReferenceValue(data.referenceUrl);
     setDisplayValue(documentManagementSummary, data.summary, "본문 미리보기가 없습니다.");
-    setDisplayValue(documentManagementAdminComment, data.adminComment);
+    setEditableInputValue(documentManagementAdminComment, data.adminComment);
     setDisplayValue(documentManagementHopeCondition, buildHopeConditionText(data.targetDept, data.accessLevel));
+    setDisplayValue(documentManagementAppliedTargetDept, data.targetDept);
+    setDisplayValue(documentManagementAppliedAdminComment, data.adminComment);
+    setDisplayValue(documentManagementAppliedUpdatedAt, data.permissionUpdatedAt || data.updatedAt || data.registeredAt);
     setReadonlyValue(documentManagementAdminName, data.approverName);
     setDisplayValue(documentManagementFailureReason, data.failureReason, "실패 사유가 기록되지 않았습니다.");
     setReadonlyValue(documentManagementStatusLabel, data.statusLabel);
@@ -1495,9 +1570,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     applyDocumentActivationButtonState(data.status, data.documentId);
 
-    if (documentManagementSaveButton) {
-      documentManagementSaveButton.disabled = true;
-    }
+    documentManagementEditState = {
+      documentId: safeDatasetValue(data.documentId),
+      initial: buildDocumentManagementInitialState(data)
+    };
+
+    updateDocumentManagementSaveButtonState();
   }
 
   // ------------------------------------------------------------
@@ -1568,9 +1646,6 @@ document.addEventListener("DOMContentLoaded", function () {
     [
       documentManagementDocumentId,
       documentManagementRegisteredAt,
-      documentManagementTitle,
-      documentManagementType,
-      documentManagementCategory,
       documentManagementApproverName,
       documentManagementChunkCount,
       documentManagementVectorCount,
@@ -1580,6 +1655,15 @@ document.addEventListener("DOMContentLoaded", function () {
       documentManagementSampleQuestion
     ].forEach(function (element) {
       setReadonlyValue(element, "-");
+    });
+
+    [
+      documentManagementTitle,
+      documentManagementType,
+      documentManagementCategory,
+      documentManagementAdminComment
+    ].forEach(function (element) {
+      setEditableInputValue(element, "-");
     });
 
     if (documentManagementTopStatusBadge) {
@@ -1593,8 +1677,11 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     setDisplayValue(documentManagementSummary, "-");
-    setDisplayValue(documentManagementAdminComment, "-");
+    showDocumentReferenceValue("");
     setDisplayValue(documentManagementHopeCondition, "-");
+    setDisplayValue(documentManagementAppliedTargetDept, "-");
+    setDisplayValue(documentManagementAppliedAdminComment, "-");
+    setDisplayValue(documentManagementAppliedUpdatedAt, "-");
     setReadonlyValue(documentManagementAdminName, "-");
     setDisplayValue(documentManagementFailureReason, "-");
     setReadonlyValue(documentManagementStatusLabel, "-");
@@ -1611,6 +1698,7 @@ document.addEventListener("DOMContentLoaded", function () {
     currentDocumentChunkDetails = [];
     currentDocumentVectorDetails = [];
     documentManagementInitialIsActive = false;
+    documentManagementEditState = null;
     documentOrgSelector?.reset();
 
     if (documentManagementToggleActiveButton) {
@@ -1620,9 +1708,7 @@ document.addEventListener("DOMContentLoaded", function () {
       documentManagementToggleActiveButton.dataset.status = "";
     }
 
-    if (documentManagementSaveButton) {
-      documentManagementSaveButton.disabled = true;
-    }
+    updateDocumentManagementSaveButtonState();
   });
 
   [titleInput, requestTypeInput, categoryInput, adminReviewMemo].forEach(function (element) {
@@ -1696,9 +1782,96 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   });
 
-  documentManagementSaveButton?.addEventListener("click", function () {
+  [
+    documentManagementTitle,
+    documentManagementType,
+    documentManagementCategory,
+    documentManagementAdminComment
+  ].forEach(function (element) {
+    element?.addEventListener("input", updateDocumentManagementSaveButtonState);
+    element?.addEventListener("change", updateDocumentManagementSaveButtonState);
+  });
+
+  documentManagementFinalTargetSelector?.addEventListener("change", updateDocumentManagementSaveButtonState);
+  documentManagementFinalTargetSelector?.addEventListener("input", updateDocumentManagementSaveButtonState);
+
+  documentManagementSaveButton?.addEventListener("click", async function () {
     if (documentManagementSaveButton.disabled) return;
-    alert("권한 조건 저장 기능은 후속 구현 예정입니다.");
+    if (!documentManagementEditState?.documentId) {
+      alert("문서 정보를 확인할 수 없습니다.");
+      return;
+    }
+
+    const payload = collectDocumentManagementEditableState();
+    const baseUrl = safeDatasetValue(documentManagementSaveButton.dataset.detailBaseUrl);
+
+    if (!payload.title) {
+      alert("문서명을 입력해 주세요.");
+      documentManagementTitle?.focus();
+      return;
+    }
+
+    if (!payload.requestType) {
+      alert("자료 유형을 입력해 주세요.");
+      documentManagementType?.focus();
+      return;
+    }
+
+    if (!payload.category) {
+      alert("카테고리를 입력해 주세요.");
+      documentManagementCategory?.focus();
+      return;
+    }
+
+    if (!payload.targetDept) {
+      alert("최종 권한 조건을 선택해 주세요.");
+      return;
+    }
+
+    if (!baseUrl) {
+      alert("저장 요청 경로를 확인할 수 없습니다.");
+      return;
+    }
+
+    const previousDisabled = documentManagementSaveButton.disabled;
+    documentManagementSaveButton.disabled = true;
+
+    try {
+      const params = new URLSearchParams();
+      params.set("title", payload.title);
+      params.set("requestType", payload.requestType);
+      params.set("category", payload.category);
+      params.set("targetDept", payload.targetDept);
+      params.set("adminComment", payload.adminComment);
+
+      const response = await fetch(baseUrl + "/" + encodeURIComponent(documentManagementEditState.documentId) + "/detail", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+          ...buildCsrfHeaders()
+        },
+        credentials: "same-origin",
+        body: params.toString()
+      });
+
+      let result = null;
+      try {
+        result = await response.json();
+      } catch (error) {
+        result = null;
+      }
+
+      if (!response.ok || !result?.success) {
+        throw new Error(result?.message || "문서 정보를 저장하지 못했습니다.");
+      }
+
+      alert(result.message || "저장되었습니다.");
+      window.location.reload();
+    } catch (error) {
+      alert(error?.message || "문서 정보를 저장하지 못했습니다.");
+      documentManagementSaveButton.disabled = previousDisabled;
+      updateDocumentManagementSaveButtonState();
+    }
   });
 
   documentManagementModal?.addEventListener("click", function (event) {
