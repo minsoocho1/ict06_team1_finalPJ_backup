@@ -62,6 +62,17 @@
 
               </form>
 
+              <!-- 공휴일 데이터 갱신 버튼 -->
+              <!-- 연 1회 또는 임시공휴일 발생 시 사용하는 관리용 기능 -->
+              <a th:href="@{/admin/attendance/holiday/sync}"
+                 class="btn btn-outline-warning"
+                 onclick="return confirm('공휴일 데이터는 보통 연 1회 또는 임시공휴일 발생 시 갱신합니다.\n지금 공휴일 데이터를 갱신하시겠습니까?');">
+
+                <i class="fa-solid fa-calendar-days me-1"></i>
+                공휴일 데이터 갱신
+
+              </a>
+
               <!-- 근태 현황 화면으로 이동 -->
               <a th:href="@{/admin/attendance/main}"
                  class="btn btn-outline-secondary">
@@ -74,12 +85,26 @@
         </div>
 
         <!-- 연차 자동 부여 성공 메시지 -->
-        <div th:if="${successMessage != null}"
+        <div th:if="${leaveSuccessMessage}"
+             class="alert alert-success alert-dismissible fade show"
+             role="alert">
+          <span th:text="${leaveSuccessMessage}">
+            연차 자동 부여가 완료되었습니다.
+          </span>
+          <button type="button"
+                  class="btn-close"
+                  data-bs-dismiss="alert"
+                  aria-label="Close">
+          </button>
+        </div>
+
+        <!-- 공휴일 데이터 갱신 성공 메시지 -->
+        <div th:if="${holidaySuccessMessage}"
              class="alert alert-success alert-dismissible fade show"
              role="alert">
 
-          <span th:text="${successMessage}">
-            연차 자동 부여가 완료되었습니다.
+          <span th:text="${holidaySuccessMessage}">
+            공휴일 데이터 갱신 완료
           </span>
 
           <button type="button"

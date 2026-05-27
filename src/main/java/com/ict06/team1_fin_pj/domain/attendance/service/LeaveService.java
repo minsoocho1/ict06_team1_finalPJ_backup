@@ -80,4 +80,21 @@ public interface LeaveService {
             Integer deptId,
             String sortType
     );
+
+    /**
+     * 승인된 휴가/연차 사용분을 연차 발생 내역에 반영한다.
+     *
+     * 사용 위치:
+     * - 전자결재에서 휴가 신청이 최종 승인되었을 때 호출
+     *
+     * 처리 내용:
+     * - LEAVE_REQUEST의 leaveDays 만큼
+     * - LEAVE_OCCURRENCE.used_days 증가
+     * - LEAVE_OCCURRENCE.remain_days 감소
+     *
+     * 주의:
+     * - 휴가 신청 생성/승인 자체는 전자결재 영역
+     * - 이 메서드는 승인 이후 연차 현황 반영만 담당
+     */
+    void applyApprovedLeaveUsage(Integer leaveRequestId);
 }
