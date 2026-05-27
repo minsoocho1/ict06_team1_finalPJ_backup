@@ -29,6 +29,7 @@ api.interceptors.request.use((config) => {
   const accessToken = localStorage.getItem("accessToken");
 
   if (accessToken) {
+    config.headers = config.headers || {};
     config.headers.Authorization = accessToken.startsWith("Bearer ")
       ? accessToken
       : `Bearer ${accessToken}`;
@@ -195,5 +196,22 @@ export const getEmployeesByDepartment = (deptId) =>
   api.get("/organization/employees", {
     params: {
       deptId: String(deptId),
+    },
+  });
+
+// -----------------------------------------------------
+// 사용자 자료 등록 요청 API
+// -----------------------------------------------------
+
+export const createKnowledgeRequest = (payload) =>
+  api.post("/ai-secretary/knowledge-request", payload);
+
+export const getKnowledgeRequestSuggestions = () =>
+  api.get("/ai-secretary/knowledge-request/suggestions");
+
+export const getMyKnowledgeRequests = (empNo) =>
+  api.get("/ai-secretary/knowledge-request/my", {
+    params: {
+      empNo: String(empNo),
     },
   });

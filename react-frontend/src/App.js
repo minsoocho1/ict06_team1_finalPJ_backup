@@ -16,7 +16,7 @@ import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
 // 레이아웃 및 하위 서비스 페이지(Lazy Loading 적용)
-const DefaultLayout = React.lazy(() => import("./layout/DefaultLayout"));
+const UserAppLayout = React.lazy(() => import("./layout/UserAppLayout"));
 
 function AppContent() {
 
@@ -40,7 +40,7 @@ function AppContent() {
           {/* 3. [그룹 B] 사이드바/헤더 있는 메인 서비스 레이아웃 */}
           {/* 메인 : routes/index.js에 정리된 모든 경로 지원*/}
           {/* 앞으로 생성할 페이지는 routes/의 각 대분류 별 파일에 Route만 추가하면 사이드바가 자동으로 적용됨 */}
-          <Route path={PATH.ROOT} element={<DefaultLayout userInfo={userInfo} />}>
+          <Route path={PATH.ROOT} element={<UserAppLayout userInfo={userInfo} />}>
             {appRoutes.map((route, idx) => (
               <Route
                 key={idx}

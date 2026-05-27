@@ -31,4 +31,6 @@ public interface EmpRepository extends JpaRepository<EmpEntity, String>, EmpRepo
 
     List<EmpEntity> findByRole_RoleId(Integer roleId);
 
+    Optional<EmpEntity> findByEmpNoOrEmpId(String empNo, String empId);
+
 }

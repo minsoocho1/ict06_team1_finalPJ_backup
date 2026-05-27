@@ -37,6 +37,9 @@ public class AiSecretaryController {
     private AiTemplateRequestService aiTemplateRequestService;
 
     @Autowired
+    private AiKnowledgeRequestService aiKnowledgeRequestService;
+
+    @Autowired
     private AiChatMessageRepository aiChatMessageRepository;
 
     // 챗봇 최근 세션 조회 또는 생성
@@ -93,7 +96,14 @@ public class AiSecretaryController {
         @PathVariable Integer sessionId // URL 경로(path)에 있는 상수 값을 변수(Variable)로 가져오기
     ) {
         // 메시지 응답 DTO 포함 List 생성
-        List<AiChatMessageResponseDto> response = aiSecretaryService.getMessageList(sessionId)
+        List<AiChatMessageEntity> messages = aiSecretaryService.getMessageList(sessionId);
+        List<Integer> assistantMessageIds = messages.stream()
+                .filter(message -> message.getRole() == MessageRole.ASSISTANT)
+                .map(AiChatMessageEntity::getMessageId)
+                .filter(messageId -> messageId != null)
+                .toList();
+        var referencesByMessageId = aiSecretaryService.getMessageReferences(assistantMessageIds);
+        List<AiChatMessageResponseDto> response = messages
                 .stream()
                 .map(message -> AiChatMessageResponseDto.builder()
                         .messageId(message.getMessageId())
@@ -105,6 +115,8 @@ public class AiSecretaryController {
                         .promptTokens(message.getPromptTokens())
                         .completionTokens(message.getCompletionTokens())
                         .createdAt(message.getCreatedAt())
+                        .updatedAt(message.getUpdatedAt())
+                        .references(referencesByMessageId.getOrDefault(message.getMessageId(), List.of()))
                         .build())
                 .toList();
 
@@ -229,6 +241,32 @@ public class AiSecretaryController {
         return ApiResponse.ok("추천 템플릿 추가 요청 목록 조회 성공", responseDto);
     }
 
+    @PostMapping("/knowledge-request")
+    public ApiResponse<KnowledgeResponseDto> createKnowledgeRequest(
+            @Valid @RequestBody KnowledgeRequestCreateDto requestDto
+    ) {
+        KnowledgeResponseDto responseDto =
+                aiKnowledgeRequestService.createRequest(requestDto);
+
+        return ApiResponse.ok("자료 등록 요청이 접수되었습니다.", responseDto);
+    }
+
+    @GetMapping("/knowledge-request/my")
+    public ApiResponse<List<KnowledgeResponseDto>> getMyKnowledgeRequests(
+            @RequestParam String empNo
+    ) {
+        List<KnowledgeResponseDto> responseDto =
+                aiKnowledgeRequestService.getMyRequests(empNo);
+
+        return ApiResponse.ok("내 자료 등록 요청 목록 조회 성공", responseDto);
+    }
+
+    @GetMapping("/knowledge-request/suggestions")
+    public ApiResponse<KnowledgeRequestSuggestionsDto> getKnowledgeRequestSuggestions() {
+        KnowledgeRequestSuggestionsDto responseDto = aiKnowledgeRequestService.getSuggestions();
+        return ApiResponse.ok("자동완성 후보 조회 성공", responseDto);
+    }
+
     private String resolveDocumentType(Integer sessionId) {
         return aiChatMessageRepository
                 .findTopBySessionSessionIdAndRoleOrderBySeqNoAsc(sessionId, MessageRole.USER)
@@ -238,13 +276,21 @@ public class AiSecretaryController {
     }
 
     private String parseDocumentTypeFromUserMessage(String content) {
-        if (content == null) return "REPORT";
+        if (content == null) {
+            return "REPORT";
+        }
 
         String upper = content.toUpperCase();
 
-        if (upper.contains("TEMPLATE") || upper.contains("템플릿")) return "TEMPLATE";
-        if (upper.contains("MINUTES")) return "MINUTES";
-        if (upper.contains("APPROVAL")) return "APPROVAL";
+        if (upper.contains("TEMPLATE")) {
+            return "TEMPLATE";
+        }
+        if (upper.contains("MINUTES")) {
+            return "MINUTES";
+        }
+        if (upper.contains("APPROVAL")) {
+            return "APPROVAL";
+        }
         return "REPORT";
     }
 
