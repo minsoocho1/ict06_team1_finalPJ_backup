@@ -43,17 +43,29 @@ public class AuthController {
      */
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody LoginRequest loginRequest) {
+
         try {
-            System.out.println("[AuthController] /api/auth/login 호출 - 사번: " + loginRequest.getEmpNo());
+
+            System.out.println("[AuthController] /api/auth/login 호출 - 로그인ID: "
+                    + loginRequest.getLoginId());
+
             Map<String, Object> result = authService.login(
-                    loginRequest.getEmpNo(),
+                    loginRequest.getLoginId(),
                     loginRequest.getPassword()
             );
-            System.out.println("[AuthController] /api/auth/login 응답 성공 - 사번: " + loginRequest.getEmpNo());
+
+            System.out.println("[AuthController] /api/auth/login 응답 성공 - 로그인ID: "
+                    + loginRequest.getLoginId());
+
             return ResponseEntity.ok(result);
+
         } catch (RuntimeException e) {
-            System.out.println("[AuthController] /api/auth/login 응답 실패 - 사번: "
-                    + loginRequest.getEmpNo() + ", 메시지: " + e.getMessage());
+
+            System.out.println("[AuthController] /api/auth/login 응답 실패 - 로그인ID: "
+                    + loginRequest.getLoginId()
+                    + ", 메시지: "
+                    + e.getMessage());
+
             return ResponseEntity.badRequest().body(e.getMessage());
         }
     }
@@ -79,7 +91,7 @@ public class AuthController {
 
     @Data
     static class LoginRequest {
-        private String empNo;
+        private String loginId;
         private String password;
     }
 
