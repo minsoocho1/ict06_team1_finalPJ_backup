@@ -13,6 +13,7 @@ import com.ict06.team1_fin_pj.common.dto.employee.EmployeeSearchConditionDto;
 import com.ict06.team1_fin_pj.common.security.PrincipalDetails;
 import com.ict06.team1_fin_pj.domain.approval.service.ApprovalReceiptOcrService;
 import com.ict06.team1_fin_pj.domain.approval.service.ApprovalService;
+import com.ict06.team1_fin_pj.domain.employee.repository.DepartmentRepository;
 import com.ict06.team1_fin_pj.domain.employee.service.AdEmployeeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -46,6 +47,7 @@ public class ApprovalApiController {
     private final ApprovalService approvalService;
     private final AdEmployeeService adEmployeeService;
     private final ApprovalReceiptOcrService approvalReceiptOcrService;
+    private final DepartmentRepository departmentRepository;
 
     /**
      * 결재 서식 목록 조회 API
@@ -108,7 +110,24 @@ public class ApprovalApiController {
             throw new IllegalArgumentException("로그인 정보가 필요합니다.");
         }
 
+        normalizeApprovalDepartmentCondition(conditionDto);
+
         return adEmployeeService.findEmployees(conditionDto, pageable);
+    }
+
+    private void normalizeApprovalDepartmentCondition(EmployeeSearchConditionDto conditionDto) {
+        Integer deptId = conditionDto.getDeptId();
+
+        if (deptId == null) {
+            return;
+        }
+
+        if (!departmentRepository.existsByParentDept_DeptId(deptId)) {
+            return;
+        }
+
+        conditionDto.setParentDeptId(deptId);
+        conditionDto.setDeptId(null);
     }
 
     /**

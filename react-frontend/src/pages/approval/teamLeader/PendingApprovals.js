@@ -113,7 +113,7 @@ const PendingApprovals = () => {
   // 결재 대기 상세 화면에서는 승인/반려 처리를 해야 하므로 approvalId를 query string으로 넘깁니다.
   const openDetail = (approvalId) => {
     if (boxType === 'processed') {
-      navigate(PATH.APPROVAL.UPCOMING_DETAIL_WITH_ID(approvalId));
+      navigate(`${PATH.APPROVAL.UPCOMING_DETAIL_WITH_ID(approvalId)}&source=processed`);
       return;
     }
 
