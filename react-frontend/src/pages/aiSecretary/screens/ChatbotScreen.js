@@ -47,7 +47,7 @@ const mapMessageToBubble = (message) => ({
   role: message.role === "USER" ? "user" : "ai",
   text: message.content,
   time: formatMessageTime(message.createdAt),
-  references: [],
+  references: Array.isArray(message?.references) ? message.references : [],
 });
 
 const mapAskResponseMessageToBubble = (message, references = []) => ({

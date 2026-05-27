@@ -547,10 +547,21 @@ document.addEventListener("DOMContentLoaded", function () {
       return match ? safeDatasetValue(match[1]) : "";
     };
 
+    const splitValues = function (value) {
+      return safeDatasetValue(value)
+        .split(",")
+        .map(function (item) {
+          return safeDatasetValue(item);
+        })
+        .filter(Boolean);
+    };
+
     return {
       headquarterName: extract("본부") || extract("대상 본부"),
       teamName: extract("팀") || extract("대상 팀"),
-      positionName: extract("직책") || extract("직책 기준")
+      teamNames: splitValues(extract("팀") || extract("대상 팀")),
+      positionName: extract("직책") || extract("직책 기준"),
+      positionNames: splitValues(extract("직책") || extract("직책 기준"))
     };
   }
 
@@ -572,6 +583,22 @@ document.addEventListener("DOMContentLoaded", function () {
         return getDeptName(team) === targetTeamName;
       });
     }) || null;
+  }
+
+  function findHeadquarterByTeamNames(tree, teamNames) {
+    const targets = (Array.isArray(teamNames) ? teamNames : [])
+      .map(function (name) {
+        return safeDatasetValue(name);
+      })
+      .filter(Boolean);
+
+    if (!targets.length) return null;
+
+    return targets
+      .map(function (teamName) {
+        return findHeadquarterByTeamName(tree, teamName);
+      })
+      .find(Boolean) || null;
   }
 
   function uniquePositions(employees) {
@@ -723,8 +750,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
     let state = {
       headquarterId: "",
-      teamDeptId: "",
-      positionId: "",
+      teamDeptIds: [],
+      positionIds: [],
       employees: [],
       seedSummary: ""
     };
@@ -738,11 +765,11 @@ document.addEventListener("DOMContentLoaded", function () {
         '</div>',
         '<div class="col-md-4">',
         '<label class="form-label small fw-bold text-muted">팀 선택</label>',
-        '<select class="form-select form-select-sm" id="' + config.teamSelectId + '" disabled></select>',
+        '<div class="border rounded-2 bg-white p-2 d-flex flex-wrap gap-2 min-vh-40" id="' + config.teamSelectId + '"></div>',
         '</div>',
         '<div class="col-md-4">',
         '<label class="form-label small fw-bold text-muted">직책 기준 선택</label>',
-        '<select class="form-select form-select-sm" id="' + config.positionSelectId + '" disabled></select>',
+        '<div class="border rounded-2 bg-white p-2 d-flex flex-wrap gap-2 min-vh-40" id="' + config.positionSelectId + '"></div>',
         '</div>',
         '</div>'
       ].join("");
@@ -758,6 +785,40 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function getPositionSelect() {
       return container.querySelector("#" + config.positionSelectId);
+    }
+
+    function createChipButton(role, value, label, active, disabled) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "btn btn-sm " + (active ? "btn-primary" : "btn-outline-secondary");
+      button.dataset.role = role;
+      button.dataset.value = safeDatasetValue(value);
+      button.disabled = !!disabled;
+      button.textContent = label;
+      return button;
+    }
+
+    function getSelectedTeamLabels() {
+      const teams = getRenderableTeamOptions().filter(function (dept) {
+        return state.teamDeptIds.includes(getDeptId(dept));
+      });
+      return teams.map(function (dept) {
+        return getDeptName(dept);
+      }).filter(Boolean);
+    }
+
+    function getSelectedPositionLabels() {
+      if (state.positionIds.includes(allOptionValue)) {
+        return [allOptionLabel];
+      }
+      return uniquePositions(state.employees)
+        .filter(function (position) {
+          return state.positionIds.includes(safeDatasetValue(position.positionId));
+        })
+        .map(function (position) {
+          return safeDatasetValue(position.positionName);
+        })
+        .filter(Boolean);
     }
 
     function getSelectedHeadquarter() {
@@ -791,22 +852,21 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function loadEmployeesForSelectedTeam() {
-      if (!state.teamDeptId) {
+      if (!state.teamDeptIds.length) {
         return Promise.resolve([]);
       }
 
-      if (!enableTeamAllOption || !isAllOption(state.teamDeptId)) {
-        return loadEmployees(state.teamDeptId);
-      }
+      const teamIds = state.teamDeptIds.includes(allOptionValue)
+        ? getRenderableTeamOptions().map(function (team) { return getDeptId(team); })
+        : state.teamDeptIds;
 
-      const teams = getRenderableTeamOptions();
-      if (!teams.length) {
+      if (!teamIds.length) {
         return Promise.resolve([]);
       }
 
       return Promise.all(
-        teams.map(function (team) {
-          return loadEmployees(getDeptId(team)).catch(function () {
+        teamIds.map(function (teamId) {
+          return loadEmployees(teamId).catch(function () {
             return [];
           });
         })
@@ -832,66 +892,177 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function renderTeams() {
-      const select = getTeamSelect();
+      const panel = getTeamSelect();
       const teams = getRenderableTeamOptions();
+      if (!panel) return;
 
-      clearSelect(select, "팀을 선택하세요", !state.headquarterId);
+      panel.innerHTML = "";
 
-      if (!state.headquarterId) return;
+      if (!state.headquarterId) {
+        panel.innerHTML = '<div class="text-muted small">대상 본부를 선택하면 팀을 선택할 수 있습니다.</div>';
+        return;
+      }
 
-      if (!teams.length) {
-        if (enableTeamAllOption) {
-          appendOption(select, allOptionValue, allOptionLabel, state.teamDeptId === allOptionValue);
-          select.disabled = false;
-        } else {
-          clearSelect(select, "선택 가능한 팀이 없습니다", true);
-        }
+      if (!teams.length && !enableTeamAllOption) {
+        panel.innerHTML = '<div class="text-muted small">선택 가능한 팀이 없습니다.</div>';
         return;
       }
 
       if (enableTeamAllOption) {
-        appendOption(select, allOptionValue, allOptionLabel, state.teamDeptId === allOptionValue);
+        panel.appendChild(
+          createChipButton(
+            "team-option",
+            allOptionValue,
+            allOptionLabel,
+            state.teamDeptIds.includes(allOptionValue),
+            false
+          )
+        );
       }
+
       teams.forEach(function (dept) {
-        appendOption(select, getDeptId(dept), getDeptName(dept), getDeptId(dept) === state.teamDeptId);
+        const teamId = getDeptId(dept);
+        panel.appendChild(
+          createChipButton(
+            "team-option",
+            teamId,
+            getDeptName(dept),
+            state.teamDeptIds.includes(teamId),
+            false
+          )
+        );
       });
     }
 
     function renderPositions() {
-      const select = getPositionSelect();
+      const panel = getPositionSelect();
       const positions = uniquePositions(state.employees);
+      if (!panel) return;
 
-      clearSelect(select, "직책을 선택하세요", !state.teamDeptId);
+      panel.innerHTML = "";
 
-      if (!state.teamDeptId) return;
+      if (!state.teamDeptIds.length) {
+        panel.innerHTML = '<div class="text-muted small">팀을 선택하면 직책을 선택할 수 있습니다.</div>';
+        return;
+      }
+
+      if (!positions.length && !enablePositionAllOption) {
+        panel.innerHTML = '<div class="text-muted small">선택 가능한 직책이 없습니다.</div>';
+        return;
+      }
 
       if (enablePositionAllOption) {
-        appendOption(select, allOptionValue, allOptionLabel, state.positionId === allOptionValue);
+        panel.appendChild(
+          createChipButton(
+            "position-option",
+            allOptionValue,
+            allOptionLabel,
+            state.positionIds.includes(allOptionValue),
+            false
+          )
+        );
       }
 
       positions.forEach(function (position) {
-        if (enablePositionAllOption && (isAllOption(position.positionName) || isAllOption(position.positionId))) {
+        const positionId = safeDatasetValue(position.positionId);
+        const positionName = safeDatasetValue(position.positionName);
+        if (enablePositionAllOption && (isAllOption(positionName) || isAllOption(positionId))) {
           return;
         }
-        appendOption(select, position.positionId, position.positionName, position.positionId === state.positionId);
+        panel.appendChild(
+          createChipButton(
+            "position-option",
+            positionId,
+            positionName,
+            state.positionIds.includes(positionId),
+            false
+          )
+        );
       });
     }
 
     function updateHidden() {
       const headName = selectedText(getHeadSelect());
-      const teamName = selectedText(getTeamSelect());
-      const positionName = selectedText(getPositionSelect());
+      const teamNames = state.teamDeptIds.includes(allOptionValue)
+        ? [allOptionLabel]
+        : getSelectedTeamLabels();
+      const positionNames = getSelectedPositionLabels();
       const parts = [];
 
       if (headName) parts.push("본부: " + headName);
-      if (teamName) parts.push("팀: " + teamName);
-      if (positionName) parts.push("직책: " + positionName);
+      if (teamNames.length) parts.push("팀: " + teamNames.join(", "));
+      if (positionNames.length) parts.push("직책: " + positionNames.join(", "));
 
       if (summaryInput) summaryInput.value = parts.join(" / ");
       if (headInput) headInput.value = state.headquarterId;
-      if (teamInput) teamInput.value = state.teamDeptId;
-      if (positionInput) positionInput.value = state.positionId;
+      if (teamInput) teamInput.value = state.teamDeptIds.join(",");
+      if (positionInput) positionInput.value = state.positionIds.join(",");
       if (empInput) empInput.value = "";
+    }
+
+    function toggleTeamValue(value) {
+      const key = safeDatasetValue(value);
+      if (!key) return;
+
+      if (enableTeamAllOption && key === allOptionValue) {
+        state.teamDeptIds = [allOptionValue];
+      } else {
+        const next = state.teamDeptIds.filter(function (item) {
+          return item !== allOptionValue;
+        });
+
+        if (next.includes(key)) {
+          state.teamDeptIds = next.filter(function (item) {
+            return item !== key;
+          });
+        } else {
+          state.teamDeptIds = next.concat(key);
+        }
+      }
+
+      state.positionIds = [];
+      state.employees = [];
+      renderTeams();
+      renderPositions();
+      updateHidden();
+
+      if (!state.teamDeptIds.length) return;
+
+      loadEmployeesForSelectedTeam()
+        .then(function (employees) {
+          state.employees = employees;
+          renderPositions();
+          updateHidden();
+        })
+        .catch(function () {
+          state.employees = [];
+          renderPositions();
+          updateHidden();
+        });
+    }
+
+    function togglePositionValue(value) {
+      const key = safeDatasetValue(value);
+      if (!key) return;
+
+      if (enablePositionAllOption && key === allOptionValue) {
+        state.positionIds = [allOptionValue];
+      } else {
+        const next = state.positionIds.filter(function (item) {
+          return item !== allOptionValue;
+        });
+
+        if (next.includes(key)) {
+          state.positionIds = next.filter(function (item) {
+            return item !== key;
+          });
+        } else {
+          state.positionIds = next.concat(key);
+        }
+      }
+
+      renderPositions();
+      updateHidden();
     }
 
     function bindEvents() {
@@ -903,46 +1074,31 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (target.id === config.headSelectId) {
           state.headquarterId = safeDatasetValue(target.value);
-          state.teamDeptId = "";
-          state.positionId = "";
+          state.teamDeptIds = [];
+          state.positionIds = [];
           state.employees = [];
 
           renderTeams();
           renderPositions();
           updateHidden();
           setFieldInvalid(target, false);
+        }
+      });
+
+      container.addEventListener("click", function (event) {
+        const target = event.target;
+        if (!(target instanceof HTMLButtonElement)) return;
+
+        const role = safeDatasetValue(target.dataset.role);
+        const value = safeDatasetValue(target.dataset.value);
+
+        if (role === "team-option") {
+          toggleTeamValue(value);
           return;
         }
 
-        if (target.id === config.teamSelectId) {
-          state.teamDeptId = safeDatasetValue(target.value);
-          state.positionId = "";
-          state.employees = [];
-
-          renderPositions();
-          updateHidden();
-          setFieldInvalid(target, false);
-
-          if (!state.teamDeptId) return;
-
-          loadEmployeesForSelectedTeam()
-            .then(function (employees) {
-              state.employees = employees;
-              renderPositions();
-              updateHidden();
-            })
-            .catch(function () {
-              state.employees = [];
-              renderPositions();
-              updateHidden();
-            });
-          return;
-        }
-
-        if (target.id === config.positionSelectId) {
-          state.positionId = safeDatasetValue(target.value);
-          updateHidden();
-          setFieldInvalid(target, false);
+        if (role === "position-option") {
+          togglePositionValue(value);
         }
       });
 
@@ -952,7 +1108,10 @@ document.addEventListener("DOMContentLoaded", function () {
     function applySeed() {
       const seed = parseTargetSummary(state.seedSummary);
       const tree = Array.isArray(orgCache.departmentTree) ? orgCache.departmentTree : [];
-      let headquarter = findDepartmentByName(tree, seed.headquarterName) || findHeadquarterByTeamName(tree, seed.teamName);
+      let headquarter =
+        findDepartmentByName(tree, seed.headquarterName)
+        || findHeadquarterByTeamNames(tree, seed.teamNames)
+        || findHeadquarterByTeamName(tree, seed.teamName);
 
       if (headquarter) {
         state.headquarterId = getDeptId(headquarter);
@@ -961,23 +1120,23 @@ document.addEventListener("DOMContentLoaded", function () {
       renderHeadquarters();
       renderTeams();
 
-      if (enableTeamAllOption && isAllOption(seed.teamName)) {
-        state.teamDeptId = allOptionValue;
+      if (enableTeamAllOption && seed.teamNames.some(isAllOption)) {
+        state.teamDeptIds = [allOptionValue];
         renderTeams();
 
         return loadEmployeesForSelectedTeam().then(function (employees) {
           state.employees = employees;
 
-          if (enablePositionAllOption && isAllOption(seed.positionName)) {
-            state.positionId = allOptionValue;
+          if (enablePositionAllOption && seed.positionNames.some(isAllOption)) {
+            state.positionIds = [allOptionValue];
           } else {
-            const matchedPosition = uniquePositions(employees).find(function (position) {
-              return position.positionName === seed.positionName;
-            });
-
-            if (matchedPosition) {
-              state.positionId = matchedPosition.positionId;
-            }
+            state.positionIds = uniquePositions(employees)
+              .filter(function (position) {
+                return seed.positionNames.includes(safeDatasetValue(position.positionName));
+              })
+              .map(function (position) {
+                return safeDatasetValue(position.positionId);
+              });
           }
 
           renderPositions();
@@ -985,33 +1144,29 @@ document.addEventListener("DOMContentLoaded", function () {
         });
       }
 
-      const team = findDepartmentByName(getRenderableTeamOptions(), seed.teamName);
+      state.teamDeptIds = getRenderableTeamOptions()
+        .filter(function (team) {
+          return seed.teamNames.includes(getDeptName(team));
+        })
+        .map(function (team) {
+          return getDeptId(team);
+        });
 
-      if (!team) {
-        if (enablePositionAllOption && isAllOption(seed.positionName)) {
-          state.positionId = allOptionValue;
-          renderPositions();
-        }
-        updateHidden();
-        return Promise.resolve();
-      }
-
-      state.teamDeptId = getDeptId(team);
       renderTeams();
 
       return loadEmployeesForSelectedTeam().then(function (employees) {
         state.employees = employees;
 
-        if (enablePositionAllOption && isAllOption(seed.positionName)) {
-          state.positionId = allOptionValue;
+        if (enablePositionAllOption && seed.positionNames.some(isAllOption)) {
+          state.positionIds = [allOptionValue];
         } else {
-          const matchedPosition = uniquePositions(employees).find(function (position) {
-            return position.positionName === seed.positionName;
-          });
-
-          if (matchedPosition) {
-            state.positionId = matchedPosition.positionId;
-          }
+          state.positionIds = uniquePositions(employees)
+            .filter(function (position) {
+              return seed.positionNames.includes(safeDatasetValue(position.positionName));
+            })
+            .map(function (position) {
+              return safeDatasetValue(position.positionId);
+            });
         }
 
         renderPositions();
@@ -1022,8 +1177,8 @@ document.addEventListener("DOMContentLoaded", function () {
     function init(seedSummary) {
       state = {
         headquarterId: "",
-        teamDeptId: "",
-        positionId: "",
+        teamDeptIds: [],
+        positionIds: [],
         employees: [],
         seedSummary: safeDatasetValue(seedSummary)
       };
@@ -1032,8 +1187,8 @@ document.addEventListener("DOMContentLoaded", function () {
       bindEvents();
 
       clearSelect(getHeadSelect(), "본부를 불러오는 중입니다", true);
-      clearSelect(getTeamSelect(), "팀을 선택하세요", true);
-      clearSelect(getPositionSelect(), "직책을 선택하세요", true);
+      if (getTeamSelect()) getTeamSelect().innerHTML = '<div class="text-muted small">팀을 불러오는 중입니다.</div>';
+      if (getPositionSelect()) getPositionSelect().innerHTML = '<div class="text-muted small">직책을 불러오는 중입니다.</div>';
       updateHidden();
 
       return loadDepartmentTree()
@@ -1069,8 +1224,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
     function validate() {
       const headSelect = getHeadSelect();
-      const teamSelect = getTeamSelect();
-      const positionSelect = getPositionSelect();
 
       if (!safeDatasetValue(headSelect?.value)) {
         setFieldInvalid(headSelect, true);
@@ -1078,15 +1231,11 @@ document.addEventListener("DOMContentLoaded", function () {
         return { valid: false, message: "대상 본부를 선택해 주세요." };
       }
 
-      if (!safeDatasetValue(teamSelect?.value)) {
-        setFieldInvalid(teamSelect, true);
-        teamSelect?.focus();
+      if (!state.teamDeptIds.length) {
         return { valid: false, message: "팀을 선택해 주세요." };
       }
 
-      if (!safeDatasetValue(positionSelect?.value)) {
-        setFieldInvalid(positionSelect, true);
-        positionSelect?.focus();
+      if (!state.positionIds.length) {
         return { valid: false, message: "직책 기준을 선택해 주세요." };
       }
 
