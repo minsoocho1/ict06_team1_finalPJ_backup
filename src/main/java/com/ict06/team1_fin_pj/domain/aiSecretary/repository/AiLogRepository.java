@@ -14,6 +14,9 @@ import java.util.List;
 
 public interface AiLogRepository extends JpaRepository<AiLogEntity, Integer> {
 
+    @EntityGraph(attributePaths = {"message"})
+    List<AiLogEntity> findByMessage_MessageIdInOrderByLogIdAsc(List<Integer> messageIds);
+
     @EntityGraph(attributePaths = {"employee", "employee.department", "session", "message"})
     List<AiLogEntity> findByCreatedAtBetweenOrderByCreatedAtDesc(
             LocalDateTime startAt,
