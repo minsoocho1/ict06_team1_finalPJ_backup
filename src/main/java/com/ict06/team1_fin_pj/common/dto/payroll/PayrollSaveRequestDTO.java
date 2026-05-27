@@ -71,5 +71,15 @@ public class PayrollSaveRequestDTO {
         // OVERTIME / ABSENCE - 일반항목이면 null
         private String linkedAttendanceType;
 
+        // 근태연동 계산용 화면 전달값
+        private Integer overtimeMinutes;
+        private Integer absenceDays;
+
+        // 조정항목 여부
+        private Boolean derivedAdjustment;
+
+        // 조정항목 발생월
+        private String sourcePayMonth;
+
     }
 }

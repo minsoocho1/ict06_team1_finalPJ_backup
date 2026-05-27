@@ -377,9 +377,9 @@
                                             <td th:text="${item.itemName}">지급항목</td>
 
                                             <td class="text-end"
-                                                th:text="${item.amount == null or item.amount == 0
+                                                th:text="${item.appliedAmount == null or item.appliedAmount == 0
                                                     ? '0'
-                                                    : #numbers.formatInteger(item.amount, 3, 'COMMA')}">
+                                                    : #numbers.formatInteger(item.appliedAmount, 3, 'COMMA')}">
                                                 0
                                             </td>
 
@@ -442,9 +442,9 @@
                                         <tr th:each="item : ${statement.deductionItems}">
                                             <td th:text="${item.itemName}">공제항목</td>
                                             <td class="text-end"
-                                                th:text="${item.amount == null or item.amount == 0
+                                                th:text="${item.appliedAmount == null or item.appliedAmount == 0
                                                     ? '0'
-                                                    : #numbers.formatInteger(item.amount, 3, 'COMMA')}">
+                                                    : #numbers.formatInteger(item.appliedAmount, 3, 'COMMA')}">
                                                 0
                                             </td>
                                             <td>-</td>
@@ -704,6 +704,46 @@
                                             </td>
 
                                             <td>0.9%</td>
+                                        </tr>
+
+                                        <!-- 연장수당 / 조정수당 계산방법 -->
+                                        <tr th:each="item : ${statement.allowanceItems}"
+                                            th:if="${item.itemName.startsWith('연장수당') or item.itemName.startsWith('조정수당')}">
+                                            <td class="fw-semibold" th:text="${item.itemName}">연장수당</td>
+                                            <td>연장분 × 60분당 단가 / 60분</td>
+                                            <td th:text="${#numbers.formatInteger(item.attendanceCount == null ? 0 : item.attendanceCount, 1, 'COMMA')
+                                                + '분 × '
+                                                + #numbers.formatInteger(item.amount == null ? 0 : item.amount, 3, 'COMMA')
+                                                + '원 / 60분'}">
+                                                0분 × 0원 / 60분
+                                            </td>
+                                            <td class="text-end fw-bold"
+                                                th:text="${item.appliedAmount == null or item.appliedAmount == 0
+                                                    ? '0'
+                                                    : #numbers.formatInteger(item.appliedAmount, 3, 'COMMA')}">
+                                                0
+                                            </td>
+                                            <td>근태연동</td>
+                                        </tr>
+
+                                        <!-- 결근공제 / 조정공제 계산방법 -->
+                                        <tr th:each="item : ${statement.deductionItems}"
+                                            th:if="${item.itemName.startsWith('결근공제') or item.itemName.startsWith('조정공제')}">
+                                            <td class="fw-semibold" th:text="${item.itemName}">결근공제</td>
+                                            <td>결근일수 × 하루당 공제단가</td>
+                                            <td th:text="${#numbers.formatInteger(item.attendanceCount == null ? 0 : item.attendanceCount, 1, 'COMMA')
+                                                    + '일 × '
+                                                    + #numbers.formatInteger(item.amount == null ? 0 : item.amount, 3, 'COMMA')
+                                                    + '원'}">
+                                                0일 × 0원
+                                            </td>
+                                            <td class="text-end fw-bold"
+                                                th:text="${item.appliedAmount == null or item.appliedAmount == 0
+                                                    ? '0'
+                                                    : #numbers.formatInteger(item.appliedAmount, 3, 'COMMA')}">
+                                                0
+                                            </td>
+                                            <td>근태연동</td>
                                         </tr>
 
                                         </tbody>

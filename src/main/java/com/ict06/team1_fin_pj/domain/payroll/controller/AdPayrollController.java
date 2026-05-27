@@ -78,6 +78,23 @@ public class AdPayrollController {
         return adPayrollService.getPayrollItems(requestDTO);
     }
 
+    // DB 저장 없이 최신 항목 미리보기 조회
+    @GetMapping("/main/items/latest-preview")
+    @ResponseBody
+    public List<PayrollItemLoadResponseDTO.Item> getLatestPreviewPayrollItems(
+
+            @RequestParam String empNo,
+            @RequestParam Integer payYear,
+            @RequestParam Integer payMonth
+    ) {
+
+        return adPayrollService.getLatestPreviewPayrollItems(
+                empNo,
+                payYear,
+                payMonth
+        );
+    }
+
     // 지급/공제항목 변경 경고 확인 처리
     @PostMapping("/main/item-settings/decision")
     @ResponseBody

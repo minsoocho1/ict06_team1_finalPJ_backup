@@ -10,6 +10,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -294,6 +296,44 @@ public class AdPayrollSummaryServiceImpl implements AdPayrollSummaryService {
         }
 
         for (PayrollStatementResponseDTO.Item item : items) {
+
+            BigDecimal unitAmount =
+                    item.getAmount() == null
+                            ? BigDecimal.ZERO
+                            : item.getAmount();
+
+            BigDecimal appliedAmount =
+                    item.getAppliedAmount() == null
+                            ? BigDecimal.ZERO
+                            : item.getAppliedAmount();
+
+            if (appliedAmount.compareTo(BigDecimal.ZERO) == 0) {
+                appliedAmount = unitAmount;
+                item.setAppliedAmount(appliedAmount);
+            }
+
+            if (unitAmount.compareTo(BigDecimal.ZERO) > 0
+                    && item.getItemName() != null) {
+
+                if (item.getItemName().startsWith("연장수당")
+                        || item.getItemName().startsWith("조정수당")) {
+
+                    item.setAttendanceCount(
+                            appliedAmount
+                                    .multiply(BigDecimal.valueOf(60))
+                                    .divide(unitAmount, 0, RoundingMode.HALF_UP)
+                    );
+                }
+
+                if (item.getItemName().startsWith("결근공제")
+                        || item.getItemName().startsWith("조정공제")) {
+
+                    item.setAttendanceCount(
+                            appliedAmount
+                                    .divide(unitAmount, 0, RoundingMode.HALF_UP)
+                    );
+                }
+            }
 
             if ("ALLOWANCE".equals(item.getItemType())) {
                 statement.getAllowanceItems().add(item);

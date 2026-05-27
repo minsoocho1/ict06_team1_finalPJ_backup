@@ -47,5 +47,23 @@ public class PayrollItemLoadResponseDTO {
         // OVERTIME / ABSENCE 등
         // 현재 설정 기준으로 내려준다.
         private String linkedAttendanceType;
+
+        // 근태연동 표시용
+        private Integer overtimeMinutes;
+        private Integer absenceDays;
+
+        // 조정항목 여부
+        private Boolean derivedAdjustment;
+
+        // 조정항목 발생월
+        private String sourcePayMonth;
+
+        // 화면 표시용 항목명
+        private String displayItemName;
+
+        // 저장 당시 계산 반영금액
+        private BigDecimal taxableAmount;
+        private BigDecimal nonTaxableAmount;
+
     }
 }
