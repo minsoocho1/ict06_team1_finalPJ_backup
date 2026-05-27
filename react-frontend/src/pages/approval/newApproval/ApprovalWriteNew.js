@@ -19,7 +19,7 @@ import axiosInstance from 'src/api/axiosInstance';
 import { PATH } from 'src/constants/path';
 import { containerStyle } from 'src/styles/js/demoPageStyle';
 
-// 결재 서식 JSON 문자열을 작성 화면에서 쓰기 쉬운 객체 구조로 변환합니다.
+// template 문자열을 작성 화면에서 쓰기 쉬운 객체로 변환합니다.
 const parseTemplate = (template) => {
   if (!template) {
     return { title: '', fields: [], fileRequired: false };
@@ -98,7 +98,7 @@ const createEmptyValues = (fields) =>
     return acc;
   }, {});
 
-// [전자결재] 새 결재 문서 작성과 임시저장을 담당하는 사용자 화면입니다.
+// [전자결재] 새 결재 진행 - 결재 내용 작성 페이지
 const ApprovalWriteNew = () => {
   const [userInfo] = useOutletContext();
   const navigate = useNavigate();
@@ -228,6 +228,7 @@ const ApprovalWriteNew = () => {
     fetchLatestForm();
   }, [draftId, initialForm?.formId]);
 
+  // 서식 필드가 준비되면 화면 입력값 state를 초기화하고 기존 입력값은 유지합니다.
   useEffect(() => {
     setFieldValues((prev) => ({
       ...createEmptyValues(template.fields),
@@ -244,6 +245,7 @@ const ApprovalWriteNew = () => {
     }
   }, [canAttachFile]);
 
+  // 이미지 미리보기에 사용한 Object URL을 해제하여 브라우저 메모리 누수를 방지합니다.
   useEffect(() => {
     return () => {
       filePreviews.forEach((item) => {
