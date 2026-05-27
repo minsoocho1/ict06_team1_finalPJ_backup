@@ -37,10 +37,14 @@ public class PrincipalDetailsService implements UserDetailsService {
      */
 
     @Override
-    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
-        //1. Repository 통해 DB에서 User 정보 조회
-        EmpEntity user = usersRepository.findByEmpNo(username)
-                .orElseThrow(() -> new UsernameNotFoundException("해당 사번를 가진 사용자를 찾을 수 없습니다: " + username));
+    public UserDetails loadUserByUsername(String username)
+            throws UsernameNotFoundException {
+
+        EmpEntity user = usersRepository
+                .findByEmpNoOrEmpId(username, username)
+                .orElseThrow(() ->
+                        new UsernameNotFoundException(
+                                "사용자를 찾을 수 없습니다: " + username));
 
         return new PrincipalDetails(user);
     }

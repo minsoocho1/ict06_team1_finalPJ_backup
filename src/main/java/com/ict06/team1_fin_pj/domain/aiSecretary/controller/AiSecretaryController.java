@@ -96,7 +96,14 @@ public class AiSecretaryController {
         @PathVariable Integer sessionId // URL 경로(path)에 있는 상수 값을 변수(Variable)로 가져오기
     ) {
         // 메시지 응답 DTO 포함 List 생성
-        List<AiChatMessageResponseDto> response = aiSecretaryService.getMessageList(sessionId)
+        List<AiChatMessageEntity> messages = aiSecretaryService.getMessageList(sessionId);
+        List<Integer> assistantMessageIds = messages.stream()
+                .filter(message -> message.getRole() == MessageRole.ASSISTANT)
+                .map(AiChatMessageEntity::getMessageId)
+                .filter(messageId -> messageId != null)
+                .toList();
+        var referencesByMessageId = aiSecretaryService.getMessageReferences(assistantMessageIds);
+        List<AiChatMessageResponseDto> response = messages
                 .stream()
                 .map(message -> AiChatMessageResponseDto.builder()
                         .messageId(message.getMessageId())
@@ -108,6 +115,8 @@ public class AiSecretaryController {
                         .promptTokens(message.getPromptTokens())
                         .completionTokens(message.getCompletionTokens())
                         .createdAt(message.getCreatedAt())
+                        .updatedAt(message.getUpdatedAt())
+                        .references(referencesByMessageId.getOrDefault(message.getMessageId(), List.of()))
                         .build())
                 .toList();
 

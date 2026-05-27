@@ -1,22 +1,21 @@
 /**
  * @FileName : Bubble.js
  * @Description : aiSecretary 전용 채팅 말풍선 공통 컴포넌트
- *                - 역할(role)에 따라 정렬, 배경색, borderRadius만 변경
- *                - 활용: WriterScreen, CorrectionScreen, ChatbotScreen
  * @Author : 송혜진
  * @Date : 2026. 04. 28
- * @Modification_History
- * @
- * @ 수정일         수정자        수정내용
- * @ ----------    ---------    -------------------------------
- * @ 2026.04.29    송혜진        최초 생성
  */
 
 import React from "react";
 import { C } from "../styles/aiSecretaryTheme";
 
-export default function Bubble({ role, text, time }) {
+const isLinkableReference = (url) =>
+  typeof url === "string" &&
+  (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/"));
+
+export default function Bubble({ role, text, time, references = [] }) {
   const isUser = role === "user";
+  const isAi = role === "ai" || role === "ASSISTANT";
+  const hasReferences = isAi && Array.isArray(references) && references.length > 0;
 
   return (
     <div
@@ -51,6 +50,53 @@ export default function Bubble({ role, text, time }) {
         >
           {time}
         </div>
+
+        {hasReferences && (
+          <div
+            style={{
+              marginTop: 10,
+              padding: "10px 12px",
+              borderRadius: 12,
+              border: `1px solid ${C.border}`,
+              background: "#f8fafc",
+            }}
+          >
+            <div
+              style={{
+                fontSize: 12,
+                fontWeight: 700,
+                color: "#374151",
+                marginBottom: 8,
+              }}
+            >
+              참고한 문서
+            </div>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              {references.map((reference, index) => (
+                <div key={`${reference?.docId ?? "ref"}-${index}`}>
+                  <div style={{ fontSize: 13, color: "#111827", lineHeight: 1.5 }}>
+                    • {reference?.title || "참고 문서"}
+                  </div>
+                  <div style={{ marginTop: 4, marginLeft: 12, fontSize: 12 }}>
+                    {isLinkableReference(reference?.url) ? (
+                      <a
+                        href={reference.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ color: C.accent, textDecoration: "none", fontWeight: 600 }}
+                      >
+                        문서 열기
+                      </a>
+                    ) : (
+                      <span style={{ color: C.muted }}>문서 링크 없음</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
