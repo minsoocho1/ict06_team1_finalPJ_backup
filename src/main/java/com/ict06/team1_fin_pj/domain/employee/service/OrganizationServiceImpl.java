@@ -129,8 +129,8 @@ public class OrganizationServiceImpl implements OrganizationService {
                         .deptName(emp.getDepartment().getDeptName())
 
                         // 직급 정보
-                        .positionId(emp.getPosition().getPositionId())
-                        .positionName(emp.getPosition().getPositionName())
+                        .positionId(resolvePositionId(emp))
+                        .positionName(resolvePositionName(emp))
 
                         // 재직 상태
                         .status(emp.getStatus())
@@ -148,5 +148,21 @@ public class OrganizationServiceImpl implements OrganizationService {
                         .build())
 
                 .toList();
+    }
+
+    private Integer resolvePositionId(EmpEntity emp) {
+        if (emp == null || emp.getPosition() == null) {
+            return null;
+        }
+
+        return emp.getPosition().getPositionId();
+    }
+
+    private String resolvePositionName(EmpEntity emp) {
+        if (emp == null || emp.getPosition() == null) {
+            return null;
+        }
+
+        return emp.getPosition().getPositionName();
     }
 }
