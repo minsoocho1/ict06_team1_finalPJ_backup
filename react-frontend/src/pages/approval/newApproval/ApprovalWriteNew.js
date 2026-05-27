@@ -19,7 +19,7 @@ import axiosInstance from 'src/api/axiosInstance';
 import { PATH } from 'src/constants/path';
 import { containerStyle } from 'src/styles/js/demoPageStyle';
 
-// template 문자열을 작성 화면에서 쓰기 쉬운 객체로 변환합니다.
+// 결재 서식 JSON 문자열을 작성 화면에서 쓰기 쉬운 객체 구조로 변환합니다.
 const parseTemplate = (template) => {
   if (!template) {
     return { title: '', fields: [], fileRequired: false };
@@ -38,6 +38,7 @@ const parseTemplate = (template) => {
   }
 };
 
+// 입력값을 서버에 저장하기 전 필드 타입에 맞게 정리합니다.
 const normalizeFieldValue = (field, value) => {
   if (field.type === 'amount') {
     return String(value || '').replace(/[^\d]/g, '');
@@ -46,6 +47,7 @@ const normalizeFieldValue = (field, value) => {
   return value;
 };
 
+// 금액 입력값을 화면에 표시할 때 1,000 단위 콤마 형식으로 변환합니다.
 const formatAmount = (value) => {
   const digits = String(value || '').replace(/[^\d]/g, '');
   return digits ? Number(digits).toLocaleString('ko-KR') : '';
@@ -55,9 +57,11 @@ const formatAmount = (value) => {
 // 현재는 비용 정산 신청에서 증빙 파일로 이미지/PDF만 허용할 때 사용합니다.
 const isImageFile = (file) => file?.type?.startsWith('image/');
 
+// 선택한 파일이 PDF인지 확인하여 비용 정산 증빙 업로드 검증에 활용합니다.
 const isPdfFile = (file) =>
   file?.type === 'application/pdf' || file?.name?.toLowerCase().endsWith('.pdf');
 
+// 서버가 내려준 상대 파일 경로를 브라우저에서 접근 가능한 전체 URL로 변환합니다.
 const buildResourceUrl = (path) => {
   if (!path) {
     return '';
@@ -70,6 +74,7 @@ const buildResourceUrl = (path) => {
   return `${PATH.API.BASE.replace(/\/api$/, '')}${path}`;
 };
 
+// 임시저장 문서의 content JSON에서 필드별 기존 입력값을 복원합니다.
 const parseContentFields = (content) => {
   if (!content) {
     return {};
@@ -86,13 +91,14 @@ const parseContentFields = (content) => {
   }
 };
 
+// 선택한 서식의 모든 입력 필드를 빈 값으로 초기화합니다.
 const createEmptyValues = (fields) =>
   fields.reduce((acc, field) => {
     acc[field.id] = '';
     return acc;
   }, {});
 
-// [전자결재] 새 결재 진행 - 결재 내용 작성 페이지
+// [전자결재] 새 결재 문서 작성과 임시저장을 담당하는 사용자 화면입니다.
 const ApprovalWriteNew = () => {
   const [userInfo] = useOutletContext();
   const navigate = useNavigate();
@@ -156,6 +162,7 @@ const ApprovalWriteNew = () => {
   );
 
   // 임시저장함에서 들어온 경우에는 저장된 문서 상세와 최신 서식 정보를 함께 불러옵니다.
+  // 서식 필드가 준비되면 화면 입력값 state를 초기화하고 기존 입력값은 유지합니다.
   useEffect(() => {
     if (!draftId) {
       return;
@@ -191,6 +198,7 @@ const ApprovalWriteNew = () => {
   }, [draftId]);
 
   // 서식 목록에서 받은 데이터가 오래되었을 수 있어 작성 화면 진입 시 상세 API로 최신 template을 다시 조회합니다.
+  // 이미지 미리보기에 사용한 Object URL을 해제하여 브라우저 메모리 누수를 방지합니다.
   useEffect(() => {
     if (draftId) {
       return;
@@ -254,6 +262,7 @@ const ApprovalWriteNew = () => {
     }));
   };
 
+  // 비용 정산/OCR 대상 서식에서는 이미지 또는 PDF 파일만 업로드할 수 있게 검증합니다.
   const canUploadFile = (file) => {
     if (!isExpenseSettlementForm && !isReceiptOcrForm) {
       return true;
@@ -308,6 +317,7 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 새 첨부파일 선택 시 파일 형식을 검증하고 필요하면 OCR 자동 입력을 실행합니다.
   const handleFileChange = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     const availableFiles = selectedFiles.filter(canUploadFile);
@@ -327,11 +337,13 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 아직 서버에 저장하지 않은 신규 첨부파일을 작성 화면에서 제거합니다.
   const removeFile = (index) => {
     setFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
     setFileInputKey((prev) => prev + 1);
   };
 
+  // 임시저장 문서에 이미 저장되어 있던 첨부파일을 서버와 화면에서 함께 삭제합니다.
   const removeExistingFile = async (fileId) => {
     if (!window.confirm('기존 첨부파일을 삭제하시겠습니까?')) {
       return;
@@ -346,6 +358,7 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 현재 입력된 필드 값을 백엔드 Approval.content에 저장할 JSON 문자열로 변환합니다.
   const buildContent = () => {
     const fields = template.fields.map((field) => ({
       id: field.id,
@@ -362,6 +375,7 @@ const ApprovalWriteNew = () => {
     });
   };
 
+  // 임시저장/상신 API가 공통으로 사용하는 요청 본문을 생성합니다.
   const buildRequestPayload = (approvalLines = []) => ({
     formId: selectedForm.formId,
     title: documentTitle,
@@ -369,6 +383,7 @@ const ApprovalWriteNew = () => {
     approvalLines,
   });
 
+  // 저장 또는 다음 단계 이동 전에 서식 정보와 첨부파일 필수 조건을 검증합니다.
   const validateWriteForm = () => {
     if (!selectedForm?.formId) {
       setErrorMessage('결재 서식 정보가 없습니다.');
@@ -394,6 +409,7 @@ const ApprovalWriteNew = () => {
     return true;
   };
 
+  // 첨부파일 유무에 따라 JSON 요청 또는 multipart 요청으로 백엔드 API를 호출합니다.
   const requestApprovalApi = async (apiPath, payload, method = 'post') => {
     if (!canAttachFile || files.length === 0) {
       return axiosInstance[method](apiPath, payload);
@@ -413,6 +429,7 @@ const ApprovalWriteNew = () => {
     return axiosInstance[method](apiPath, formData);
   };
 
+  // 작성 중인 문서를 DRAFT 상태로 저장하고 임시저장함으로 이동합니다.
   const saveDraft = async () => {
     if (!validateWriteForm()) {
       return;
@@ -433,6 +450,7 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 문서 내용을 검증한 뒤 결재선 설정 화면으로 작성 상태를 전달합니다.
   const moveToLineStep = () => {
     if (!validateWriteForm()) {
       return;
@@ -454,6 +472,7 @@ const ApprovalWriteNew = () => {
     });
   };
 
+  // 서식 필드 타입(text, select, amount 등)에 맞는 입력 컴포넌트를 렌더링합니다.
   const renderField = (field) => {
     // [결재-근태 연동용]: 조퇴 시작 시각, 외근 퇴근 시각처럼 근태 기준값으로 고정해야 하는 필드를 잠급니다.
     const isLocked = lockedFieldIdSet.has(field.id);
@@ -508,6 +527,7 @@ const ApprovalWriteNew = () => {
     );
   };
 
+  // 새로 선택한 첨부파일 목록을 카드 형태로 보여주고 개별 삭제 버튼을 제공합니다.
   const renderFilePreview = () => {
     if (files.length === 0) {
       return null;
@@ -552,6 +572,7 @@ const ApprovalWriteNew = () => {
     );
   };
 
+  // 임시저장 문서에 이미 등록되어 있던 첨부파일 목록을 보여주고 삭제할 수 있게 합니다.
   const renderExistingFiles = () => {
     if (existingFiles.length === 0) {
       return null;
