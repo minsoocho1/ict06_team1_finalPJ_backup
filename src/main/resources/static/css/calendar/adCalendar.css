@@ -1,0 +1,2233 @@
+.admin-calendar-page {
+    width: calc(100% + 32px);
+    margin: -32px -16px 0 -16px;
+    padding: 0;
+    height: calc(100vh - 115px);
+    min-height: 620px;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    overflow: hidden;
+}
+
+.admin-calendar-toolbar {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    min-height: 56px;
+    padding: 16px 12px 8px;
+    flex-shrink: 0;
+}
+
+.admin-calendar-toolbar-left,
+.admin-calendar-toolbar-center,
+.admin-calendar-toolbar-right {
+    display: flex;
+    align-items: center;
+}
+
+.admin-calendar-toolbar-left {
+    gap: 6px;
+    justify-content: flex-start;
+}
+
+.admin-calendar-toolbar-center {
+    justify-content: center;
+}
+
+.admin-calendar-toolbar-right {
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.admin-calendar-title {
+    font-size: 17px;
+    font-weight: 800;
+    color: #0d6efd;
+    white-space: nowrap;
+}
+
+.admin-calendar-btn,
+.admin-calendar-view-btn,
+.admin-calendar-filter-btn {
+    height: 30px;
+    cursor: pointer;
+    font-weight: 700;
+}
+
+.admin-calendar-btn {
+    padding: 0 10px;
+    border: 1px solid #cfe2ff;
+    border-radius: 8px;
+    background: #f8fbff;
+    color: #0d6efd;
+    font-size: 12px;
+    line-height: 28px;
+}
+
+.admin-calendar-filter-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    position: relative;
+}
+
+.admin-calendar-filter-wrap {
+    position: relative;
+}
+
+.admin-calendar-filter-btn {
+    padding: 0 13px;
+    border: 1px solid #cfe2ff;
+    border-radius: 999px;
+    background: #f8fbff;
+    color: #0d6efd;
+    font-size: 13px;
+    line-height: 28px;
+}
+
+.admin-calendar-filter-btn.active {
+    border: 2px solid #0d6efd;
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, 0.12);
+    line-height: 26px;
+}
+
+.admin-calendar-filter-dropdown {
+    display: none;
+    position: absolute;
+    top: 42px;
+    right: 0;
+    width: 260px;
+    padding: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+    z-index: 1000;
+    color: #212529;
+}
+
+.admin-calendar-filter-dropdown.open {
+    display: block;
+}
+
+.admin-calendar-category-dropdown {
+    width: 280px;
+}
+
+.admin-calendar-filter-dropdown strong {
+    display: block;
+    margin-bottom: 10px;
+    color: #111827;
+    font-size: 13px;
+}
+
+.admin-calendar-filter-dropdown label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 14px;
+}
+
+/* 일정 범위 드롭다운 안에서 구성원 공개 일정을 선택하는 영역이다. */
+.admin-calendar-filter-divider {
+    margin: 12px 0;
+    border-top: 1px solid #eef2f7;
+}
+
+.admin-calendar-member-filter-title {
+    margin-bottom: 8px !important;
+}
+
+.admin-calendar-member-schedule-list,
+.admin-calendar-member-org-list {
+    max-height: 165px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.admin-calendar-member-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    min-width: 0;
+    margin-bottom: 7px;
+    color: #111827;
+    font-size: 13px !important;
+    cursor: pointer;
+}
+
+.admin-calendar-member-row input {
+    width: 14px;
+    height: 14px;
+    flex-shrink: 0;
+    accent-color: #0d6efd;
+}
+
+.admin-calendar-member-color-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    flex-shrink: 0;
+}
+
+.admin-calendar-member-name {
+    min-width: 0;
+    color: #111827;
+    font-weight: 700;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-calendar-member-position {
+    margin-left: auto;
+    color: #6b7280;
+    font-size: 12px;
+    white-space: nowrap;
+}
+
+.admin-calendar-member-empty {
+    padding: 6px 0;
+    color: #9ca3af;
+    font-size: 12px;
+}
+
+.admin-calendar-member-org-button {
+    width: 100%;
+    height: 32px;
+    margin-top: 8px;
+    border: 1px solid #c7d2fe;
+    border-radius: 7px;
+    background: #eef2ff;
+    color: #4f46e5;
+    font-size: 12px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.admin-calendar-member-org-panel {
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid #eef2f7;
+}
+
+.admin-calendar-member-org-panel[hidden] {
+    display: none !important;
+}
+
+.admin-calendar-member-org-select {
+    width: 100%;
+    height: 32px;
+    margin-bottom: 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #111827;
+    font-size: 12px;
+}
+
+.admin-calendar-member-count {
+    display: block;
+    margin-top: 8px;
+    color: #6b7280;
+    font-size: 11px;
+}
+
+.admin-calendar-view-group {
+    display: inline-flex;
+    align-items: center;
+}
+
+.admin-calendar-view-btn {
+    padding: 0 10px;
+    border: 1px solid #cfe2ff;
+    background: #fff;
+    color: #0d6efd;
+    font-size: 12px;
+    line-height: 28px;
+}
+
+.admin-calendar-view-btn.active {
+    border-color: #0d6efd;
+    background: #0d6efd;
+    color: #fff;
+}
+
+.admin-calendar-main-area {
+    border: none;
+    border-radius: 0;
+    padding: 0;
+    background: #fff;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.admin-calendar-main,
+.admin-calendar-main .fc,
+.admin-calendar-main .fc-view-harness {
+    height: 100% !important;
+}
+
+.admin-calendar-main .fc-header-toolbar {
+    display: none;
+}
+
+.admin-calendar-main .fc-daygrid-day-top {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding-top: 6px;
+}
+
+.admin-calendar-main .fc-daygrid-day-number {
+    width: 100%;
+    text-align: center;
+    padding: 0;
+    text-decoration: none;
+}
+
+.admin-calendar-main .admin-calendar-day-number {
+    display: inline-block;
+    width: 100%;
+    text-align: center;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.admin-calendar-main .fc-col-header-cell-cushion {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 6px 0;
+    text-decoration: none;
+}
+
+.admin-calendar-main .fc-daygrid-body,
+.admin-calendar-main .fc-daygrid-body table {
+    height: 100% !important;
+}
+
+.admin-calendar-main .fc-daygrid-body tbody {
+    height: 100%;
+}
+
+.admin-calendar-main .fc-daygrid-body tr {
+    height: calc(100% / 6);
+}
+
+.admin-calendar-main .fc-daygrid-day-frame {
+    height: 100%;
+    min-height: 0;
+}
+
+.admin-calendar-main .fc-daygrid-day-events {
+    min-height: 0;
+}
+
+.admin-calendar-main .fc-daygrid-day-bottom {
+    padding: 0 6px 6px;
+}
+
+.admin-calendar-main .fc-event {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+}
+
+.admin-calendar-main .fc-daygrid-event {
+    margin: 1px 6px;
+}
+
+.admin-calendar-event-line {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 4px;
+    color: #4f46e5;
+    font-size: 12px;
+    font-weight: 700;
+    overflow: hidden;
+}
+
+/* 초대받은 일정에서 내 응답이 미정이면 사용자 캘린더처럼 살짝 흐리게 보여준다. */
+.admin-calendar-event-participant-pending {
+    opacity: 0.45;
+}
+
+/* 초대받은 일정에서 불참으로 응답하면 흐림 + 취소선으로 구분한다. */
+.admin-calendar-event-participant-rejected {
+    opacity: 0.45;
+    text-decoration: line-through;
+    text-decoration-thickness: 1px;
+}
+
+.admin-calendar-event-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #3b82f6;
+    flex-shrink: 0;
+}
+
+.admin-calendar-event-time {
+    flex-shrink: 0;
+    font-weight: 800;
+}
+
+.admin-calendar-event-text,
+.admin-calendar-event-title {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-calendar-event-all-day-personal {
+    border: 1px solid #bfdbfe !important;
+    border-radius: 5px;
+    background: #dbeafe !important;
+    overflow: hidden;
+}
+
+.admin-calendar-event-all-day-personal .admin-calendar-event-line {
+    width: 100%;
+    gap: 6px;
+    padding: 1px 7px;
+    color: #2563eb;
+}
+
+.admin-calendar-event-all-day-personal .admin-calendar-event-dot {
+    display: none;
+}
+
+.admin-calendar-event-bar {
+    width: 100%;
+    min-width: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 1px 7px;
+    border-radius: 5px;
+    color: #4c1d95;
+    background: #ede9fe;
+    font-size: 12px;
+    font-weight: 700;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.admin-calendar-event-bar-company {
+    color: #9d174d;
+    background: #fce7f3;
+}
+
+.admin-calendar-event-scope {
+    flex-shrink: 0;
+    font-weight: 900;
+}
+
+.admin-calendar-main .fc-daygrid-more-link {
+    display: block;
+    margin-top: 2px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: #f3f4f6;
+    color: #6b7280 !important;
+    font-size: 12px;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+/* 사용자 CalendarDetail 팝업의 카드 질감, 여백, hover 액션을 관리자에도 맞춘다. */
+.admin-calendar-detail-popup {
+    position: fixed;
+    width: min(360px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #111827;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
+    z-index: 1060;
+    animation: adminCalendarDetailPopupIn 0.18s ease-out;
+    pointer-events: auto;
+}
+
+.admin-calendar-detail-popup[hidden] {
+    display: none !important;
+}
+
+.admin-calendar-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 22px 8px 22px;
+    min-height: 40px;
+    background: #ffffff;
+}
+
+.admin-calendar-detail-color {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 3px;
+    background: #3b82f6;
+}
+
+.admin-calendar-detail-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.admin-calendar-detail-action-btn {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: #9ca3af;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+.admin-calendar-detail-action-btn:hover {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.admin-calendar-detail-tooltip {
+    position: absolute;
+    top: 34px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-4px);
+    white-space: nowrap;
+    padding: 6px 8px;
+    border-radius: 5px;
+    background: #111827;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: 0.14s ease;
+    z-index: 1080;
+}
+
+.admin-calendar-detail-action-btn:hover .admin-calendar-detail-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
+.admin-calendar-detail-title {
+    margin: 18px 24px 0 24px;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 800;
+    line-height: 1.35;
+}
+
+.admin-calendar-detail-time {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 10px 24px 0 24px;
+    color: #374151;
+    font-size: 14px;
+}
+
+.admin-calendar-detail-divider {
+    margin: 14px 24px 0 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.admin-calendar-detail-info-list {
+    margin: 14px 24px 0 24px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.admin-calendar-detail-info-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 38px;
+    border-bottom: 1px solid #eef2f7;
+    color: #374151;
+    font-size: 13px;
+}
+
+.admin-calendar-detail-icon {
+    width: 14px;
+    color: #6b7280;
+    flex-shrink: 0;
+    text-align: center;
+}
+
+.admin-calendar-detail-info-row span {
+    min-width: 0;
+    flex: 1;
+    color: #111827;
+    font-weight: 600;
+}
+
+/* 참석자 요약 영역은 사용자 캘린더 상세 팝업과 같은 밀도로 맞춘다. */
+.admin-calendar-detail-participants {
+    margin: 14px 24px 0 24px;
+    padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.admin-calendar-detail-participant-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-calendar-detail-participant-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 12px;
+    padding-left: 28px;
+}
+
+.admin-calendar-detail-participant-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 34px;
+}
+
+.admin-calendar-detail-participant-avatar {
+    position: relative;
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: #e5e7eb;
+    color: #9ca3af;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.admin-calendar-detail-participant-status-mark {
+    position: absolute;
+    right: -2px;
+    bottom: -2px;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #ffffff;
+    border-radius: 50%;
+    font-size: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.admin-calendar-detail-participant-status-accepted {
+    background: #22c55e;
+    color: #ffffff;
+}
+
+.admin-calendar-detail-participant-status-rejected {
+    background: #ef4444;
+    color: #ffffff;
+}
+
+.admin-calendar-detail-participant-status-pending {
+    background: #d1d5db;
+    color: #6b7280;
+}
+
+.admin-calendar-detail-participant-name {
+    color: #111827;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-calendar-detail-participant-status-text {
+    margin-top: 2px;
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.admin-calendar-detail-content {
+    margin: 14px 24px 24px 24px;
+    color: #374151;
+    font-size: 13px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+}
+
+/* 이후 관리자 수정 폼을 붙일 때 사용자 수정 팝업과 같은 입력 질감을 그대로 쓰기 위한 공통 스타일 */
+.admin-calendar-detail-popup .form-label,
+.admin-calendar-detail-popup strong {
+    color: #111827;
+}
+
+.admin-calendar-detail-popup .form-label {
+    margin-top: 12px;
+    margin-bottom: 6px;
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.admin-calendar-detail-popup .form-control,
+.admin-calendar-detail-popup .form-select {
+    height: 40px;
+    border: 1px solid #d1d5db !important;
+    border-radius: 6px;
+    background: #ffffff !important;
+    color: #111827 !important;
+    font-size: 14px;
+    color-scheme: light;
+}
+
+.admin-calendar-detail-popup textarea.form-control {
+    height: auto;
+    min-height: 96px;
+}
+
+.admin-calendar-detail-popup .form-control::placeholder {
+    color: #9ca3af;
+}
+
+@keyframes adminCalendarDetailPopupIn {
+    from {
+        opacity: 0;
+        margin-top: -6px;
+    }
+
+    to {
+        opacity: 1;
+        margin-top: 0;
+    }
+}
+
+/* 관리자 일정 등록/수정 공용 모달은 사용자 상세 등록 팝업과 같은 카드 톤으로 맞춘다. */
+.admin-calendar-form-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1070;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.42);
+}
+
+.admin-calendar-form-overlay[hidden] {
+    display: none !important;
+}
+
+.admin-calendar-form-modal {
+    width: min(560px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #ffffff;
+    box-shadow: 0 22px 54px rgba(15, 23, 42, 0.26);
+    animation: adminCalendarDetailPopupIn 0.18s ease-out;
+}
+
+.admin-calendar-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 24px 14px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-calendar-form-header h4 {
+    margin: 0;
+    color: #111827;
+    font-size: 17px;
+    font-weight: 800;
+}
+
+.admin-calendar-form-close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+}
+
+.admin-calendar-form-close:hover {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.admin-calendar-form {
+    padding: 18px 24px 24px;
+}
+
+.admin-calendar-form-label {
+    display: block;
+    margin: 14px 0 6px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.admin-calendar-form-control {
+    width: 100%;
+    height: 40px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 14px;
+    padding: 0 12px;
+    color-scheme: light;
+}
+
+.admin-calendar-form-control:focus {
+    border-color: #6366f1;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
+.admin-calendar-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.admin-calendar-form-time-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+}
+
+.admin-calendar-form-time-row span {
+    color: #6b7280;
+    font-weight: 700;
+}
+
+.admin-calendar-form-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    color: #374151;
+    font-size: 13px;
+}
+
+.admin-calendar-form-participants {
+    margin-top: 14px;
+}
+
+.admin-calendar-form-participants strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-form-participant-names {
+    margin-bottom: 8px;
+    color: #374151;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.admin-calendar-form-textarea {
+    height: auto;
+    min-height: 96px;
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+.admin-calendar-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.admin-calendar-outline-btn,
+.admin-calendar-primary-btn {
+    height: 34px;
+    padding: 0 13px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.admin-calendar-outline-btn {
+    border: 1px solid #94a3b8;
+    background: #ffffff;
+    color: #334155;
+}
+
+.admin-calendar-outline-btn:hover {
+    background: #f8fafc;
+}
+
+.admin-calendar-primary-btn {
+    border: 1px solid #5b50d6;
+    background: #5b50d6;
+    color: #ffffff;
+}
+
+.admin-calendar-primary-btn:hover {
+    background: #4f46c8;
+}
+
+/* 참석자 모달: 사용자 캘린더의 멤버 카드 선택 UI와 최대한 비슷하게 맞춘다. */
+.admin-calendar-participant-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid #e5e7eb;
+    border-radius: 9px;
+    background: #ffffff;
+    color: #111827;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.admin-calendar-participant-card + .admin-calendar-participant-card {
+    margin-top: 8px;
+}
+
+.admin-calendar-participant-card:hover {
+    border-color: #93c5fd;
+    background: #f8fbff;
+}
+
+.admin-calendar-participant-card.is-selected {
+    border-color: #1d7afc;
+    background: #1d7afc;
+    color: #ffffff;
+    box-shadow: 0 8px 20px rgba(29, 122, 252, 0.18);
+}
+
+.admin-calendar-participant-card input {
+    margin-top: 3px;
+    accent-color: #1d7afc;
+}
+
+.admin-calendar-participant-card.is-selected input {
+    accent-color: #ffffff;
+}
+
+.admin-calendar-participant-card span {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+}
+
+.admin-calendar-participant-card strong {
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.admin-calendar-participant-card small {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7280;
+    line-height: 1.25;
+}
+
+.admin-calendar-participant-card.is-selected small {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+/* 참석자 모달: 선택된 멤버 태그 영역이다. */
+.admin-calendar-participant-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 5px 8px;
+    border-radius: 999px;
+    background: #1d7afc;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.admin-calendar-participant-tag button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 14px;
+    height: 14px;
+    border: 0;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.admin-calendar-participant-tag button:hover {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* 참석자 모달: 로딩/빈 목록/오류 메시지를 카드 목록 안에서 안정적으로 보여준다. */
+.admin-calendar-participant-empty {
+    padding: 18px 12px;
+    border: 1px dashed #d1d5db;
+    border-radius: 9px;
+    background: #f9fafb;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 700;
+    text-align: center;
+}
+
+/* 상세등록/수정 레이어: 사용자 캘린더처럼 화면 흐름에서 분리된 fixed 팝업으로 띄운다. */
+.admin-calendar-detail-form-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 1070;
+    background: transparent;
+    pointer-events: none;
+}
+
+.admin-calendar-detail-form-layer[hidden] {
+    display: none !important;
+}
+
+.admin-calendar-detail-form-popup {
+    position: fixed;
+    width: min(560px, calc(100vw - 48px));
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #111827;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
+    animation: adminCalendarDetailPopupIn 0.18s ease-out;
+    pointer-events: auto;
+}
+
+.admin-calendar-detail-form-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 22px 24px 14px;
+    border-bottom: 1px solid #e5e7eb;
+    background: #ffffff;
+}
+
+.admin-calendar-detail-form-header strong {
+    color: #111827;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.admin-calendar-detail-form {
+    padding: 18px 24px 24px;
+}
+
+.admin-calendar-detail-form-title {
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 0 0 12px;
+    border: 0;
+    border-bottom: 1px solid #d1d5db;
+    background: transparent;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 800;
+    outline: none;
+}
+
+.admin-calendar-detail-form-title::placeholder {
+    color: #9ca3af;
+}
+
+.admin-calendar-detail-form-participants {
+    margin-top: 14px;
+}
+
+.admin-calendar-detail-form-participants strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-detail-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+/* 간단등록 팝업도 사용자 캘린더처럼 날짜 셀 근처에 뜨는 작은 fixed 팝업으로 고정한다. */
+.admin-calendar-simple-popup {
+    position: fixed;
+    width: min(390px, calc(100vw - 32px));
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    z-index: 1065;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #ffffff;
+    color: #111827;
+    box-shadow: 0 18px 42px rgba(15, 23, 42, 0.24);
+    animation: adminCalendarDetailPopupIn 0.18s ease-out;
+}
+
+.admin-calendar-simple-popup[hidden] {
+    display: none !important;
+}
+
+.admin-calendar-simple-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 18px 4px;
+    color: #111827;
+    font-size: 15px;
+    font-weight: 800;
+}
+
+.admin-calendar-simple-date {
+    margin-top: 12px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 500;
+}
+
+.admin-calendar-popup-close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: #9ca3af;
+    cursor: pointer;
+}
+
+.admin-calendar-popup-close:hover {
+    background: #f3f4f6;
+    color: #4b5563;
+}
+
+.admin-calendar-simple-form {
+    padding: 4px 24px 24px;
+}
+
+.admin-calendar-simple-title {
+    width: 100%;
+    margin-bottom: 14px;
+    padding: 0 0 12px;
+    border: 0;
+    border-bottom: 1px solid #d1d5db;
+    background: transparent;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 800;
+    outline: none;
+}
+
+.admin-calendar-simple-title::placeholder {
+    color: #9ca3af;
+}
+
+.admin-calendar-simple-time-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.admin-calendar-simple-time-row span {
+    color: #6b7280;
+    font-weight: 700;
+}
+
+.admin-calendar-simple-participants {
+    margin-top: 14px;
+}
+
+.admin-calendar-simple-participants strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-simple-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+/* 참석자 모달은 상세/수정 팝업보다 위에 떠야 한다. */
+.admin-calendar-participant-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.admin-calendar-participant-modal[hidden] {
+    display: none !important;
+}
+
+/* 팝업 중복/레이어 깨짐 방지: 관리자 캘린더 플로팅 UI의 우선순위를 사용자 캘린더처럼 정리한다. */
+.admin-calendar-detail-popup {
+    z-index: 1060;
+}
+
+.admin-calendar-simple-popup {
+    z-index: 1065;
+}
+
+.admin-calendar-detail-form-layer {
+    z-index: 1070;
+}
+
+.admin-calendar-detail-form-popup {
+    z-index: 1071;
+}
+
+.admin-calendar-participant-modal {
+    z-index: 1090;
+}
+
+/* 상세등록/수정 팝업 내부 폼을 사용자 캘린더와 비슷한 간격과 크기로 맞춘다. */
+.admin-calendar-detail-form .admin-calendar-form-control,
+.admin-calendar-simple-form .admin-calendar-form-control {
+    height: 40px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #111827;
+    font-size: 14px;
+    padding: 0 12px;
+    box-sizing: border-box;
+}
+
+.admin-calendar-detail-form select.admin-calendar-form-control,
+.admin-calendar-simple-form select.admin-calendar-form-control {
+    appearance: auto;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-label {
+    display: block;
+    margin: 14px 0 6px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-time-row,
+.admin-calendar-simple-form .admin-calendar-simple-time-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-check,
+.admin-calendar-simple-form .admin-calendar-form-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    color: #374151;
+    font-size: 13px;
+}
+
+.admin-calendar-detail-form textarea.admin-calendar-form-control {
+    height: auto;
+    min-height: 96px;
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+/* 참석자 모달은 등록/수정 팝업 위에서만 동작하고, 내부 카드가 흘러내리지 않게 고정한다. */
+.admin-calendar-participant-dialog {
+    width: min(640px, calc(100vw - 48px));
+    max-height: calc(100vh - 72px);
+    overflow: hidden;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 22px 54px rgba(15, 23, 42, 0.26);
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-calendar-participant-body {
+    min-height: 0;
+    overflow: hidden;
+}
+
+.admin-calendar-participant-list {
+    max-height: 280px;
+    overflow-y: auto;
+}
+
+.admin-calendar-participant-footer {
+    flex-shrink: 0;
+}
+
+/* 참석자 선택 모달: 사용자 캘린더의 멤버 초대 UI처럼 좌측 검색, 우측 멤버 목록 구조로 정리한다. */
+.admin-calendar-participant-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.45);
+}
+
+.admin-calendar-participant-modal[hidden] {
+    display: none !important;
+}
+
+.admin-calendar-participant-dialog {
+    width: min(640px, calc(100vw - 48px));
+    max-height: calc(100vh - 72px);
+    overflow: hidden;
+    border: 1px solid #e5e7eb;
+    border-radius: 10px;
+    background: #ffffff;
+    box-shadow: 0 22px 54px rgba(15, 23, 42, 0.26);
+    display: flex;
+    flex-direction: column;
+}
+
+.admin-calendar-participant-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 0 18px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-calendar-participant-header strong {
+    color: #111827;
+    font-size: 16px;
+    font-weight: 800;
+}
+
+.admin-calendar-participant-body {
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 18px;
+    min-height: 360px;
+    padding: 16px 18px;
+    overflow: hidden;
+}
+
+.admin-calendar-participant-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 0;
+}
+
+.admin-calendar-participant-filter strong,
+.admin-calendar-participant-list-header strong,
+.admin-calendar-participant-selected strong {
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-participant-filter .admin-calendar-form-control {
+    height: 36px;
+    font-size: 13px;
+}
+
+.admin-calendar-participant-filter .admin-calendar-outline-btn {
+    width: 100%;
+    height: 34px;
+    justify-content: center;
+}
+
+.admin-calendar-participant-list-wrap {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding-left: 18px;
+    border-left: 1px solid #e5e7eb;
+}
+
+.admin-calendar-participant-list-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.admin-calendar-participant-list-header label {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    color: #374151;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.admin-calendar-participant-list {
+    min-height: 0;
+    max-height: 210px;
+    overflow-y: auto;
+    padding-right: 6px;
+}
+
+.admin-calendar-participant-selected {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid #e5e7eb;
+}
+
+.admin-calendar-participant-selected-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 32px;
+    margin-top: 8px;
+    color: #6b7280;
+    font-size: 12px;
+}
+
+.admin-calendar-participant-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    padding: 12px 18px;
+    border-top: 1px solid #e5e7eb;
+    background: #ffffff;
+    flex-shrink: 0;
+}
+
+/* 작은 화면에서는 좌우 분할 대신 세로 배치로 무너지지 않게 한다. */
+@media (max-width: 720px) {
+    .admin-calendar-participant-body {
+        grid-template-columns: 1fr;
+    }
+
+    .admin-calendar-participant-list-wrap {
+        padding-left: 0;
+        border-left: 0;
+        border-top: 1px solid #e5e7eb;
+        padding-top: 14px;
+    }
+}
+
+/* 상세등록/수정 팝업: 사용자 캘린더 상세등록 카드와 입력 밀도, 여백, 글자 크기를 맞춘다. */
+.admin-calendar-detail-form-popup {
+    width: min(560px, calc(100vw - 48px));
+    border-radius: 14px;
+    background: #ffffff;
+    color: #111827;
+}
+
+.admin-calendar-detail-form {
+    padding: 18px 24px 24px;
+}
+
+.admin-calendar-detail-form-title {
+    width: 100%;
+    height: 42px;
+    margin-bottom: 14px;
+    padding: 0 0 10px;
+    border: 0;
+    border-bottom: 1px solid #d1d5db;
+    background: transparent;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 800;
+    outline: none;
+}
+
+.admin-calendar-detail-form-title::placeholder {
+    color: #9ca3af;
+    font-weight: 700;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-label {
+    display: block;
+    margin: 14px 0 6px;
+    color: #6b7280;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-control,
+.admin-calendar-simple-form .admin-calendar-form-control {
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background-color: #ffffff;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 500;
+    box-sizing: border-box;
+    color-scheme: light;
+}
+
+.admin-calendar-detail-form select.admin-calendar-form-control,
+.admin-calendar-simple-form select.admin-calendar-form-control {
+    padding-right: 34px;
+    cursor: pointer;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-control:focus,
+.admin-calendar-simple-form .admin-calendar-form-control:focus {
+    border-color: #6366f1;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.14);
+}
+
+.admin-calendar-detail-form .admin-calendar-form-time-row {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-time-row span {
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    color: #374151;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-textarea {
+    height: auto;
+    min-height: 96px;
+    padding: 10px 12px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.admin-calendar-detail-form-participants {
+    margin-top: 14px;
+}
+
+.admin-calendar-detail-form-participants strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-form-participant-names {
+    margin-bottom: 8px;
+    color: #374151;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.admin-calendar-detail-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+    padding-bottom: 2px;
+}
+
+/* 사용자 캘린더처럼 일정에 마우스를 올리면 선택된 느낌을 준다. */
+.admin-calendar-page .fc-event:hover,
+.admin-calendar-page .fc-daygrid-event:hover {
+    background-color: #e5e7eb !important;
+    border-radius: 4px;
+}
+
+/* 마감 보정: 간단등록 하단 버튼을 사용자 캘린더와 같은 취소/상세등록/등록 흐름으로 정렬한다. */
+.admin-calendar-simple-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.admin-calendar-simple-footer .admin-calendar-outline-btn,
+.admin-calendar-simple-footer .admin-calendar-primary-btn {
+    min-width: 46px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+/* 95% 싱크 보정: 사용자 캘린더와 같은 사용감으로 맞추되 관리자 영역은 보라 계열 포인트 컬러를 유지한다. */
+:root {
+    --admin-calendar-accent: #4f46e5;
+    --admin-calendar-accent-strong: #4338ca;
+    --admin-calendar-accent-soft: #eef2ff;
+    --admin-calendar-line: #e5e7eb;
+    --admin-calendar-text: #111827;
+    --admin-calendar-muted: #6b7280;
+}
+
+.admin-calendar-page {
+    min-height: calc(100vh - 112px);
+    background: #fff;
+}
+
+.admin-calendar-toolbar {
+    min-height: 42px;
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--admin-calendar-line);
+    background: #fff;
+}
+
+.admin-calendar-title {
+    color: #2563eb;
+    font-size: 17px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.admin-calendar-toolbar-btn,
+.admin-calendar-filter-button,
+.admin-calendar-view-button {
+    height: 31px;
+    border: 1px solid #bfdbfe;
+    border-radius: 10px;
+    background: #f8fbff;
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.admin-calendar-view-button.active {
+    border-color: var(--admin-calendar-accent);
+    background: var(--admin-calendar-accent);
+    color: #fff;
+}
+
+.admin-calendar-main-area {
+    min-width: 0;
+    width: 100%;
+    padding: 0;
+    overflow: hidden;
+}
+
+.admin-calendar-main {
+    width: 100%;
+    height: calc(100vh - 178px);
+    min-height: 650px;
+    background: #fff;
+}
+
+.admin-calendar-main .fc,
+.admin-calendar-main .fc-view-harness,
+.admin-calendar-main .fc-scrollgrid,
+.admin-calendar-main .fc-daygrid-body,
+.admin-calendar-main .fc-daygrid-body table {
+    width: 100% !important;
+}
+
+.admin-calendar-main .fc-scrollgrid {
+    border-color: var(--admin-calendar-line);
+}
+
+.admin-calendar-main .fc-col-header-cell {
+    height: 34px;
+    background: #fff;
+    border-color: var(--admin-calendar-line);
+}
+
+.admin-calendar-main .fc-col-header-cell-cushion {
+    color: var(--admin-calendar-accent);
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.admin-calendar-main .fc-daygrid-day {
+    border-color: var(--admin-calendar-line);
+}
+
+.admin-calendar-main .fc-daygrid-day-frame {
+    min-height: 116px;
+    padding: 7px 6px 6px;
+}
+
+.admin-calendar-main .admin-calendar-day-number,
+.admin-calendar-main .fc-daygrid-day-number {
+    color: var(--admin-calendar-accent);
+    font-size: 14px;
+    font-weight: 800;
+    text-decoration: none;
+}
+
+.admin-calendar-main .fc-day-other .admin-calendar-day-number,
+.admin-calendar-main .fc-day-other .fc-daygrid-day-number {
+    color: #c7d2fe;
+}
+
+.admin-calendar-main .fc-day-today {
+    background: #fff8d6 !important;
+}
+
+.admin-calendar-main .fc-event,
+.admin-calendar-main .fc-daygrid-event {
+    margin: 1px 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    cursor: pointer;
+}
+
+.admin-calendar-main .fc-event:hover,
+.admin-calendar-main .fc-daygrid-event:hover {
+    background: #e5e7eb !important;
+    border-radius: 4px;
+}
+
+.admin-calendar-event-inner {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    gap: 3px;
+    color: #4f46e5;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.28;
+}
+
+.admin-calendar-event-dot {
+    flex: 0 0 auto;
+    width: 7px;
+    height: 7px;
+    border-radius: 999px;
+    background: #3b82f6;
+}
+
+.admin-calendar-event-time,
+.admin-calendar-event-text {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.admin-calendar-event-bar {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-height: 20px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1.25;
+}
+
+.admin-calendar-event-bar.department {
+    background: #ede9fe;
+    color: #6d28d9;
+}
+
+.admin-calendar-event-bar.company {
+    background: #fce7f3;
+    color: #be185d;
+}
+
+.admin-calendar-event-all-day-personal .admin-calendar-event-inner {
+    min-height: 20px;
+    padding: 2px 8px;
+    border-radius: 5px;
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.admin-calendar-dropdown {
+    min-width: 190px;
+    padding: 16px;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 14px 34px rgba(15, 23, 42, 0.12);
+    z-index: 1050;
+}
+
+.admin-calendar-dropdown-title {
+    margin-bottom: 12px;
+    color: var(--admin-calendar-text);
+    font-size: 14px;
+    font-weight: 800;
+}
+
+.admin-calendar-dropdown label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 8px 0;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.admin-calendar-dropdown input[type='checkbox'] {
+    accent-color: var(--admin-calendar-accent);
+}
+
+.admin-calendar-simple-popup,
+.admin-calendar-detail-popup,
+.admin-calendar-detail-form-popup {
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    background: #fff;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.16);
+    color: var(--admin-calendar-text);
+    z-index: 1070;
+}
+
+.admin-calendar-simple-popup {
+    width: 390px;
+    padding: 22px 22px 18px;
+}
+
+.admin-calendar-simple-title-row,
+.admin-calendar-detail-form-header,
+.admin-calendar-detail-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.admin-calendar-simple-title-row h3,
+.admin-calendar-detail-form-header h3 {
+    margin: 0;
+    color: var(--admin-calendar-text);
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+}
+
+.admin-calendar-simple-close,
+.admin-calendar-detail-form-close,
+.admin-calendar-detail-close {
+    border: 0;
+    background: transparent;
+    color: #9ca3af;
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.admin-calendar-simple-title-input {
+    width: 100%;
+    margin-top: 22px;
+    padding: 0 0 14px;
+    border: 0;
+    border-bottom: 1px solid #d1d5db;
+    color: var(--admin-calendar-text);
+    font-size: 17px;
+    font-weight: 800;
+    outline: none;
+}
+
+.admin-calendar-simple-title-input::placeholder {
+    color: #9ca3af;
+}
+
+.admin-calendar-simple-date {
+    margin: 13px 0 12px;
+    color: var(--admin-calendar-muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-calendar-simple-form .admin-calendar-form-control,
+.admin-calendar-detail-form .admin-calendar-form-control {
+    width: 100%;
+    height: 38px;
+    border: 1px solid #d1d5db;
+    border-radius: 6px;
+    background: #fff;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.admin-calendar-simple-form .admin-calendar-form-time-row,
+.admin-calendar-detail-form .admin-calendar-form-time-row {
+    display: grid;
+    grid-template-columns: 1fr 20px 1fr;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+}
+
+.admin-calendar-simple-form .admin-calendar-form-time-row span,
+.admin-calendar-detail-form .admin-calendar-form-time-row span {
+    color: #6b7280;
+    font-size: 14px;
+    font-weight: 800;
+    text-align: center;
+}
+
+.admin-calendar-form-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+    color: #374151;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.admin-calendar-simple-participants,
+.admin-calendar-detail-form-participants {
+    margin-top: 14px;
+}
+
+.admin-calendar-simple-participants strong,
+.admin-calendar-detail-form-participants strong {
+    display: block;
+    margin-bottom: 8px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-form-participant-names {
+    margin-bottom: 8px;
+    color: #4b5563;
+    font-size: 13px;
+    line-height: 1.5;
+}
+
+.admin-calendar-outline-btn,
+.admin-calendar-primary-btn {
+    min-width: 46px;
+    height: 34px;
+    padding: 0 12px;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.admin-calendar-outline-btn {
+    border: 1px solid var(--admin-calendar-accent);
+    background: #fff;
+    color: var(--admin-calendar-accent);
+}
+
+.admin-calendar-outline-btn.neutral {
+    border-color: #9ca3af;
+    color: #4b5563;
+}
+
+.admin-calendar-primary-btn {
+    border: 1px solid var(--admin-calendar-accent);
+    background: var(--admin-calendar-accent);
+    color: #fff;
+}
+
+.admin-calendar-primary-btn:hover {
+    background: var(--admin-calendar-accent-strong);
+}
+
+.admin-calendar-simple-footer {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 8px;
+    margin-top: 18px;
+}
+
+.admin-calendar-detail-popup {
+    width: 360px;
+    padding: 24px 28px 20px;
+}
+
+.admin-calendar-detail-title {
+    margin: 24px 0 12px;
+    color: #111827;
+    font-size: 18px;
+    font-weight: 900;
+}
+
+.admin-calendar-detail-time {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #e5e7eb;
+    color: #374151;
+    font-size: 13px;
+}
+
+/* 반복 일정은 사용자 캘린더처럼 작은 뱃지로 표시한다. */
+.admin-calendar-detail-repeat-badge {
+    display: inline-flex;
+    align-items: center;
+    margin-top: 10px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    background: #e7f1ff;
+    color: #0d6efd;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-calendar-detail-repeat-badge[hidden] {
+    display: none;
+}
+
+.admin-calendar-detail-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 42px;
+    border-bottom: 1px solid #edf0f4;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-detail-row svg,
+.admin-calendar-detail-row i {
+    width: 15px;
+    color: #6b7280;
+}
+
+.admin-calendar-detail-content {
+    margin-top: 18px;
+    padding-top: 14px;
+    border-top: 1px solid #e5e7eb;
+    color: #374151;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.admin-calendar-detail-form-layer {
+    position: fixed;
+    inset: 0;
+    display: block;
+    background: transparent;
+    pointer-events: none;
+    z-index: 1060;
+}
+
+.admin-calendar-detail-form-layer[hidden],
+.admin-calendar-simple-popup[hidden],
+.admin-calendar-detail-popup[hidden],
+.admin-calendar-participant-modal[hidden] {
+    display: none !important;
+}
+
+.admin-calendar-detail-form-popup {
+    position: fixed;
+    width: 560px;
+    max-width: calc(100vw - 48px);
+    padding: 24px;
+    overflow: auto;
+    pointer-events: auto;
+}
+
+.admin-calendar-detail-form-popup::-webkit-scrollbar,
+.admin-calendar-participant-dialog::-webkit-scrollbar {
+    width: 8px;
+}
+
+.admin-calendar-detail-form-popup::-webkit-scrollbar-thumb,
+.admin-calendar-participant-dialog::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: #9ca3af;
+}
+
+.admin-calendar-detail-form h4 {
+    margin: 24px 0 14px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid #d1d5db;
+    color: #111827;
+    font-size: 17px;
+    font-weight: 900;
+}
+
+.admin-calendar-detail-form label:not(.admin-calendar-form-check) {
+    display: block;
+    margin: 12px 0 7px;
+    color: #4b5563;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.admin-calendar-detail-form .admin-calendar-form-textarea {
+    min-height: 96px;
+    height: auto;
+    padding: 10px 12px;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.admin-calendar-detail-form-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 18px;
+    padding-bottom: 2px;
+}
+
+.admin-calendar-participant-modal {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: rgba(15, 23, 42, 0.45);
+    z-index: 1090;
+}
+
+.admin-calendar-participant-dialog {
+    width: 760px;
+    max-width: calc(100vw - 48px);
+    max-height: calc(100vh - 80px);
+    overflow: auto;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 28px 70px rgba(15, 23, 42, 0.24);
+}
+
+.admin-calendar-participant-header,
+.admin-calendar-participant-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-calendar-participant-footer {
+    justify-content: flex-end;
+    gap: 8px;
+    border-top: 1px solid #e5e7eb;
+    border-bottom: 0;
+}
+
+.admin-calendar-participant-body {
+    display: grid;
+    grid-template-columns: 280px 1fr;
+    gap: 22px;
+    padding: 18px 20px;
+}
+
+.admin-calendar-participant-body h4 {
+    margin: 0 0 12px;
+    color: #111827;
+    font-size: 14px;
+    font-weight: 900;
+}
+
+.admin-calendar-participant-search input {
+    width: 100%;
+    height: 36px;
+    padding: 0 12px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    font-size: 13px;
+}
+
+.admin-calendar-participant-list {
+    max-height: 260px;
+    overflow: auto;
+}
+
+.admin-calendar-participant-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    padding: 9px 10px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    color: #111827;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.admin-calendar-participant-item + .admin-calendar-participant-item {
+    margin-top: 8px;
+}
+
+.admin-calendar-participant-item.selected {
+    border-color: var(--admin-calendar-accent);
+    background: var(--admin-calendar-accent);
+    color: #fff;
+}
+
+.admin-calendar-selected-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 3px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    background: var(--admin-calendar-accent);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+}

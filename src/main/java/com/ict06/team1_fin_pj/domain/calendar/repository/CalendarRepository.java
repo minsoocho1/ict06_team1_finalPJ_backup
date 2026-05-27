@@ -79,6 +79,28 @@ public interface CalendarRepository extends JpaRepository<ScheduleEntity, Intege
             @Param("personalType") ScheduleType personalType
     );
 
+    // 관리자 캘린더에서 관리 가능한 일정만 조회.
+    // 개인 비공개 일정은 관리자 화면에서도 제외,
+    // 공개 개인일정, 부서일정, 전사일정만 관리자 캘린더에 표시한다.
+    @Query("""
+            SELECT DISTINCT s
+              FROM ScheduleEntity s
+              LEFT JOIN FETCH s.creator c
+              LEFT JOIN FETCH s.department d
+              LEFT JOIN FETCH s.participants sp
+              LEFT JOIN FETCH sp.employee pe
+             WHERE s.isDeleted = false
+                AND (
+                     NOT (s.type = :personalType AND s.isPublic = false)
+                     OR c.empNo = :adminEmpNo
+                )
+        ORDER BY s.startTime ASC
+         """)
+    List<ScheduleEntity> findAdminManageableSchedules(
+            @Param("personalType") ScheduleType personalType,
+            @Param("adminEmpNo") String adminEmpNo
+    );
+
     // 특정 사원의 특정 카테고리 일정 조회
     List<ScheduleEntity> findByCreator_EmpNoAndCategory(String empNo, String category);
 }
