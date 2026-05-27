@@ -281,6 +281,9 @@ export default function OrganizationSelector({
   initialOrganizationSeed = null,
   onChangeFormData,
   showReferenceNote = true,
+  showEmployeePicker = true,
+  enableTeamAllOption = false,
+  enablePositionAllOption = false,
 }) {
   const safeFormType =
     formType === "REPORT" || formType === "MINUTES" || formType === "APPROVAL"
@@ -291,7 +294,7 @@ export default function OrganizationSelector({
   const [employees, setEmployees] = useState([]);
   const [selectedHeadquarterId, setSelectedHeadquarterId] = useState("");
   const [selectedTeamIds, setSelectedTeamIds] = useState([]);
-  const [selectedPositionId, setSelectedPositionId] = useState("");
+  const [selectedPositionIds, setSelectedPositionIds] = useState([]);
   const [selectedEmpNos, setSelectedEmpNos] = useState([]);
   const [referenceNote, setReferenceNote] = useState("");
   const [seedDeptText, setSeedDeptText] = useState("");
@@ -339,32 +342,83 @@ export default function OrganizationSelector({
     [selectedTeamIds, teamOptions]
   );
 
+  const teamAllSelected = useMemo(() => {
+    if (!enableTeamAllOption || teamOptions.length === 0) {
+      return false;
+    }
+
+    return (
+      selectedTeamIds.length === teamOptions.length &&
+      teamOptions.every((dept) =>
+        selectedTeamIds.includes(String(getDeptId(dept)))
+      )
+    );
+  }, [enableTeamAllOption, selectedTeamIds, teamOptions]);
+
+  const renderedTeamOptions = useMemo(() => {
+    if (!enableTeamAllOption || teamOptions.length === 0) {
+      return teamOptions;
+    }
+
+    return [
+      {
+        deptId: "__ALL__",
+        deptName: "전원",
+      },
+      ...teamOptions,
+    ];
+  }, [enableTeamAllOption, teamOptions]);
+
   const positions = useMemo(() => uniquePositions(employees), [employees]);
 
-  const selectedPosition = useMemo(
+  const positionAllSelected = useMemo(
+    () => selectedPositionIds.includes("ALL"),
+    [selectedPositionIds]
+  );
+
+  const renderedPositions = useMemo(() => {
+    const filtered = positions.filter(
+      (item) =>
+        !(
+          enablePositionAllOption &&
+          (normalizePositionName(item.positionName) === "전원" ||
+            String(item.positionId) === "ALL")
+        )
+    );
+
+    if (!enablePositionAllOption) {
+      return filtered;
+    }
+
+    return [
+      {
+        positionId: "ALL",
+        positionName: "전원",
+      },
+      ...filtered,
+    ];
+  }, [enablePositionAllOption, positions]);
+
+  const selectedPositionLabels = useMemo(
     () => {
-      if (selectedPositionId === "ALL") {
-        return {
-          positionId: "ALL",
-          positionName: "전원",
-        };
+      if (positionAllSelected) {
+        return ["전원"];
       }
 
-      return (
-        positions.find(
-          (item) => String(item.positionId) === String(selectedPositionId)
-        ) || null
-      );
+      return positions
+        .filter((item) => selectedPositionIds.includes(String(item.positionId)))
+        .map((item) => normalizePositionName(item.positionName))
+        .filter(Boolean);
     },
-    [positions, selectedPositionId]
+    [positionAllSelected, positions, selectedPositionIds]
   );
 
   const visibleEmployees = useMemo(() => {
-    if (selectedTeamIds.length === 0 || !selectedPositionId) {
+    if (selectedTeamIds.length === 0 || selectedPositionIds.length === 0) {
       return [];
     }
 
-    if (selectedPositionId === "ALL") {
+    if (positionAllSelected) {
       return employees
         .slice()
         .sort((left, right) => {
@@ -383,8 +437,7 @@ export default function OrganizationSelector({
 
     return employees
       .filter(
-        (employee) =>
-          String(employee.positionId) === String(selectedPositionId)
+        (employee) => selectedPositionIds.includes(String(employee.positionId))
       )
       .sort((left, right) => {
         const diff = Number(left.positionId || 0) - Number(right.positionId || 0);
@@ -397,7 +450,7 @@ export default function OrganizationSelector({
           "ko"
         );
       });
-  }, [employees, selectedPositionId, selectedTeamIds]);
+  }, [employees, positionAllSelected, selectedPositionIds, selectedTeamIds]);
 
   const selectedEmployees = useMemo(
     () =>
@@ -411,7 +464,7 @@ export default function OrganizationSelector({
     if (!normalizedInitialOrganizationSeed) {
       setSelectedHeadquarterId("");
       setSelectedTeamIds([]);
-      setSelectedPositionId("");
+      setSelectedPositionIds([]);
       setSelectedEmpNos([]);
       setEmployees([]);
       setSeedDeptText("");
@@ -437,7 +490,7 @@ export default function OrganizationSelector({
 
     setSelectedHeadquarterId(nextHeadquarterId);
     setSelectedTeamIds(nextTeamIds);
-    setSelectedPositionId(nextTeamIds.length > 0 ? "ALL" : "");
+    setSelectedPositionIds(nextTeamIds.length > 0 ? ["ALL"] : []);
     setSelectedEmpNos([]);
     setEmployees([]);
     setSeedDeptText(nextDeptText);
@@ -545,18 +598,17 @@ export default function OrganizationSelector({
 
     if (
       selectedTeamIds.length > 0 &&
-      (employees.length === 0 || !selectedPositionId)
+      (employees.length === 0 || selectedPositionIds.length === 0)
     ) {
       return;
     }
 
     const nextSelected =
-      selectedPositionId === "ALL"
+      positionAllSelected
         ? buildAllEmployeeNos(employees)
         : employees
             .filter(
-              (employee) =>
-                String(employee.positionId) === String(selectedPositionId)
+              (employee) => selectedPositionIds.includes(String(employee.positionId))
             )
             .map((employee) => String(employee.empNo || ""))
             .filter(Boolean);
@@ -568,7 +620,7 @@ export default function OrganizationSelector({
     if (!same) {
       setSelectedEmpNos(nextSelected);
     }
-  }, [employees, selectedEmpNos, selectedPositionId, selectedTeamIds]);
+  }, [employees, positionAllSelected, selectedEmpNos, selectedPositionIds, selectedTeamIds]);
 
   useEffect(() => {
     const selectedTeamLabels = selectedTeams
@@ -580,7 +632,7 @@ export default function OrganizationSelector({
     const hasTeamSelection =
       Boolean(selectedHeadquarter?.deptName) || selectedTeamLabels.length > 0;
     const allSelected =
-      selectedPositionId === "ALL" &&
+      positionAllSelected &&
       selectedTeamIds.length > 0 &&
       employees.length > 0 &&
       selectedEmployees.length === employees.length;
@@ -592,25 +644,25 @@ export default function OrganizationSelector({
     }
 
     if (selectedTeamLabels.length > 0) {
-      targetLines.push(`대상 팀: ${selectedTeamLabels.join(", ")}`);
+      targetLines.push(`대상 팀: ${teamAllSelected ? "전원" : selectedTeamLabels.join(", ")}`);
     } else if (!hasTeamSelection && seedDeptText) {
       targetLines.push(`연관 부서: ${seedDeptText}`);
     }
 
-    if (selectedPosition?.positionName) {
-      targetLines.push(
-        `직책 기준: ${normalizePositionName(selectedPosition.positionName)}`
-      );
+    if (selectedPositionLabels.length > 0) {
+      targetLines.push(`직책 기준: ${selectedPositionLabels.join(", ")}`);
     }
 
-    if (selectedPositionId === "ALL") {
-      if (allSelected) {
-        targetLines.push(`선택 사원: 전원(총 ${selectedEmployees.length}명)`);
+    if (showEmployeePicker) {
+      if (positionAllSelected) {
+        if (allSelected) {
+          targetLines.push(`선택 사원: 전원(총 ${selectedEmployees.length}명)`);
+        } else if (selectedEmployeeLabels.length > 0) {
+          targetLines.push(`선택 사원: ${selectedEmployeeLabels.join(", ")}`);
+        }
       } else if (selectedEmployeeLabels.length > 0) {
         targetLines.push(`선택 사원: ${selectedEmployeeLabels.join(", ")}`);
       }
-    } else if (selectedEmployeeLabels.length > 0) {
-      targetLines.push(`선택 사원: ${selectedEmployeeLabels.join(", ")}`);
     }
 
     if (referenceNote.trim()) {
@@ -621,24 +673,26 @@ export default function OrganizationSelector({
 
     if (selectedHeadquarter?.deptName && selectedTeamLabels.length > 0) {
       audienceParts.push(
-        `${selectedHeadquarter.deptName} > ${selectedTeamLabels.join(", ")}`
+        `${selectedHeadquarter.deptName} > ${teamAllSelected ? "전원" : selectedTeamLabels.join(", ")}`
       );
     } else if (seedDeptText) {
       audienceParts.push(`연관 부서: ${seedDeptText}`);
     }
 
-    if (selectedPosition?.positionName) {
-      audienceParts.push(normalizePositionName(selectedPosition.positionName));
+    if (selectedPositionLabels.length > 0) {
+      audienceParts.push(selectedPositionLabels.join(", "));
     }
 
-    if (selectedPositionId === "ALL") {
-      if (allSelected) {
-        audienceParts.push("전체 사원");
+    if (showEmployeePicker) {
+      if (positionAllSelected) {
+        if (allSelected) {
+          audienceParts.push("전체 사원");
+        } else if (selectedEmployeeLabels.length > 0) {
+          audienceParts.push(selectedEmployeeLabels.join(", "));
+        }
       } else if (selectedEmployeeLabels.length > 0) {
         audienceParts.push(selectedEmployeeLabels.join(", "));
       }
-    } else if (selectedEmployeeLabels.length > 0) {
-      audienceParts.push(selectedEmployeeLabels.join(", "));
     }
 
     const nextAudience = audienceParts.filter(Boolean).join(" / ");
@@ -656,18 +710,21 @@ export default function OrganizationSelector({
     referenceNote,
     selectedEmployees,
     selectedHeadquarter,
-    selectedPosition,
-    selectedPositionId,
+    positionAllSelected,
+    selectedPositionIds,
+    selectedPositionLabels,
     selectedTeamIds,
     selectedTeams,
     seedDeptText,
+    showEmployeePicker,
+    teamAllSelected,
   ]);
 
   const handleHeadquarterChange = (event) => {
     const nextValue = String(event.target.value || "");
     setSelectedHeadquarterId(nextValue);
     setSelectedTeamIds([]);
-    setSelectedPositionId("");
+    setSelectedPositionIds([]);
     setSelectedEmpNos([]);
     setEmployees([]);
     setError("");
@@ -677,13 +734,23 @@ export default function OrganizationSelector({
     const key = String(teamId || "");
 
     setSelectedTeamIds((prev) => {
-      const exists = prev.includes(key);
-      const next = exists
-        ? prev.filter((item) => item !== key)
-        : [...prev, key];
+      let next;
 
-      if (next.length > 0 && !selectedPositionId) {
-        setSelectedPositionId("ALL");
+      if (key === "__ALL__" && enableTeamAllOption) {
+        next = teamOptions.map((dept) => String(getDeptId(dept)));
+      } else {
+        const withoutAll = prev.filter((item) => item !== "__ALL__");
+        next = withoutAll.includes(key)
+          ? withoutAll.filter((item) => item !== key)
+          : [...withoutAll, key];
+      }
+
+      if (next.length > 0 && selectedPositionIds.length === 0) {
+        setSelectedPositionIds(["ALL"]);
+      }
+
+      if (next.length === 0) {
+        setSelectedPositionIds([]);
       }
 
       return next;
@@ -693,32 +760,43 @@ export default function OrganizationSelector({
     setEmployees([]);
   };
 
-  const handlePositionChange = (event) => {
-    const nextValue = String(event.target.value || "");
-    setSelectedPositionId(nextValue);
+  const handlePositionToggle = (positionId) => {
+    const key = String(positionId || "");
 
-    if (!nextValue) {
-      setSelectedEmpNos([]);
-      return;
-    }
+    setSelectedPositionIds((prev) => {
+      let next;
 
-    if (nextValue === "ALL") {
-      setSelectedEmpNos(buildAllEmployeeNos(employees));
-      return;
-    }
+      if (key === "ALL" && enablePositionAllOption) {
+        next = ["ALL"];
+      } else {
+        const withoutAll = prev.filter((item) => item !== "ALL");
+        next = withoutAll.includes(key)
+          ? withoutAll.filter((item) => item !== key)
+          : [...withoutAll, key];
+      }
 
-    const nextSelected = employees
-      .filter(
-        (employee) => String(employee.positionId) === String(nextValue)
-      )
-      .map((employee) => String(employee.empNo || ""))
-      .filter(Boolean);
+      if (next.includes("ALL")) {
+        setSelectedEmpNos(buildAllEmployeeNos(employees));
+        return next;
+      }
 
-    setSelectedEmpNos(nextSelected);
+      if (next.length === 0) {
+        setSelectedEmpNos([]);
+        return next;
+      }
+
+      const nextSelected = employees
+        .filter((employee) => next.includes(String(employee.positionId)))
+        .map((employee) => String(employee.empNo || ""))
+        .filter(Boolean);
+
+      setSelectedEmpNos(nextSelected);
+      return next;
+    });
   };
 
   const toggleEmployee = (empNo) => {
-    if (selectedPositionId === "ALL") {
+    if (positionAllSelected) {
       return;
     }
 
@@ -774,7 +852,7 @@ export default function OrganizationSelector({
         </div>
 
         <div>
-          <div style={labelStyle}>팀</div>
+          <div style={labelStyle}>대상 팀</div>
           <div
             style={{
               display: "flex",
@@ -784,16 +862,15 @@ export default function OrganizationSelector({
               alignItems: "center",
             }}
           >
-            {teamOptions.map((dept) => {
+            {renderedTeamOptions.map((dept) => {
               const teamId = String(getDeptId(dept));
-              const active = selectedTeamIds.includes(teamId);
+              const active =
+                teamId === "__ALL__"
+                  ? teamAllSelected
+                  : selectedTeamIds.includes(teamId);
 
               return (
-                <Chip
-                  key={teamId}
-                  active={active}
-                  onClick={() => handleTeamToggle(teamId)}
-                >
+                <Chip key={teamId} active={active} onClick={() => handleTeamToggle(teamId)}>
                   {getDeptName(dept)}
                 </Chip>
               );
@@ -803,64 +880,84 @@ export default function OrganizationSelector({
 
         <div>
           <div style={labelStyle}>직책 기준</div>
-          <select
-            value={selectedPositionId}
-            onChange={handlePositionChange}
-            style={controlStyle}
-            disabled={selectedTeamIds.length === 0 || loadingEmployees || positions.length === 0}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              minHeight: 42,
+              alignItems: "center",
+            }}
           >
-            <option value="" disabled>
-              직책을 선택하세요
-            </option>
-            <option value="ALL">전원</option>
-            {positions.map((item) => (
-              <option key={String(item.positionId)} value={String(item.positionId)}>
-                {normalizePositionName(item.positionName)}
-              </option>
-            ))}
-          </select>
+            {!selectedTeamIds.length ? (
+              <div style={{ fontSize: 13, color: C.sub }}>대상 팀을 선택하면 직책 목록이 표시됩니다.</div>
+            ) : loadingEmployees ? (
+              <div style={{ fontSize: 13, color: C.sub }}>직책 목록을 불러오는 중...</div>
+            ) : !renderedPositions.length ? (
+              <div style={{ fontSize: 13, color: C.sub }}>선택 가능한 직책이 없습니다.</div>
+            ) : (
+              renderedPositions.map((item) => {
+                const positionId = String(item.positionId);
+                const active = positionId === "ALL"
+                  ? positionAllSelected
+                  : selectedPositionIds.includes(positionId);
+
+                return (
+                  <Chip
+                    key={positionId}
+                    active={active}
+                    onClick={() => handlePositionToggle(positionId)}
+                  >
+                    {normalizePositionName(item.positionName)}
+                  </Chip>
+                );
+              })
+            )}
+          </div>
         </div>
       </div>
 
-      <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: "#fff" }}>
-        <div style={labelStyle}>사원 선택</div>
+      {showEmployeePicker ? (
+        <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: "#fff" }}>
+          <div style={labelStyle}>사원 선택</div>
 
-        {!selectedHeadquarterId ? (
-          <div style={{ fontSize: 13, color: C.sub }}>
-            대상 본부를 선택하면 대상 팀이 표시됩니다.
-          </div>
-        ) : selectedTeamIds.length === 0 ? (
-          <div style={{ fontSize: 13, color: C.sub }}>
-            팀을 선택하면 사원 목록이 표시됩니다.
-          </div>
-        ) : !selectedPositionId ? (
+          {!selectedHeadquarterId ? (
+            <div style={{ fontSize: 13, color: C.sub }}>
+              대상 본부를 선택하면 대상 팀이 표시됩니다.
+            </div>
+          ) : selectedTeamIds.length === 0 ? (
+            <div style={{ fontSize: 13, color: C.sub }}>
+              팀을 선택하면 사원 목록이 표시됩니다.
+            </div>
+        ) : selectedPositionIds.length === 0 ? (
           <div style={{ fontSize: 13, color: C.sub }}>
             직책 기준을 선택하면 사원 목록이 표시됩니다.
           </div>
-        ) : loadingEmployees ? (
-          <div style={{ fontSize: 13, color: C.sub }}>사원 목록을 불러오는 중...</div>
-        ) : visibleEmployees.length === 0 ? (
-          <div style={{ fontSize: 13, color: C.sub }}>
-            선택 가능한 사원이 없습니다.
-          </div>
-        ) : (
-          <div style={employeeWrapStyle}>
-            {visibleEmployees.map((employee) => {
-              const active = selectedEmpNos.includes(String(employee.empNo));
+          ) : loadingEmployees ? (
+            <div style={{ fontSize: 13, color: C.sub }}>사원 목록을 불러오는 중...</div>
+          ) : visibleEmployees.length === 0 ? (
+            <div style={{ fontSize: 13, color: C.sub }}>
+              선택 가능한 사원이 없습니다.
+            </div>
+          ) : (
+            <div style={employeeWrapStyle}>
+              {visibleEmployees.map((employee) => {
+                const active = selectedEmpNos.includes(String(employee.empNo));
 
-              return (
-                <Chip
-                  key={String(employee.empNo)}
-                  active={active}
-                  onClick={() => toggleEmployee(employee.empNo)}
-                >
-                  {getEmployeeDisplayName(employee)}
-                </Chip>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                return (
+                  <Chip
+                    key={String(employee.empNo)}
+                    active={active}
+                    onClick={() => toggleEmployee(employee.empNo)}
+                  >
+                    {getEmployeeDisplayName(employee)}
+                  </Chip>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      ) : null}
 
       {showReferenceNote ? (
         <div style={{ border: `1px solid ${C.border}`, borderRadius: 12, padding: 12, background: "#fff" }}>

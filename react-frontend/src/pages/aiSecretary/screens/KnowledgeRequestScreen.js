@@ -15,8 +15,8 @@ import {
   getMyKnowledgeRequests,
   unwrapApiData,
 } from "../api/aiSecretaryApi";
-import { I, Icon } from "../constants/aiSecretaryIcons";
 import { C, styles } from "../styles/aiSecretaryTheme";
+import { I, Icon } from "../constants/aiSecretaryIcons";
 
 const STATUS_LABEL_MAP = {
   PENDING: "대기중",
@@ -62,7 +62,6 @@ const fieldErrorStyle = {
   fontWeight: 700,
   lineHeight: 1.5,
 };
-
 
 const DEFAULT_REQUEST_TYPES = [
   "FAQ",
@@ -152,6 +151,16 @@ function getStatusTone(status) {
   };
 }
 
+function isLinkableReference(value) {
+  const normalized = normalizeText(value);
+
+  return (
+    normalized.startsWith("http://") ||
+    normalized.startsWith("https://") ||
+    normalized.startsWith("/")
+  );
+}
+
 function buildTargetDeptSummary(form) {
   const audience = normalizeText(form?.audience);
   const targets = Array.isArray(form?.targets)
@@ -204,6 +213,7 @@ export default function KnowledgeRequestScreen({ userInfo }) {
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [requests, setRequests] = useState([]);
+  const [expandedRequests, setExpandedRequests] = useState({});
   const [suggestions, setSuggestions] = useState({
     requestTypes: normalizeSuggestionList(DEFAULT_REQUEST_TYPES, []),
     categories: normalizeSuggestionList(DEFAULT_CATEGORIES, []),
@@ -217,6 +227,17 @@ export default function KnowledgeRequestScreen({ userInfo }) {
     setErrors((prev) => ({
       ...prev,
       [field]: undefined,
+    }));
+  }, []);
+
+  const toggleRequestExpanded = useCallback((requestId) => {
+    if (!requestId) {
+      return;
+    }
+
+    setExpandedRequests((prev) => ({
+      ...prev,
+      [requestId]: !prev[requestId],
     }));
   }, []);
 
@@ -252,25 +273,25 @@ export default function KnowledgeRequestScreen({ userInfo }) {
       const targetDept = buildTargetDeptSummary(nextForm);
 
       if (!empNo) {
-        nextErrors.requester = "??? ??? ??? ?? ? ????.";
+        nextErrors.requester = "요청자 정보를 찾을 수 없습니다.";
       }
       if (!title) {
-        nextErrors.title = "??? ?? ?? ??? ?????.";
+        nextErrors.title = "문서명을 입력해 주세요.";
       }
       if (!requestType) {
-        nextErrors.requestType = "?? ??? ?????.";
+        nextErrors.requestType = "문서 유형을 입력해 주세요.";
       }
       if (!category) {
-        nextErrors.category = "????? ?????.";
+        nextErrors.category = "카테고리를 입력해 주세요.";
       }
       if (!reason) {
-        nextErrors.reason = "?? ??? ?????.";
+        nextErrors.reason = "요청 사유를 입력해 주세요.";
       }
       if (!sampleQuestion) {
-        nextErrors.sampleQuestion = "?? ?? ??? ?????.";
+        nextErrors.sampleQuestion = "챗봇 질문 예시를 입력해 주세요.";
       }
       if (!targetDept) {
-        nextErrors.targets = "?? ?? ??? ??? ???.";
+        nextErrors.targets = "권한 희망 조건을 선택해 주세요.";
       }
 
       return nextErrors;
@@ -369,7 +390,7 @@ export default function KnowledgeRequestScreen({ userInfo }) {
       } catch (error) {
         setFeedback({
           type: "error",
-          text: "?? ?? ?? ??? ??????.",
+          text: "요청 등록 중 오류가 발생했습니다.",
         });
       } finally {
         setSaving(false);
@@ -390,48 +411,11 @@ export default function KnowledgeRequestScreen({ userInfo }) {
         onChange={(nextValue) => updateField(fieldName, nextValue)}
         suggestions={suggestionList}
         placeholder={placeholder}
-        helperText={helperText}
+        helperText={undefined}
         emptyText="직접 입력해 주세요."
       />
       {helperText ? <div style={{ fontSize: 12, color: C.sub }}>{helperText}</div> : null}
     </div>
-  );
-
-  const renderSelect = (fieldName, options, placeholder) => (
-    <select
-      value={form[fieldName]}
-      onChange={(event) => updateField(fieldName, event.target.value)}
-      style={{
-        width: "100%",
-        minHeight: 46,
-        border: `1px solid ${C.border}`,
-        borderRadius: 12,
-        outline: "none",
-        background: "#fff",
-        color: C.text,
-        fontSize: 14,
-        padding: "0 14px",
-        boxSizing: "border-box",
-      }}
-    >
-      <option value="">{placeholder}</option>
-      {(Array.isArray(options) ? options : []).map((option) => {
-        const value =
-          typeof option === "string" ? option : normalizeText(option?.value);
-        const label =
-          typeof option === "string" ? option : normalizeText(option?.label || option?.value);
-
-        if (!value) {
-          return null;
-        }
-
-        return (
-          <option key={value} value={value}>
-            {label || value}
-          </option>
-        );
-      })}
-    </select>
   );
 
   return (
@@ -606,6 +590,9 @@ export default function KnowledgeRequestScreen({ userInfo }) {
                   targets={form.targets}
                   onChangeFormData={updateField}
                   showReferenceNote={false}
+                  showEmployeePicker={false}
+                  enableTeamAllOption
+                  enablePositionAllOption
                 />
                 <KnowledgeRequestFieldError error={errors.targets} />
                 <div className="form-text">
@@ -622,8 +609,7 @@ export default function KnowledgeRequestScreen({ userInfo }) {
               display: "flex",
               justifyContent: "flex-end",
               gap: 10,
-              marginTop: 24,
-              flexWrap: "wrap",
+              marginTop: 20,
             }}
           >
             <AppButton
@@ -676,7 +662,7 @@ export default function KnowledgeRequestScreen({ userInfo }) {
                 textAlign: "center",
               }}
             >
-              아직 제출한 요청이 없습니다.
+              아직 등록한 요청이 없습니다.
             </div>
           ) : null}
 
@@ -684,10 +670,13 @@ export default function KnowledgeRequestScreen({ userInfo }) {
             const tone = getStatusTone(request?.status);
             const title = normalizeText(request?.title) || "-";
             const requester = normalizeText(request?.requesterName) || requesterLabel;
+            const requestId = request?.knowledgeRequestId;
+            const expanded = Boolean(requestId && expandedRequests[requestId]);
+            const referenceUrl = normalizeText(request?.referenceUrl);
 
             return (
               <div
-                key={request?.knowledgeRequestId || `${title}-${request?.createdAt || request?.requestDate || Math.random()}`}
+                key={requestId || `${title}-${request?.createdAt || request?.requestDate || Math.random()}`}
                 style={{
                   border: `1px solid ${C.border}`,
                   borderRadius: 16,
@@ -750,75 +739,112 @@ export default function KnowledgeRequestScreen({ userInfo }) {
                       {normalizeText(request?.category) || "-"}
                     </div>
                   </div>
-
-                  <div>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>권한 희망 조건</div>
-                    <div style={{ marginTop: 4, fontSize: 14, color: C.text }}>
-                      {normalizeText(request?.targetDept) || "-"}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>
-                      참고 URL 또는 콘텐츠 경로
-                    </div>
-                    <div style={{ marginTop: 4, fontSize: 14, color: C.text, wordBreak: "break-all" }}>
-                      {normalizeText(request?.referenceUrl) || "-"}
-                    </div>
-                  </div>
                 </div>
 
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>요청 사유</div>
-                  <div
+                <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end" }}>
+                  <button
+                    type="button"
+                    onClick={() => toggleRequestExpanded(requestId)}
                     style={{
-                      marginTop: 4,
-                      fontSize: 14,
+                      border: `1px solid ${C.border}`,
+                      background: expanded ? "#F8FAFC" : "#fff",
                       color: C.text,
-                      lineHeight: 1.7,
-                      whiteSpace: "pre-wrap",
+                      borderRadius: 10,
+                      padding: "8px 12px",
+                      fontSize: 13,
+                      fontWeight: 800,
+                      cursor: "pointer",
                     }}
                   >
-                    {normalizeText(request?.reason) || "-"}
-                  </div>
+                    {expanded ? "접기" : "전체보기"}
+                  </button>
                 </div>
 
-                <div style={{ marginTop: 14 }}>
-                  <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>챗봇 질문 예시</div>
+                {expanded ? (
                   <div
                     style={{
-                      marginTop: 4,
-                      fontSize: 14,
-                      color: C.text,
-                      lineHeight: 1.7,
-                      whiteSpace: "pre-wrap",
-                    }}
-                  >
-                    {normalizeText(request?.sampleQuestion) || "-"}
-                  </div>
-                </div>
-
-                {normalizeText(request?.adminComment) ? (
-                  <div
-                    style={{
-                      marginTop: 14,
+                      marginTop: 16,
                       borderRadius: 12,
                       background: "#F8FAFC",
                       border: `1px solid ${C.border}`,
                       padding: 14,
                     }}
                   >
-                    <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>관리자 검토 메모</div>
-                    <div
-                      style={{
-                        marginTop: 4,
-                        fontSize: 14,
-                        color: C.text,
-                        lineHeight: 1.7,
-                        whiteSpace: "pre-wrap",
-                      }}
-                    >
-                      {request.adminComment}
+                    <div style={{ display: "grid", gap: 14 }}>
+                      <div>
+                        <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>권한 희망 조건</div>
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: 14,
+                            color: C.text,
+                            lineHeight: 1.7,
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {normalizeText(request?.targetDept) || "-"}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>참고 URL 또는 콘텐츠 경로</div>
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: 14,
+                            color: C.text,
+                            lineHeight: 1.7,
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {referenceUrl ? (
+                            isLinkableReference(referenceUrl) ? (
+                              <a
+                                href={referenceUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                style={{ color: C.primary, textDecoration: "underline" }}
+                              >
+                                {referenceUrl}
+                              </a>
+                            ) : (
+                              referenceUrl
+                            )
+                          ) : (
+                            "-"
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>요청 사유</div>
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: 14,
+                            color: C.text,
+                            lineHeight: 1.7,
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {normalizeText(request?.reason) || "등록된 내용이 없습니다."}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ fontSize: 12, color: C.muted, fontWeight: 700 }}>챗봇 질문 예시</div>
+                        <div
+                          style={{
+                            marginTop: 4,
+                            fontSize: 14,
+                            color: C.text,
+                            lineHeight: 1.7,
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {normalizeText(request?.sampleQuestion) || "등록된 내용이 없습니다."}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ) : null}

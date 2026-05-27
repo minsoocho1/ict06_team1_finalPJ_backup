@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Data
 @Builder
@@ -22,6 +23,7 @@ public class AiChatMessageResponseDto {
     private Integer completionTokens;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private List<ChatbotReferenceDto> references;
 
     public static AiChatMessageResponseDto from(AiChatMessageEntity message) {
         return AiChatMessageResponseDto.builder()
@@ -35,6 +37,26 @@ public class AiChatMessageResponseDto {
                 .completionTokens(message.getCompletionTokens())
                 .createdAt(message.getCreatedAt())
                 .updatedAt(message.getUpdatedAt())
+                .references(List.of())
+                .build();
+    }
+
+    public static AiChatMessageResponseDto from(
+            AiChatMessageEntity message,
+            List<ChatbotReferenceDto> references
+    ) {
+        return AiChatMessageResponseDto.builder()
+                .messageId(message.getMessageId())
+                .sessionId(message.getSession().getSessionId())
+                .role(message.getRole())
+                .content(message.getContent())
+                .seqNo(message.getSeqNo())
+                .modelName(message.getModelName())
+                .promptTokens(message.getPromptTokens())
+                .completionTokens(message.getCompletionTokens())
+                .createdAt(message.getCreatedAt())
+                .updatedAt(message.getUpdatedAt())
+                .references(references == null ? List.of() : references)
                 .build();
     }
 

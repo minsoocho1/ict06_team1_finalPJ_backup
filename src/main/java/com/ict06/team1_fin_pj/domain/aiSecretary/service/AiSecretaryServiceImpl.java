@@ -15,11 +15,17 @@
 
 package com.ict06.team1_fin_pj.domain.aiSecretary.service;
 
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.ChatbotReferenceDto;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatMessageEntity;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatSessionEntity;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiLogEntity;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiRetrievalTraceEntity;
+import com.ict06.team1_fin_pj.domain.aiSecretary.entity.MessageRole;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.SessionType;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiChatMessageRepository;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiChatSessionRepository;
+import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiLogRepository;
+import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiRetrievalTraceRepository;
 import com.ict06.team1_fin_pj.domain.auth.repository.EmpRepository;
 import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import lombok.RequiredArgsConstructor;
@@ -27,7 +33,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -38,6 +46,8 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
 
     private final AiChatSessionRepository aiChatSessionRepository;
     private final AiChatMessageRepository aiChatMessageRepository;
+    private final AiLogRepository aiLogRepository;
+    private final AiRetrievalTraceRepository aiRetrievalTraceRepository;
     private final EmpRepository empRepository;
 
     // 공통 세션 생성 진입점
@@ -128,6 +138,79 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
         return aiChatMessageRepository.findBySessionSessionIdOrderBySeqNoAsc(sessionId);
     }
 
+    @Override
+    public Map<Integer, List<ChatbotReferenceDto>> getMessageReferences(List<Integer> assistantMessageIds) {
+        if (assistantMessageIds == null || assistantMessageIds.isEmpty()) {
+            return Map.of();
+        }
+
+        List<AiLogEntity> logs = aiLogRepository.findByMessage_MessageIdInOrderByLogIdAsc(assistantMessageIds)
+                .stream()
+                .filter(log -> log.getMessage() != null && log.getMessage().getMessageId() != null)
+                .toList();
+
+        if (logs.isEmpty()) {
+            return Map.of();
+        }
+
+        List<Integer> logIds = logs.stream()
+                .map(AiLogEntity::getLogId)
+                .filter(id -> id != null)
+                .toList();
+
+        if (logIds.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, Integer> logIdToMessageId = new LinkedHashMap<>();
+        for (AiLogEntity log : logs) {
+            if (log.getLogId() == null || log.getMessage() == null || log.getMessage().getMessageId() == null) {
+                continue;
+            }
+            logIdToMessageId.put(log.getLogId(), log.getMessage().getMessageId());
+        }
+
+        List<AiRetrievalTraceEntity> traces =
+                aiRetrievalTraceRepository.findByLog_LogIdInAndUsedInAnswerTrueOrderByTraceIdAsc(logIds);
+
+        if (traces.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Integer, LinkedHashMap<Integer, ChatbotReferenceDto>> messageReferenceMap = new LinkedHashMap<>();
+
+        for (AiRetrievalTraceEntity trace : traces) {
+            if (trace == null || trace.getLog() == null || trace.getDocument() == null) {
+                continue;
+            }
+
+            Integer logId = trace.getLog().getLogId();
+            Integer messageId = logIdToMessageId.get(logId);
+            Integer docId = trace.getDocument().getDocId();
+
+            if (messageId == null || docId == null) {
+                continue;
+            }
+
+            LinkedHashMap<Integer, ChatbotReferenceDto> referencesByDocId =
+                    messageReferenceMap.computeIfAbsent(messageId, ignored -> new LinkedHashMap<>());
+
+            referencesByDocId.computeIfAbsent(docId, ignored ->
+                    ChatbotReferenceDto.builder()
+                            .docId(docId)
+                            .title(safe(trace.getDocument().getTitle(), "참고 문서 " + docId))
+                            .url(normalizeReferenceUrl(trace.getDocument().getFilePath()))
+                            .build()
+            );
+        }
+
+        Map<Integer, List<ChatbotReferenceDto>> result = new LinkedHashMap<>();
+        messageReferenceMap.forEach((messageId, referencesByDocId) ->
+                result.put(messageId, List.copyOf(referencesByDocId.values()))
+        );
+        return result;
+    }
+
     // 메시지 저장
     @Override
     @Transactional
@@ -151,5 +234,22 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
         session.updateLastMessageAt(LocalDateTime.now());
 
         return savedMessage;
+    }
+
+    private String normalizeReferenceUrl(String filePath) {
+        String normalized = safe(filePath);
+        return normalized.isBlank() ? null : normalized;
+    }
+
+    private String safe(String value, String fallback) {
+        if (value == null || value.isBlank()) {
+            return fallback;
+        }
+
+        return value;
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
     }
 }
