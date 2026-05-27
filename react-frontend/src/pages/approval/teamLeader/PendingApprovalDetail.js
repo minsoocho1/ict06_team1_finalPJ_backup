@@ -298,11 +298,14 @@ const PendingApprovalDetail = () => {
                     </CTableDataCell>
                   ) : (
                     approvalSignLines.map((line) => {
+                      const isApprovedLine = line.status === 'APPROVED';
                       const signImg = signMap[line.approverNo];
 
                       return (
                         <CTableDataCell key={`${line.lineId}-sign-img`}>
-                          {signImg ? (
+                          {!isApprovedLine ? (
+                            <span className="text-body-secondary small">-</span>
+                          ) : signImg ? (
                             <img
                               src={buildResourceUrl(signImg)}
                               alt={`${line.approverName || line.approverNo} 인감`}

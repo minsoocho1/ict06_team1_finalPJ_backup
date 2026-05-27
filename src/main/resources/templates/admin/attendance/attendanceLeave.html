@@ -416,14 +416,28 @@
                 </div>
 
                 <!-- 연차 현황 페이징 영역 시작 -->
-                <div class="row mt-3">
+                <div class="row mt-4 mb-2"
+                     th:if="${leaveStatusPage != null and leaveStatusPage.totalPages > 0}">
 
-                  <!-- 가운데 정렬 -->
                   <div class="col-12 d-flex justify-content-center">
 
-                    <!-- Bootstrap Pagination -->
                     <nav>
-                      <ul class="pagination">
+                      <ul class="pagination pagination-sm mb-0">
+
+                        <!-- 처음 버튼 -->
+                        <li class="page-item"
+                            th:classappend="${leaveStatusPage.first} ? ' disabled'">
+                          <a class="page-link"
+                             th:href="@{/admin/attendance/leave(
+                                page=0,
+                                size=${leaveStatusPage.size},
+                                keyword=${keyword},
+                                deptId=${deptId},
+                                sortType=${sortType}
+                             )}">
+                            처음
+                          </a>
+                        </li>
 
                         <!-- 이전 버튼 -->
                         <li class="page-item"
@@ -440,9 +454,12 @@
                           </a>
                         </li>
 
-                        <!-- 페이지 번호 반복 -->
+                        <!-- 현재 페이지 기준 앞뒤 2개만 출력 -->
                         <li class="page-item"
-                            th:each="pageNum : ${#numbers.sequence(0, leaveStatusPage.totalPages - 1)}"
+                            th:each="pageNum : ${#numbers.sequence(
+                                leaveStatusPage.number - 2 < 0 ? 0 : leaveStatusPage.number - 2,
+                                leaveStatusPage.number + 2 >= leaveStatusPage.totalPages ? leaveStatusPage.totalPages - 1 : leaveStatusPage.number + 2
+                            )}"
                             th:classappend="${pageNum == leaveStatusPage.number} ? ' active'">
                           <a class="page-link"
                              th:text="${pageNum + 1}"
@@ -469,6 +486,21 @@
                                 sortType=${sortType}
                              )}">
                             다음
+                          </a>
+                        </li>
+
+                        <!-- 마지막 버튼 -->
+                        <li class="page-item"
+                            th:classappend="${leaveStatusPage.last} ? ' disabled'">
+                          <a class="page-link"
+                             th:href="@{/admin/attendance/leave(
+                                page=${leaveStatusPage.totalPages - 1},
+                                size=${leaveStatusPage.size},
+                                keyword=${keyword},
+                                deptId=${deptId},
+                                sortType=${sortType}
+                             )}">
+                            마지막
                           </a>
                         </li>
 

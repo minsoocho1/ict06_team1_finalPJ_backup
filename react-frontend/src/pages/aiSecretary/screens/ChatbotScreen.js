@@ -47,6 +47,15 @@ const mapMessageToBubble = (message) => ({
   role: message.role === "USER" ? "user" : "ai",
   text: message.content,
   time: formatMessageTime(message.createdAt),
+  references: Array.isArray(message?.references) ? message.references : [],
+});
+
+const mapAskResponseMessageToBubble = (message, references = []) => ({
+  id: message?.messageId,
+  role: message?.role === "USER" ? "user" : "ai",
+  text: message?.content || "",
+  time: formatMessageTime(message?.createdAt),
+  references: Array.isArray(references) ? references : [],
 });
 
 export default function ChatbotScreen() {
@@ -228,16 +237,25 @@ export default function ChatbotScreen() {
 
     // askChatbot API = USER 메시지 저장 + Gemini 호출 + ASSISTANT 메시지 저장 처리
     try {
-      await askChatbot({
+      const response = await askChatbot({
         sessionId: currentSessionId,
         content: trimmed,
       });
+      const data = response?.data?.data || unwrapApiData(response) || response?.data || response;
+      const references = Array.isArray(data?.references) ? data.references : [];
 
       // 입력창 초기화
       setInput("");
 
-      // DB 기준 최신 메시지 재조회
-      await loadMessages(currentSessionId);
+      if (data?.userMessage && data?.aiMessage) {
+        setMessages((prev) => [
+          ...prev,
+          mapAskResponseMessageToBubble(data.userMessage),
+          mapAskResponseMessageToBubble(data.aiMessage, references),
+        ]);
+      } else {
+        await loadMessages(currentSessionId);
+      }
     } catch (err) {
       console.error("챗봇 응답 생성 실패", err);
       setError("AI 응답 생성 중 문제가 발생했습니다. 잠시 후 다시 시도해 주세요.");
@@ -323,6 +341,7 @@ export default function ChatbotScreen() {
                 role={msg.role}
                 text={msg.text}
                 time={msg.time}
+                references={msg.references}
               />
             ))
           ) : (

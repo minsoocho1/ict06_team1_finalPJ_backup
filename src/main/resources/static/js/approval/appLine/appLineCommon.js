@@ -80,7 +80,7 @@ function renderTargetUI() {
             </div>
                 <div class="mt-3">
                     <p>🏢 부서 목록</p>
-                    <div id="deptList" class="list-group"></div>
+                    <div id="deptList" class="list-group overflow-auto" style="max-height: 520px;"></div>
                 </div>`;
     }
 
@@ -226,9 +226,12 @@ function loadEmployees(keyword, page = 0) {
 // 부서 조회
 function loadDepartments() {
 
-    $.get('/admin/approval/targets/departments',
+    $.get('/api/organization/departments/tree',
         function (data) {
-            renderDeptList(data);
+            renderDeptTree(data);
+        })
+        .fail(function () {
+            $('#deptList').html('<div class="text-danger">부서 정보를 불러오지 못했습니다.</div>');
         });
 }
 
@@ -304,47 +307,82 @@ function renderEmployeeList(data) {
     $('#employeeList').html(html);
 }
 
-// renderDeptList(data)
-// 부서 목록 렌더링
-function renderDeptList(data) {
+// renderDeptTree(data)
+function renderDeptTree(data) {
 
     let html = '';
 
     if (!data || data.length === 0) {
         html = `<div class="text-muted">조회 결과 없음</div>`;
     } else {
-        data.forEach(dept => {
-
-            const id = String(dept.id);
-
-            const type = 'DEPT';
-
-            const key = `${type}_${id}`;
-
-            let isChecked = false;
-
-            if (state.searchMode === 'ref') {
-                isChecked = selectedState.ref.has(key);
-            } else {
-                const stepMap = selectedState.approval[state.currentEditingStep] || new Map();
-                isChecked = stepMap.has(key);
-            }
-
-            html += `
-                <label class="list-group-item">
-                    <input type="checkbox"
-                        class="form-check-input me-2 target-checkbox"
-                        value="${id}"
-                        data-name="${dept.name}"
-                        data-type="${type}"
-                        ${isChecked ? 'checked' : ''}>
-                    ${dept.name}
-                </label>
-            `;
-        });
+        html = renderDeptTreeNodes(data, 0);
     }
 
     $('#deptList').html(html);
+}
+
+function renderDeptTreeNodes(departments, depth) {
+
+    let html = '';
+
+    departments.forEach(dept => {
+
+        const id = String(dept.deptId);
+        const name = dept.deptName;
+        const type = 'DEPT';
+        const children = dept.children || [];
+        const hasChildren = children.length > 0;
+        const isRoot = depth === 0;
+        const key = `${type}_${id}`;
+
+        let isChecked = false;
+
+        if (state.searchMode === 'ref') {
+            isChecked = selectedState.ref.has(key);
+        } else {
+            const stepMap = selectedState.approval[state.currentEditingStep] || new Map();
+            isChecked = stepMap.has(key);
+        }
+
+        const paddingLeft = 16 + depth * 28;
+        const rowClass = isRoot
+            ? 'list-group-item d-flex align-items-center bg-light fw-semibold'
+            : 'list-group-item d-flex align-items-center';
+        const badgeClass = isRoot
+            ? 'badge bg-secondary ms-auto'
+            : 'badge bg-light text-dark ms-auto';
+        const badgeText = isRoot ? '본부' : '팀';
+        const treeMarker = hasChildren ? '-' : '';
+
+        html += `
+            <label class="${rowClass}" style="padding-left: ${paddingLeft}px;">
+                <span class="text-muted me-2" style="width: 14px;">${treeMarker}</span>
+                <input type="checkbox"
+                    class="form-check-input me-2 target-checkbox"
+                    value="${id}"
+                    data-name="${escapeHtml(name)}"
+                    data-type="${type}"
+                    ${isChecked ? 'checked' : ''}>
+                <span>${escapeHtml(name)}</span>
+                <span class="${badgeClass}">${badgeText}</span>
+            </label>
+        `;
+
+        if (hasChildren) {
+            html += renderDeptTreeNodes(children, depth + 1);
+        }
+    });
+
+    return html;
+}
+
+function escapeHtml(value) {
+    return String(value || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
 }
 
 // renderPositionList(data)
