@@ -140,10 +140,14 @@ const createPrintHtml = (detail, content, signMap) => {
     .sort((a, b) => Number(a.stepOrder) - Number(b.stepOrder));
 
   const signHeaderCells = approvalSignLines.map((line) => `
-    <th>${escapeHtml(formatApprovalTarget(line))}</th>
+    <th>${escapeHtml(line.approverName || line.approverNo || '-')}</th>
   `).join('');
 
   const signImageCells = approvalSignLines.map((line) => {
+    if (line.status !== 'APPROVED') {
+      return '<td><span class="muted">-</span></td>';
+    }
+
     const signImg = signMap[line.approverNo];
 
     return `
@@ -220,10 +224,10 @@ const createPrintHtml = (detail, content, signMap) => {
           th, td { border: 1px solid #ced4da; padding: 9px 10px; font-size: 13px; vertical-align: middle; }
           th { width: 170px; background: #f8f9fa; text-align: left; }
           .meta th { width: 130px; }
-          .sign-img { width: 58px; height: 58px; object-fit: contain; }
-          .sign-table { width: auto; margin-left: auto; margin-bottom: 18px; }
-          .sign-table th, .sign-table td { min-width: 94px; text-align: center; }
-          .sign-table .label { width: 56px; min-width: 56px; background: #f8f9fa; font-weight: 700; }
+          .sign-img { width: 58px; height: 58px; object-fit: contain; display: block; margin: 0 auto; }
+          .sign-table { width: max-content; table-layout: auto; margin-left: auto; margin-bottom: 18px; }
+          .sign-table th, .sign-table td { width: 66px; min-width: 66px; max-width: 66px; padding: 6px 4px; text-align: center; }
+          .sign-table .label { width: 42px; min-width: 42px; max-width: 42px; background: #f8f9fa; font-weight: 700; }
           .file-list { display: flex; gap: 12px; flex-wrap: wrap; }
           .file-item { width: 150px; font-size: 12px; border: 1px solid #dee2e6; padding: 8px; }
           .file-img { width: 100%; height: 95px; object-fit: cover; display: block; margin-bottom: 6px; }
@@ -482,11 +486,14 @@ const ApprovalsDetail = ({
                       </CTableDataCell>
                     ) : (
                       approvalSignLines.map((line) => {
+                        const isApprovedLine = line.status === 'APPROVED';
                         const signImg = signMap[line.approverNo];
 
                         return (
                           <CTableDataCell key={`${line.lineId}-sign-img`}>
-                            {signImg ? (
+                            {!isApprovedLine ? (
+                              <span className="text-body-secondary small">-</span>
+                            ) : signImg ? (
                               <img
                                 src={buildResourceUrl(signImg)}
                                 alt={`${line.approverName || line.approverNo} 인감`}

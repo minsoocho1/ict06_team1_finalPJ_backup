@@ -132,6 +132,12 @@ public class AdAttendanceServiceImpl implements AdAttendanceService {
         List<AdAttendanceDTO> attendanceList =
                 attendancePage.getContent();
 
+        // Excel 다운로드 데이터가 없는 경우
+        // 빈 Excel 파일 대신 사용자에게 안내 메시지를 반환한다.
+        if (attendanceList.isEmpty()) {
+            throw new IllegalArgumentException("다운로드할 근태 데이터가 없습니다.");
+        }
+
         // Excel 생성 전용 클래스
         AttendanceExcelExporter exporter =
                 new AttendanceExcelExporter();
@@ -549,6 +555,17 @@ public class AdAttendanceServiceImpl implements AdAttendanceService {
         LocalDateTime beforeCheckIn = attendance.getCheckInAt();
         LocalDateTime beforeCheckOut = attendance.getCheckOutAt();
         AttendanceStatus beforeStatus = attendance.getStatus();
+
+        // 3-1. 출근/퇴근 시간 순서 검증
+        // 관리자가 시간을 수정할 때 퇴근시간이 출근시간보다 빠르면
+        // 근무시간 계산이 음수가 될 수 있으므로 저장하지 않는다.
+        // 예: 출근 09:00 / 퇴근 08:00 같은 잘못된 데이터 방지
+        if (request.getCheckInAt() != null &&
+                request.getCheckOutAt() != null &&
+                request.getCheckOutAt().isBefore(request.getCheckInAt())) {
+
+            throw new IllegalArgumentException("퇴근시간은 출근시간보다 빠를 수 없습니다.");
+        }
 
         // 4. 관리자 수정 적용
         attendance.updateByAdmin(

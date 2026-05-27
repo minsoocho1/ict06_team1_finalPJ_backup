@@ -149,6 +149,7 @@ export const PATH = {
       LINE_TEMPLATE_DETAIL: (templateId) => `/approval/line-templates/${templateId}`,
       EMPLOYEES: '/approval/employees',
       EMPLOYEE_SIGN: (empNo) => `/approval/employees/${empNo}/sign`,
+      RECEIPT_OCR: '/approval/receipt-ocr',
       MY_DOCUMENTS: '/approval/my-documents',
       REFERENCED_DOCUMENTS: '/approval/referenced-documents',
       PENDING_DOCUMENTS: '/approval/pending-documents',
