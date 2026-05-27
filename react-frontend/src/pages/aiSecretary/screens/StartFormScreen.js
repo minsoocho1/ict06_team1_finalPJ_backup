@@ -164,6 +164,9 @@ export default function StartFormScreen({
       : safeFormType === "APPROVAL"
       ? "결재 라인 참고 대상"
       : "보고 대상 선택";
+  const enableEmployeeIndividualSelect = ["REPORT", "MINUTES", "APPROVAL"].includes(
+    safeFormType
+  );
 
   useEffect(() => {
     if (templateSeed) {
@@ -564,6 +567,7 @@ export default function StartFormScreen({
               targets={safeFormData.targets}
               initialOrganizationSeed={organizationSeed}
               onChangeFormData={onChangeFormData}
+              enableEmployeeIndividualSelect={enableEmployeeIndividualSelect}
             />
           </Field>
         </div>
