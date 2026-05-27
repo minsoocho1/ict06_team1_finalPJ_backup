@@ -9,6 +9,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.10    김다솜        관리자 문서/RAG 데이터 수정 처리를 위한 update 메서드 추가
  * @ 2026.05.18    김다솜        문서와 온보딩 콘텐츠 여러 건의 연결 매핑 추가
+ * @ 2026.05.21    송혜진        document_domain 컬럼 추가
  */
 package com.ict06.team1_fin_pj.domain.onboarding.entity;
 
@@ -42,6 +43,11 @@ public class DocumentEntity extends BaseTimeEntity {
 
     @Column(name = "file_path", nullable = false, length = 500)
     private String filePath;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "document_domain", nullable = false, length = 30)
+    private DocumentDomain documentDomain = DocumentDomain.ONBOARDING;
 
     @Column(name = "summary_preview", columnDefinition = "TEXT")
     private String summaryPreview;
@@ -96,6 +102,26 @@ public class DocumentEntity extends BaseTimeEntity {
 
     public void updateSummaryPreview(String summaryPreview) {
         this.summaryPreview = summaryPreview;
+    }
+
+    public void updateTitle(String title) {
+        this.title = title;
+    }
+
+    @PrePersist
+    public void prePersistDocumentDomain() {
+        applyDefaultDocumentDomain();
+    }
+
+    @PreUpdate
+    public void preUpdateDocumentDomain() {
+        applyDefaultDocumentDomain();
+    }
+
+    private void applyDefaultDocumentDomain() {
+        if (this.documentDomain == null) {
+            this.documentDomain = DocumentDomain.ONBOARDING;
+        }
     }
 
     public void updateDocument(

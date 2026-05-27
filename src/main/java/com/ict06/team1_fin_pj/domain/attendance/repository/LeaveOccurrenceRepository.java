@@ -9,7 +9,8 @@ import java.util.List;
 // interface로 만든다.
 // JpaRepository<엔티티명, PK 타입>
 public interface LeaveOccurrenceRepository
-        extends JpaRepository<LeaveOccurrenceEntity, Integer> {
+        extends JpaRepository<LeaveOccurrenceEntity, Integer>,
+                LeaveOccurrenceRepositoryCustom  {
 
     // 특정 사원의 특정 연도 연차 발생 내역 조회
     // LeaveOccurrenceEntity에는 empNo가 직접 없고 employee 안에 있으므로

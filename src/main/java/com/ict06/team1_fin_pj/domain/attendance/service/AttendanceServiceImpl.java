@@ -191,6 +191,13 @@ public class AttendanceServiceImpl implements AttendanceService {
             throw new RuntimeException("이미 퇴근했습니다.");
         }
 
+        // 2-1. 출근 시간이 없는 경우 퇴근 처리 불가
+        // 예: 결근(ABSENT) 데이터처럼 checkInAt이 비어있는 근태 기록은
+        // 근무시간 계산(Duration.between)을 할 수 없으므로 여기서 먼저 막는다.
+        if (attendance.getCheckInAt() == null) {
+            throw new RuntimeException("출근 시간이 없어 퇴근 처리할 수 없습니다.");
+        }
+
         // 현재 시간 = 퇴근 시간
         LocalDateTime now = LocalDateTime.now();
 
@@ -261,6 +268,21 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         // 전체 직원 조회
         List<EmpEntity> employees = employeeRepository.findAll();
+
+        // 결근 자동 생성 대상 직원 필터링
+        // - 재직 중인 직원만 포함
+        // - 삭제되지 않은 직원만 포함
+        // 퇴사자/삭제 직원은 결근 처리 대상에서 제외한다.
+        employees = employees.stream()
+
+                // 재직 상태만 허용
+                .filter(employee -> "재직".equals(employee.getStatus())
+                        || "ACTIVE".equals(employee.getStatus()))
+
+                // 삭제되지 않은 직원만 "결근 처리 대상에 포함"
+                .filter(employee -> !"Y".equals(employee.getIsDeleted()))
+
+                .toList();
 
         // 전체 직원을 한 명씩 확인
         for (EmpEntity employee : employees) {

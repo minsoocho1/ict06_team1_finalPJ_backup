@@ -47,6 +47,21 @@ public class PayrollStatusResponseDTO {
     // 입력 초기화 가능 여부
     private boolean resetAvailable;
 
+    // 소득세
+    private BigDecimal incomeTax;
+
+    // 지방소득세
+    private BigDecimal localIncomeTax;
+
+    // 총 공제액
+    private BigDecimal totalDeduction;
+
+    // 총 지급액
+    private BigDecimal totalGross;
+
+    // 실수령액
+    private BigDecimal netSalary;
+
     private BigDecimal nationalPensionAmount;
     private BigDecimal healthInsuranceAmount;
     private BigDecimal longTermCareAmount;

@@ -7,9 +7,15 @@ import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiLogType;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiLogRepository;
 import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Map;
+
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AiLogServiceImpl implements AiLogService {
@@ -32,14 +38,65 @@ public class AiLogServiceImpl implements AiLogService {
             long durationMs,
             String errorMessage
     ) {
+        saveChatbotLogAndReturn(userMessage, aiMessage, providerSuccess, fallback, durationMs, errorMessage, null);
+    }
+
+    @Override
+    @Transactional
+    public void saveChatbotLog(
+            AiChatMessageEntity userMessage,
+            AiChatMessageEntity aiMessage,
+            boolean providerSuccess,
+            boolean fallback,
+            long durationMs,
+            String errorMessage,
+            Map<String, String> permissionDeniedInfo
+    ) {
+        saveChatbotLogAndReturn(userMessage, aiMessage, providerSuccess, fallback, durationMs, errorMessage, permissionDeniedInfo);
+    }
+
+    @Override
+    @Transactional
+    public AiLogEntity saveChatbotLogAndReturn(
+            AiChatMessageEntity userMessage,
+            AiChatMessageEntity aiMessage,
+            boolean providerSuccess,
+            boolean fallback,
+            long durationMs,
+            String errorMessage
+    ) {
+        return saveChatbotLogAndReturn(userMessage, aiMessage, providerSuccess, fallback, durationMs, errorMessage, null);
+    }
+
+    @Override
+    @Transactional
+    public AiLogEntity saveChatbotLogAndReturn(
+            AiChatMessageEntity userMessage,
+            AiChatMessageEntity aiMessage,
+            boolean providerSuccess,
+            boolean fallback,
+            long durationMs,
+            String errorMessage,
+            Map<String, String> permissionDeniedInfo
+    ) {
         if (userMessage == null || aiMessage == null) {
-            return;
+            log.warn("[AI_LOG] skip save: userMessage or aiMessage is null");
+            return null;
+        }
+
+        if (userMessage.getMessageId() == null || aiMessage.getMessageId() == null) {
+            log.warn(
+                    "[AI_LOG] skip save: missing messageId. userMessageId={}, aiMessageId={}",
+                    userMessage.getMessageId(),
+                    aiMessage.getMessageId()
+            );
+            return null;
         }
 
         AiChatSessionEntity session = aiMessage.getSession();
         EmpEntity employee = session != null ? session.getEmployee() : null;
 
-        String queryMeta = buildQueryMeta(userMessage);
+        String queryMeta = buildQueryMeta(userMessage, permissionDeniedInfo);
         String responseMeta = buildResponseMeta(aiMessage, providerSuccess, fallback);
 
         AiLogEntity log = AiLogEntity.builder()
@@ -54,16 +111,29 @@ public class AiLogServiceImpl implements AiLogService {
                 .errorMessage(trimErrorMessage(errorMessage))
                 .build();
 
-        aiLogRepository.save(log);
+        return aiLogRepository.save(log);
     }
 
-    private String buildQueryMeta(AiChatMessageEntity userMessage) {
+    private String buildQueryMeta(AiChatMessageEntity userMessage, Map<String, String> permissionDeniedInfo) {
         String content = userMessage.getContent();
 
         int questionLength = content == null ? 0 : content.length();
 
-        return "requestMessageId=%d, questionLength=%d"
-                .formatted(userMessage.getMessageId(), questionLength);
+        StringBuilder meta = new StringBuilder("requestMessageId=%d, questionLength=%d"
+                .formatted(userMessage.getMessageId(), questionLength));
+
+        if (permissionDeniedInfo != null && !permissionDeniedInfo.isEmpty()) {
+            appendMeta(meta, "permissionDenied", permissionDeniedInfo.get("permissionDenied"));
+            appendMeta(meta, "deniedReason", permissionDeniedInfo.get("deniedReason"));
+            appendMeta(meta, "deniedDocId", permissionDeniedInfo.get("deniedDocId"));
+            appendMeta(meta, "deniedDocTitle", permissionDeniedInfo.get("deniedDocTitle"));
+            appendMeta(meta, "userHeadquarter", permissionDeniedInfo.get("userHeadquarter"));
+            appendMeta(meta, "userTeam", permissionDeniedInfo.get("userTeam"));
+            appendMeta(meta, "userPosition", permissionDeniedInfo.get("userPosition"));
+            appendMeta(meta, "targetDept", permissionDeniedInfo.get("targetDept"));
+        }
+
+        return meta.toString();
     }
 
     private String buildResponseMeta(
@@ -90,6 +160,17 @@ public class AiLogServiceImpl implements AiLogService {
         }
 
         return errorMessage.substring(0, 1000);
+    }
+
+    private void appendMeta(StringBuilder meta, String key, String value) {
+        if (key == null || key.isBlank() || value == null || value.isBlank()) {
+            return;
+        }
+
+        meta.append(", ")
+                .append(key)
+                .append("=")
+                .append(URLEncoder.encode(value, StandardCharsets.UTF_8));
     }
 
     //
