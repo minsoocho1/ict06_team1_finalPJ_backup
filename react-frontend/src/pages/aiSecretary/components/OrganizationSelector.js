@@ -17,6 +17,7 @@ import { C } from "../styles/aiSecretaryTheme";
 import {
   getDepartmentTree,
   getEmployeesByDepartment,
+  unwrapApiData,
 } from "../api/aiSecretaryApi";
 
 const shellStyle = {
@@ -191,22 +192,35 @@ function uniquePositions(employees) {
   const map = new Map();
 
   employees.forEach((employee) => {
-    if (employee?.positionId === null || employee?.positionId === undefined) {
+    const rawPositionId = employee?.positionId;
+    const positionName = normalizePositionName(employee?.positionName || "");
+    const hasPositionId =
+      rawPositionId !== null &&
+      rawPositionId !== undefined &&
+      String(rawPositionId).trim() !== "";
+
+    if (!hasPositionId && !positionName) {
       return;
     }
 
-    const key = String(employee.positionId);
+    const key = hasPositionId
+      ? `id:${String(rawPositionId)}`
+      : `name:${positionName}`;
 
     if (!map.has(key)) {
       map.set(key, {
-        positionId: employee.positionId,
-        positionName: employee.positionName || "",
+        positionId: hasPositionId ? rawPositionId : key,
+        positionName,
       });
     }
   });
 
   return Array.from(map.values()).sort(
-    (left, right) => Number(left.positionId || 0) - Number(right.positionId || 0)
+    (left, right) =>
+      String(left.positionName || "").localeCompare(
+        String(right.positionName || ""),
+        "ko"
+      )
   );
 }
 
@@ -249,7 +263,7 @@ function mergeEmployeesByEmpNo(groups) {
   const map = new Map();
 
   groups.flat().forEach((employee) => {
-    const key = String(employee?.empNo || "");
+    const key = String(employee?.empNo || employee?.id || employee?.employeeId || "");
     if (!key) {
       return;
     }
@@ -274,6 +288,104 @@ function mergeEmployeesByEmpNo(groups) {
   return Array.from(map.values());
 }
 
+function getEmployeeTeamKey(employee) {
+  return String(
+    employee?.teamId ??
+      employee?.deptId ??
+      employee?.departmentId ??
+      ""
+  ).trim();
+}
+
+function safeObject(value) {
+  return value && typeof value === "object" ? value : {};
+}
+
+function normalizeEmployee(employee, fallbackDeptId) {
+  const position = safeObject(employee?.position);
+  const department = safeObject(employee?.department);
+  const team = safeObject(employee?.team);
+  const deptId = String(
+    employee?.deptId ??
+      employee?.departmentId ??
+      employee?.teamId ??
+      department?.deptId ??
+      department?.departmentId ??
+      department?.id ??
+      team?.deptId ??
+      team?.departmentId ??
+      team?.id ??
+      fallbackDeptId ??
+      ""
+  ).trim();
+
+  const teamName = String(
+    employee?.teamName ??
+      employee?.deptName ??
+      employee?.departmentName ??
+      employee?.department ??
+      department?.deptName ??
+      department?.departmentName ??
+      department?.name ??
+      team?.deptName ??
+      team?.departmentName ??
+      team?.name ??
+      ""
+  ).trim();
+
+  const positionName = String(
+    employee?.positionName ??
+      employee?.position ??
+      position?.positionName ??
+      position?.name ??
+      ""
+  ).trim();
+
+  const rawPositionId =
+    employee?.positionId ??
+    employee?.positionNo ??
+    employee?.positionCode ??
+    position?.positionId ??
+    position?.id ??
+    position?.positionNo ??
+    position?.positionCode;
+
+  return {
+    ...employee,
+    empNo:
+      employee?.empNo ??
+      employee?.employeeNo ??
+      employee?.employeeId ??
+      employee?.id ??
+      null,
+    name: String(employee?.name ?? employee?.empName ?? employee?.employeeName ?? "").trim(),
+    empName: String(employee?.empName ?? employee?.name ?? employee?.employeeName ?? "").trim(),
+    positionId:
+      rawPositionId !== null &&
+      rawPositionId !== undefined &&
+      String(rawPositionId).trim() !== ""
+        ? rawPositionId
+        : positionName || null,
+    positionName,
+    deptId,
+    departmentId: deptId,
+    teamId: deptId,
+    teamName,
+    deptName: teamName,
+    departmentName: teamName,
+  };
+}
+
+function uniqueDeptIds(values) {
+  return Array.from(
+    new Set(
+      (Array.isArray(values) ? values : [])
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  );
+}
+
 export default function OrganizationSelector({
   formType,
   audience,
@@ -282,6 +394,7 @@ export default function OrganizationSelector({
   onChangeFormData,
   showReferenceNote = true,
   showEmployeePicker = true,
+  enableEmployeeIndividualSelect = false,
   enableTeamAllOption = false,
   enablePositionAllOption = false,
 }) {
@@ -342,6 +455,15 @@ export default function OrganizationSelector({
     [selectedTeamIds, teamOptions]
   );
 
+  const headquarterScopeDeptIds = useMemo(
+    () =>
+      uniqueDeptIds([
+        selectedHeadquarterId,
+        ...teamOptions.map((dept) => String(getDeptId(dept))),
+      ]),
+    [selectedHeadquarterId, teamOptions]
+  );
+
   const teamAllSelected = useMemo(() => {
     if (!enableTeamAllOption || teamOptions.length === 0) {
       return false;
@@ -369,7 +491,29 @@ export default function OrganizationSelector({
     ];
   }, [enableTeamAllOption, teamOptions]);
 
-  const positions = useMemo(() => uniquePositions(employees), [employees]);
+  const selectedTeamKeySet = useMemo(
+    () => new Set((selectedTeamIds || []).map((item) => String(item || "").trim()).filter(Boolean)),
+    [selectedTeamIds]
+  );
+
+  const filteredEmployeesByTeam = useMemo(() => {
+    if (selectedTeamIds.length === 0) {
+      return [];
+    }
+
+    if (teamAllSelected) {
+      return employees.slice();
+    }
+
+    return employees.filter((employee) =>
+      selectedTeamKeySet.has(getEmployeeTeamKey(employee))
+    );
+  }, [employees, selectedTeamIds, selectedTeamKeySet, teamAllSelected]);
+
+  const positions = useMemo(
+    () => uniquePositions(filteredEmployeesByTeam),
+    [filteredEmployeesByTeam]
+  );
 
   const positionAllSelected = useMemo(
     () => selectedPositionIds.includes("ALL"),
@@ -418,27 +562,13 @@ export default function OrganizationSelector({
       return [];
     }
 
-    if (positionAllSelected) {
-      return employees
-        .slice()
-        .sort((left, right) => {
-          const diff =
-            Number(left.positionId || 0) - Number(right.positionId || 0);
-          if (diff !== 0) {
-            return diff;
-          }
+    const filteredByPosition = positionAllSelected
+      ? filteredEmployeesByTeam
+      : filteredEmployeesByTeam.filter((employee) =>
+          selectedPositionIds.includes(String(employee.positionId))
+        );
 
-          return getEmployeeDisplayName(left).localeCompare(
-            getEmployeeDisplayName(right),
-            "ko"
-          );
-        });
-    }
-
-    return employees
-      .filter(
-        (employee) => selectedPositionIds.includes(String(employee.positionId))
-      )
+    return filteredByPosition
       .sort((left, right) => {
         const diff = Number(left.positionId || 0) - Number(right.positionId || 0);
         if (diff !== 0) {
@@ -450,7 +580,7 @@ export default function OrganizationSelector({
           "ko"
         );
       });
-  }, [employees, positionAllSelected, selectedPositionIds, selectedTeamIds]);
+  }, [filteredEmployeesByTeam, positionAllSelected, selectedPositionIds, selectedTeamIds]);
 
   const selectedEmployees = useMemo(
     () =>
@@ -508,7 +638,8 @@ export default function OrganizationSelector({
 
       try {
         const response = await getDepartmentTree();
-        const nextTree = Array.isArray(response?.data) ? response.data : [];
+        const payload = unwrapApiData(response);
+        const nextTree = Array.isArray(payload) ? payload : [];
 
         if (alive) {
           setDepartmentTree(nextTree);
@@ -535,7 +666,7 @@ export default function OrganizationSelector({
     let alive = true;
 
     const loadEmployees = async () => {
-      if (selectedTeamIds.length === 0) {
+      if (!selectedHeadquarterId) {
         setEmployees([]);
         setSelectedEmpNos([]);
         setLoadingEmployees(false);
@@ -547,17 +678,15 @@ export default function OrganizationSelector({
 
       try {
         const results = await Promise.all(
-          selectedTeamIds.map(async (teamId) => {
+          headquarterScopeDeptIds.map(async (deptId) => {
             try {
-              const response = await getEmployeesByDepartment(teamId);
-              const nextEmployees = Array.isArray(response?.data)
-                ? response.data
-                : [];
+              const response = await getEmployeesByDepartment(deptId);
+              const payload = unwrapApiData(response);
+              const employeeList = Array.isArray(payload) ? payload : [];
 
-              return nextEmployees.map((employee) => ({
-                ...employee,
-                teamId: String(teamId),
-              }));
+              return employeeList.map((employee) =>
+                normalizeEmployee(employee, deptId)
+              );
             } catch (fetchError) {
               return [];
             }
@@ -586,7 +715,7 @@ export default function OrganizationSelector({
     return () => {
       alive = false;
     };
-  }, [selectedTeamIds]);
+  }, [headquarterScopeDeptIds, selectedHeadquarterId]);
 
   useEffect(() => {
     if (selectedTeamIds.length === 0 && !seedDeptText) {
@@ -603,10 +732,30 @@ export default function OrganizationSelector({
       return;
     }
 
+    if (enableEmployeeIndividualSelect) {
+      const visibleEmployeeNos = new Set(
+        visibleEmployees
+          .map((employee) => String(employee.empNo || ""))
+          .filter(Boolean)
+      );
+      const nextSelected = selectedEmpNos.filter((empNo) =>
+        visibleEmployeeNos.has(String(empNo || ""))
+      );
+      const same =
+        nextSelected.length === selectedEmpNos.length &&
+        nextSelected.every((item, index) => item === selectedEmpNos[index]);
+
+      if (!same) {
+        setSelectedEmpNos(nextSelected);
+      }
+
+      return;
+    }
+
     const nextSelected =
       positionAllSelected
-        ? buildAllEmployeeNos(employees)
-        : employees
+        ? buildAllEmployeeNos(filteredEmployeesByTeam)
+        : filteredEmployeesByTeam
             .filter(
               (employee) => selectedPositionIds.includes(String(employee.positionId))
             )
@@ -620,7 +769,15 @@ export default function OrganizationSelector({
     if (!same) {
       setSelectedEmpNos(nextSelected);
     }
-  }, [employees, positionAllSelected, selectedEmpNos, selectedPositionIds, selectedTeamIds]);
+  }, [
+    enableEmployeeIndividualSelect,
+    filteredEmployeesByTeam,
+    positionAllSelected,
+    selectedEmpNos,
+    selectedPositionIds,
+    selectedTeamIds,
+    visibleEmployees,
+  ]);
 
   useEffect(() => {
     const selectedTeamLabels = selectedTeams
@@ -757,7 +914,6 @@ export default function OrganizationSelector({
     });
 
     setSelectedEmpNos([]);
-    setEmployees([]);
   };
 
   const handlePositionToggle = (positionId) => {
@@ -776,7 +932,9 @@ export default function OrganizationSelector({
       }
 
       if (next.includes("ALL")) {
-        setSelectedEmpNos(buildAllEmployeeNos(employees));
+        if (!enableEmployeeIndividualSelect) {
+          setSelectedEmpNos(buildAllEmployeeNos(filteredEmployeesByTeam));
+        }
         return next;
       }
 
@@ -785,18 +943,32 @@ export default function OrganizationSelector({
         return next;
       }
 
-      const nextSelected = employees
-        .filter((employee) => next.includes(String(employee.positionId)))
-        .map((employee) => String(employee.empNo || ""))
-        .filter(Boolean);
+      if (!enableEmployeeIndividualSelect) {
+        const nextSelected = filteredEmployeesByTeam
+          .filter((employee) => next.includes(String(employee.positionId)))
+          .map((employee) => String(employee.empNo || ""))
+          .filter(Boolean);
 
-      setSelectedEmpNos(nextSelected);
+        setSelectedEmpNos(nextSelected);
+      } else {
+        setSelectedEmpNos((prevSelected) => {
+          const allowedEmpNoSet = new Set(
+            filteredEmployeesByTeam
+              .filter((employee) => next.includes(String(employee.positionId)))
+              .map((employee) => String(employee.empNo || ""))
+              .filter(Boolean)
+          );
+
+          return prevSelected.filter((empNo) => allowedEmpNoSet.has(String(empNo || "")));
+        });
+      }
+
       return next;
     });
   };
 
   const toggleEmployee = (empNo) => {
-    if (positionAllSelected) {
+    if (positionAllSelected && !enableEmployeeIndividualSelect) {
       return;
     }
 

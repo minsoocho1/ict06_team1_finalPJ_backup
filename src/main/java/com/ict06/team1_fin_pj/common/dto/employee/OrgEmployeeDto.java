@@ -1,5 +1,6 @@
 package com.ict06.team1_fin_pj.common.dto.employee;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -52,6 +53,7 @@ public class OrgEmployeeDto {
      *
      * 직급 정렬 시 사용할 수 있다.
      */
+    @JsonProperty("positionId")
     private Integer positionId;
 
     /*
@@ -60,6 +62,7 @@ public class OrgEmployeeDto {
      * 예:
      * 수석, 선임, 책임, 사원
      */
+    @JsonProperty("positionName")
     private String positionName;
 
     /*
