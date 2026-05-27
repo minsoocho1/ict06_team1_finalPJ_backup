@@ -4,8 +4,12 @@ import com.ict06.team1_fin_pj.common.dto.attendance.AttendanceDTO;
 import com.ict06.team1_fin_pj.domain.attendance.entity.AttendanceEntity;
 import com.ict06.team1_fin_pj.domain.attendance.entity.AttendanceStatus;
 import com.ict06.team1_fin_pj.domain.attendance.repository.AttendanceRepository;
+import com.ict06.team1_fin_pj.domain.attendance.repository.HolidayRepository;
 import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import com.ict06.team1_fin_pj.domain.employee.repository.EmployeeRepository;
+import com.ict06.team1_fin_pj.domain.attendance.repository.LeaveRequestRepository;
+import com.ict06.team1_fin_pj.domain.attendance.entity.LeaveStatus;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -15,6 +19,7 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import org.springframework.scheduling.annotation.Scheduled;
+
 import java.time.DayOfWeek;
 
 
@@ -24,6 +29,11 @@ public class AttendanceServiceImpl implements AttendanceService {
 
     private final AttendanceRepository attendanceRepository;
     private final EmployeeRepository employeeRepository;
+    // 공휴일 Repository
+    private final HolidayRepository holidayRepository;
+    // 휴가 신청 Repository
+    // 승인된 휴가일은 결근 처리하지 않기 위해 사용
+    private final LeaveRequestRepository leaveRequestRepository;
 
     // ==============================
     // GPS 출근 검증 기준값
@@ -224,13 +234,6 @@ public class AttendanceServiceImpl implements AttendanceService {
 
         // 5. 연장근무 계산
         int overtimeMins = 0;
-        LocalTime standardEndTime = LocalTime.of(18, 0);
-
-        if (now.toLocalTime().isAfter(standardEndTime)) {
-            overtimeMins = (int) java.time.Duration
-                    .between(standardEndTime, now.toLocalTime())
-                    .toMinutes();
-        }
 
         // 6. Entity 값 변경
         attendance.checkOut(
@@ -266,6 +269,12 @@ public class AttendanceServiceImpl implements AttendanceService {
             return;
         }
 
+        // 공휴일이면 결근 처리하지 않는다.
+        // HOLIDAY 테이블에 등록되어 있고 is_active=true인 날짜는 근무일이 아니므로 제외한다.
+        if (holidayRepository.existsByHolidayDateAndIsActiveTrue(today)) {
+            return;
+        }
+
         // 전체 직원 조회
         List<EmpEntity> employees = employeeRepository.findAll();
 
@@ -292,18 +301,39 @@ public class AttendanceServiceImpl implements AttendanceService {
                     .findByEmployee_EmpNoAndWorkDate(employee.getEmpNo(), today)
                     .isPresent();
 
-            // 오늘 근태 기록이 없으면 결근 데이터 생성
-            if (!exists) {
-                AttendanceEntity absentAttendance = AttendanceEntity.builder()
-                        .employee(employee)                 // 직원 정보
-                        .workDate(today)                    // 오늘 날짜
-                        .status(AttendanceStatus.ABSENT)    // 결근 상태
-                        .note("자동 결근 처리")              // 관리자 확인용 메모
-                        .build();
-
-                // DB 저장
-                attendanceRepository.save(absentAttendance);
+            // 이미 오늘 근태 기록이 있으면 결근 처리 대상이 아니므로 다음 직원으로 넘어간다.
+            // 예: 출근/퇴근 기록이 있거나 이미 결근/휴가 데이터가 생성된 경우
+            if (exists) {
+                continue;
             }
+
+            // 오늘 승인된 휴가/연차가 있는지 확인한다.
+            // 승인된 휴가 기간(startDate ~ endDate)에 오늘 날짜가 포함되어 있으면 결근 처리하지 않는다.
+            boolean hasApprovedLeave =
+                    leaveRequestRepository
+                            .existsByEmployee_EmpNoAndStatusAndStartDateLessThanEqualAndEndDateGreaterThanEqual(
+                                    employee.getEmpNo(),
+                                    LeaveStatus.APPROVED,
+                                    today,
+                                    today
+                            );
+
+            // 승인된 휴가/연차가 있으면 결근 생성 대상에서 제외한다.
+            // 예: 오늘 연차 승인 상태라면 출근 기록이 없어도 ABSENT를 만들면 안 된다.
+            if (hasApprovedLeave) {
+                continue;
+            }
+
+            // 오늘 근태 기록도 없고 승인된 휴가/연차도 없는 경우에만 결근 데이터를 생성한다.
+            AttendanceEntity absentAttendance = AttendanceEntity.builder()
+                    .employee(employee)                 // 직원 정보
+                    .workDate(today)                    // 결근 처리 날짜
+                    .status(AttendanceStatus.ABSENT)    // 결근 상태
+                    .note("자동 결근 처리")              // 관리자 확인용 메모
+                    .build();
+
+            // 결근 데이터 DB 저장
+            attendanceRepository.save(absentAttendance);
         }
     }
 
