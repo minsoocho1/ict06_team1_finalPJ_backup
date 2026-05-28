@@ -98,6 +98,94 @@ const createEmptyValues = (fields) =>
     return acc;
   }, {});
 
+// 날짜/시간 범위 검증에서 시작 필드와 종료 필드를 찾기 위해 id와 label을 같은 기준으로 정리합니다.
+const normalizeRangeKey = (value) =>
+  String(value || '') // 1. 값이 없으면 빈 문자열로 만들고 문자열로 변환합니다.
+    .toLowerCase() // 2. 영문 대문자를 모두 소문자로 변경합니다.
+    .replace(/[_\s]/g, '') // 3. 언더스코어(_)와 공백(띄어쓰기)을 모두 제거합니다.
+    .replace(/start|end|from|to|시작|종료|끝|부터|까지/g, ''); // 4. 시작/종료와 관련된 단어들을 지워 순수 '본문 키'만 남깁니다. (예: "startDate" -> "date")
+
+const hasStartText = (field) =>
+  // 필드의 id와 label을 공백으로 합친 문자열에서 'start', 'from', '시작', '부터'가 포함되어 있는지 대소문자 구분 없이 검사합니다.
+  /start|from|시작|부터/i.test(`${field.id || ''} ${field.label || ''}`);
+
+
+const hasEndText = (field) =>
+  // 필드의 id와 label을 공백으로 합친 문자열에서 'end', 'to', '종료', '끝', '까지'가 포함되어 있는지 대소문자 구분 없이 검사합니다.
+  /end|to|종료|끝|까지/i.test(`${field.id || ''} ${field.label || ''}`);
+
+
+const getComparableRangeKeys = (field) =>
+  // 필드의 id와 label을 각각 정규화한 뒤, 빈 문자열을 제외(filter(Boolean))하고 유효한 값만 배열로 반환합니다.
+  [normalizeRangeKey(field.id), normalizeRangeKey(field.label)].filter(Boolean);
+
+// 시작/종료 의미가 있는 date 또는 time 필드를 자동으로 짝지어 반환합니다.
+const findRangePairs = (fields, type) => {
+  // 1. 전체 필드 중 매개변수로 받은 타입('date' 또는 'time')과 일치하는 필드만 골라냅니다.
+  const rangeFields = fields.filter((field) => field.type === type);
+  // 2. 그중에서 시작 의미를 가진 필드들을 필터링합니다.
+  const startFields = rangeFields.filter(hasStartText);
+  // 3. 그중에서 종료 의미를 가진 필드들을 필터링합니다.
+  const endFields = rangeFields.filter(hasEndText);
+
+  return endFields
+    .map((endField) => {
+      // 4. 종료 필드의 정규화된 비교 키 배열을 가져옵니다.
+      const endKeys = getComparableRangeKeys(endField);
+      // 5. 시작 필드 목록 중에서 종료 필드와 동일한 '본문 키'를 공유하는 필드를 찾습니다.
+      const startField = startFields.find((candidate) => {
+        const startKeys = getComparableRangeKeys(candidate);
+        // 시작 필드의 키 중 하나라도 종료 필드의 키에 포함되어 있으면 매칭됩니다.
+        return startKeys.some((key) => endKeys.includes(key));
+      });
+
+      // 6. 매칭되는 시작 필드가 있으면 객체로 묶어 반환하고, 없으면 null을 반환합니다.
+      return startField ? { startField, endField } : null;
+    })
+    .filter(Boolean); // 7. null로 반환된 항목들을 배열에서 완전히 제거합니다.
+};
+
+// 결재 서식의 날짜/시간 범위에서 종료값이 시작값보다 빠른지 검증합니다.
+const validateDateTimeRanges = (fields, values) => {
+  // 1. 자동으로 날짜(date) 필드 쌍과 시간(time) 필드 쌍을 찾아 배열로 저장합니다.
+  const datePairs = findRangePairs(fields, 'date');
+  const timePairs = findRangePairs(fields, 'time');
+
+  // 2. 날짜 필드 쌍을 순회하며 검증합니다.
+  for (const { startField, endField } of datePairs) {
+    const startValue = values[startField.id]; // 시작 날짜 값
+    const endValue = values[endField.id]; // 종료 날짜 값
+
+    // 시작값과 종료값이 모두 입력되었는데, 종료일이 시작일보다 빠르면 에러 메시지를 즉시 반환합니다.
+    if (startValue && endValue && endValue < startValue) {
+      return `${endField.label || '종료일'}은(는) ${startField.label || '시작일'}보다 빠를 수 없습니다.`;
+    }
+  }
+
+  // 3. 사용자가 며칠 이상(Multi-Day)에 걸친 기간을 선택했는지 여부를 체크합니다.
+  const hasMultiDayRange = datePairs.some(({ startField, endField }) => {
+    const startValue = values[startField.id];
+    const endValue = values[endField.id];
+    // 종료일이 시작일보다 미래인 날짜 쌍이 하나라도 있으면 true가 됩니다.
+    return startValue && endValue && endValue > startValue;
+  });
+
+  // 4. 시간 필드 쌍을 순회하며 검증합니다.
+  for (const { startField, endField } of timePairs) {
+    const startValue = values[startField.id]; // 시작 시간 값
+    const endValue = values[endField.id]; // 종료 시간 값
+
+    // 다른 날로 넘어가는 기간(hasMultiDayRange가 true)이 아닐 때만 시간 순서를 검사합니다.
+    // (예: 5월 28일 23시 ~ 5월 29일 01시 처럼 날짜가 다르면 종료 시간이 시작 시간보다 빨라도 정상입니다.)
+    if (!hasMultiDayRange && startValue && endValue && endValue < startValue) {
+      return `${endField.label || '종료 시간'}은(는) ${startField.label || '시작 시간'}보다 빠를 수 없습니다.`;
+    }
+  }
+
+  // 5. 모든 검증을 통과하면 빈 문자열을 반환하여 에러가 없음을 알립니다.
+  return '';
+};
+
 // [전자결재] 새 결재 진행 - 결재 내용 작성 페이지
 const ApprovalWriteNew = () => {
   const [userInfo] = useOutletContext();
@@ -404,6 +492,12 @@ const ApprovalWriteNew = () => {
 
     if (isExpenseSettlementForm && files.some((file) => !canUploadFile(file))) {
       setErrorMessage('비용 정산 신청은 이미지 또는 PDF 파일만 첨부할 수 있습니다.');
+      return false;
+    }
+
+    const rangeErrorMessage = validateDateTimeRanges(template.fields, fieldValues);
+    if (rangeErrorMessage) {
+      setErrorMessage(rangeErrorMessage);
       return false;
     }
 
