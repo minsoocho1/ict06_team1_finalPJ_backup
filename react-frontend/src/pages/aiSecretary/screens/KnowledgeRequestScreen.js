@@ -1,6 +1,17 @@
 /**
  * @FileName : KnowledgeRequestScreen.js
- * @Description : AiSecretary.js 전용 지식 등록 요청 화면
+ * @Description : AiSecretary.js 전용 챗봇 자료 등록 요청 화면
+ *                - 사용자가 챗봇/RAG에 추가되길 원하는 지식 자료 등록 요청
+ *                - 문서 유형, 카테고리, 권한 희망 조건, 참고 URL, 요청 사유 입력
+ *                - 내 요청 목록 조회 및 상세 펼침/접기 기능 제공
+ * @Author : 송혜진
+ * @Date : 2026. 05. 20
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.05.20  송혜진       최초 생성
+ * @ 2026.05.28  송혜진       자료 등록 요청 폼 UX 및 내 요청 목록 카드 정리
  */
 
 import React, { useCallback, useEffect, useMemo, useState } from "react";

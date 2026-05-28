@@ -1,14 +1,14 @@
 /**
  * @FileName : AiAssistantDraftServiceImpl.js
- * @Description : 蹂닿퀬???뚯쓽濡?寃곗옱 ?ъ쑀 珥덉븞 ?앹꽦 ?먮쫫 ?대떦
- * @Author : ?≫삙吏?
+ * @Description : 보고서/회의록/결재 사유 초안 생성 흐름 담당
+ * @Author : 송혜진
  * @Date : 2026. 04. 28
  * @Modification_History
  * @
- * @ ?섏젙??        ?섏젙??       ?섏젙?댁슜
+ * @ 수정일         수정자        수정내용
  * @ ----------    ---------    ----------------------------------------
- * @ 2026.05.06    ?≫삙吏?       理쒖큹 ?앹꽦 (珥덉븞 ?앹꽦/ ?섏젙 硫붿꽌??異붽?)
- * @ 2026.05.11    ?≫삙吏?       ?쒗뵆由??앹꽦 硫붿꽌??異붽?
+ * @ 2026.05.06    송혜진        최초 생성 (초안 생성/ 수정 메서드 추가)
+ * @ 2026.05.11    송혜진        템플릿 생성 메서드 추가
  */
 
 package com.ict06.team1_fin_pj.domain.aiSecretary.service;
@@ -42,7 +42,7 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
     private final AiLogService aiLogService;
     private final ObjectMapper objectMapper;
 
-    // 珥덉븞 ?앹꽦
+    // 초안 생성
     @Override
     @Transactional
     public AssistantDraftResponseDto createDraft(AssistantDraftRequestDto requestDto) {
@@ -53,18 +53,14 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
         boolean fallback = false;
         String errorMessage = null;
 
-        /*
-         * AI 鍮꾩꽌 臾몄꽌 ?묒꽦? ?κ린 蹂닿? ??곸씠誘濡?ASSISTANT ?몄뀡?쇰줈 ?앹꽦?쒕떎.
-         */
+        // AI 비서 문서 작성은 장기 보관 대상이므로 ASSISTANT 세션으로 생성
         AiChatSessionEntity session = aiSecretaryService.createSession(
                 requestDto.getEmpNo(),
                 SessionType.ASSISTANT,
                 requestDto.getTitle()
         );
 
-        /*
-         * USER 硫붿떆吏?먮뒗 ?ъ슜?먭? ?낅젰?????댁슜???붿빟 ??ν븳??
-         */
+        // USER 메시지에는 사용자가 입력한 요청 내용을 요약 저장
         AiChatMessageEntity userMessage = AiChatMessageEntity.builder()
                 .role(MessageRole.USER)
                 .content(buildUserInputSummary(requestDto))
@@ -84,7 +80,7 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
             fallback = false;
             modelName = "gemini";
         } catch (Exception e) {
-            log.warn("[ASSISTANT_DRAFT] Gemini 珥덉븞 ?앹꽦 ?ㅽ뙣. fallback?쇰줈 ?泥댄빀?덈떎. reason={}", e.getMessage());
+            log.warn("[ASSISTANT_DRAFT] Gemini 초안 생성 실패. fallback으로 대체합니다. reason={}", e.getMessage());
 
             content = buildFallbackDraft(requestDto);
             providerSuccess = false;
@@ -104,12 +100,8 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
 
         long durationMs = System.currentTimeMillis() - startTime;
 
-        /*
-         * 湲곗〈 AiLogService??Chatbot ?꾩슜 signature?쇰㈃,
-         * ?곗꽑? ??遺遺꾩쓣 ?앸왂?섍퀬 ?섏쨷??ASSISTANT 濡쒓렇??硫붿꽌?쒕? 異붽??대룄 ?쒕떎.
-         *
-         * ?꾩옱 鍮좊Ⅸ ?곌껐??紐⑺몴?대?濡??꾨옒???좏깮?ы빆.
-         */
+        // AI 비서 사용 로그 저장
+        // Gemini 호출 성공 여부, fallback 여부, 처리 시간을 함께 기록한다.
         try {
             aiLogService.saveAssistantLog(
                     savedUserMessage,
@@ -121,7 +113,7 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
                     errorMessage
             );
         } catch (Exception logException) {
-            log.warn("[AI_LOG] AI 鍮꾩꽌 珥덉븞 濡쒓렇 ????ㅽ뙣. reason={}", logException.getMessage());
+            log.warn("[AI_LOG] AI 비서 초안 로그 저장 실패. reason={}", logException.getMessage());
         }
 
         return AssistantDraftResponseDto.builder()
@@ -136,7 +128,7 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
                 .build();
     }
 
-    // 珥덉븞 ?섏젙
+    // 초안 수정
     @Override
     @Transactional
     public AssistantReviseResponseDto reviseDraft(AssistantReviseRequestDto requestDto) {
@@ -147,10 +139,8 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
         boolean fallback = false;
         String errorMessage = null;
 
-        /*
-         * [1] USER 硫붿떆吏 ???
-         * ?ъ슜?먭? ?낅젰???섏젙 ?붿껌??????대젰?쇰줈 ?④릿??
-         */
+        // [1] USER 메시지 저장
+        // 사용자가 입력한 수정 요청을 대화 이력으로 남김
         AiChatMessageEntity userMessage = AiChatMessageEntity.builder()
                 .role(MessageRole.USER)
                 .content(buildReviseUserMessage(requestDto))
@@ -159,25 +149,21 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
         AiChatMessageEntity savedUserMessage =
                 aiSecretaryService.saveMessage(requestDto.getSessionId(), userMessage);
 
-        /*
-         * [2] ?꾩옱 臾몄꽌 + ?섏젙 吏?쒕줈 ?꾨＼?꾪듃 援ъ꽦
-         */
+        // [2] 현재 문서 + 수정 지시로 프롬프트 구성
         String prompt = buildRevisePrompt(requestDto);
 
         String revisedContent;
         String modelName = "gemini";
 
-        /*
-         * [3] Gemini ?몄텧
-         * ?ㅽ뙣?섎㈃ fallback 臾몄꽌濡??泥댄븳??
-         */
+        // [3] Gemini 호출
+        // 실패하면 fallback 문서로 대체
         try {
             revisedContent = aiModelClient.generateAnswer(prompt);
             providerSuccess = true;
             fallback = false;
             modelName = "gemini";
         } catch (Exception e) {
-            log.warn("[ASSISTANT_REVISE] Gemini 臾몄꽌 ?섏젙 ?ㅽ뙣. fallback?쇰줈 ?泥댄빀?덈떎. reason={}", e.getMessage());
+            log.warn("[ASSISTANT_REVISE] Gemini 문서 수정 실패. fallback으로 대체합니다. reason={}", e.getMessage());
 
             revisedContent = buildReviseFallback(requestDto);
             providerSuccess = false;
@@ -186,10 +172,8 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
             modelName = "gemini-fallback";
         }
 
-        /*
-         * [4] ASSISTANT 硫붿떆吏 ???
-         * ?섏젙??臾몄꽌 ?꾨Ц??ASSISTANT 硫붿떆吏濡???ν븳??
-         */
+        // [4] ASSISTANT 메시지 저장
+        // 수정된 문서 전문을 ASSISTANT 메시지로 저장
         AiChatMessageEntity aiMessage = AiChatMessageEntity.builder()
                 .role(MessageRole.ASSISTANT)
                 .content(revisedContent)
@@ -199,11 +183,8 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
         AiChatMessageEntity savedAiMessage =
                 aiSecretaryService.saveMessage(requestDto.getSessionId(), aiMessage);
 
-        /*
-         * [5] AI_LOG ???
-         * ?꾩옱 AiLogService媛 梨쀫큸??硫붿꽌?쒕쭔 ?덈떎硫??곗꽑 ?숈씪 援ъ“瑜??ъ궗?⑺븷 ???덈떎.
-         * ?? 媛?ν븯硫??꾨옒 7踰덉쓽 saveAssistantLog() 異붽?瑜?異붿쿇?쒕떎.
-         */
+        // [5] AI_LOG 저장
+        // 수정 요청 처리 결과를 AI 비서 사용 로그로 남긴다.
         long durationMs = System.currentTimeMillis() - startTime;
 
         try {
@@ -217,12 +198,10 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
                     errorMessage
             );
         } catch (Exception logException) {
-            log.warn("[AI_LOG] AI 臾몄꽌 ?섏젙 濡쒓렇 ????ㅽ뙣. reason={}", logException.getMessage());
+            log.warn("[AI_LOG] AI 문서 수정 로그 저장 실패. reason={}", logException.getMessage());
         }
 
-        /*
-         * [6] ?꾨줎?몃줈 ?섏젙 寃곌낵 諛섑솚
-         */
+        // [6] 프론트로 수정 결과 반환
         return AssistantReviseResponseDto.builder()
                 .sessionId(requestDto.getSessionId())
                 .userMessageId(savedUserMessage.getMessageId())
@@ -236,14 +215,14 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
     }
 
 
-    // AI ??? ??
+    // AI 템플릿 생성
     @Override
     public AssistantTemplateResponseDto createTemplate(AssistantTemplateRequestDto requestDto) {
 
-        String category = defaultValue(requestDto.getCategory(), "??");
-        String dept = defaultValue(requestDto.getDept(), "??");
-        String situation = defaultValue(requestDto.getSituation(), "???? ?? ??");
-        String tone = defaultValue(requestDto.getTone(), "???");
+        String category = defaultValue(requestDto.getCategory(), "일반");
+        String dept = defaultValue(requestDto.getDept(), "공통");
+        String situation = defaultValue(requestDto.getSituation(), "업무 상황");
+        String tone = defaultValue(requestDto.getTone(), "정중한");
 
         String type = normalizeTemplateType(requestDto.getType(), category, situation);
 
@@ -262,10 +241,10 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
             String rawAnswer = aiModelClient.generateAnswer(prompt);
             Map<String, Object> parsed = parseTemplateJson(rawAnswer);
 
-            String title = stringValue(parsed.get("title"), situation + " ???");
+            String title = stringValue(parsed.get("title"), situation + " 템플릿");
             String description = stringValue(
                     parsed.get("description"),
-                    dept + " ??? " + situation + " ??? ?? AI ??????."
+                    dept + "에서 사용할 " + situation + " 템플릿입니다."
             );
             String content = stringValue(parsed.get("content"), rawAnswer);
             List<String> preview = listValue(parsed.get("preview"));
@@ -289,7 +268,7 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
                     .build();
 
         } catch (Exception e) {
-            log.warn("[ASSISTANT_TEMPLATE] Gemini ??? ?? ??. fallback?? ?????. reason={}", e.getMessage());
+            log.warn("[ASSISTANT_TEMPLATE] Gemini 템플릿 생성 실패. fallback으로 대체합니다. reason={}", e.getMessage());
 
             return buildFallbackTemplate(
                     type,
@@ -315,11 +294,11 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
 
         String joined = (safe(category) + " " + safe(situation)).toUpperCase();
 
-        if (joined.contains("??") || joined.contains("???")) {
+        if (joined.contains("회의") || joined.contains("회의록")) {
             return "MINUTES";
         }
 
-        if (joined.contains("??") || joined.contains("??")) {
+        if (joined.contains("결재") || joined.contains("승인")) {
             return "APPROVAL";
         }
 
@@ -337,51 +316,51 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
             boolean includeSignature
     ) {
         String typeLabel = switch (type) {
-            case "MINUTES" -> "???";
-            case "APPROVAL" -> "?? ???";
-            default -> "???";
+            case "MINUTES" -> "회의록";
+            case "APPROVAL" -> "결재 사유";
+            default -> "보고서";
         };
 
         return """
-                ??? ?? ????? AI ?? ?? ?????.
+            당신은 사내 업무 문서 템플릿을 작성하는 AI 비서입니다.
 
-                ?? ??? ?? ?? ?? ???? ?????.
+            아래 조건에 맞는 실무용 템플릿을 작성해 주세요.
 
-                ?? ??: %s
-                ????: %s
-                ?? ??: %s
-                ?? ??: %s
-                ??? ?: %s
-                ?? ?? ??: %s
-                ?? ?? ?? ??: %s
-                ?? ?? ?? ??: %s
+            문서 유형: %s
+            카테고리: %s
+            사용 부서: %s
+            사용 상황: %s
+            작성 톤: %s
+            제목 포함 여부: %s
+            문단 구조 포함 여부: %s
+            서명 영역 포함 여부: %s
 
-                ??? ?? JSON ??? ?????.
-                ?? ??, ???? ????, ```json ?? ??? ?? ???.
+            반드시 아래 JSON 형식으로만 응답해 주세요.
+            설명 문장, 마크다운 코드블록, ```json 표기는 포함하지 마세요.
 
-                {
-                  "title": "??? ??",
-                  "description": "??? ??",
-                  "preview": ["1. ? ?? ??", "2. ? ?? ??", "3. ? ?? ??"],
-                  "content": "??? ??? ? ?? ??? ?? ??"
-                }
+            {
+              "title": "템플릿 제목",
+              "description": "템플릿 설명",
+              "preview": ["1. 주요 항목", "2. 주요 항목", "3. 주요 항목"],
+              "content": "실제 사용 가능한 템플릿 본문"
+            }
 
-                ?? ??:
-                1. ???? ?????.
-                2. ?? ???? ??? ? ?? ??? ?????.
-                3. ???? ?? ???? ??, ??, ??, ???? ???? ???.
-                4. ??? [??] ?? [??] ???? ?????.
-                5. content?? ??, ?? ??, ??? ?? ??? ?????.
-                6. preview? content? ?? ?? 3~5?? ?????.
-                """.formatted(
+            작성 기준:
+            1. 한국어로 작성하세요.
+            2. 실제 회사 업무에서 바로 사용할 수 있는 형식으로 작성하세요.
+            3. 필요한 경우 제목, 개요, 목적, 세부 내용, 요청 사항을 포함하세요.
+            4. 변수 영역은 [항목] 또는 [입력값] 형태로 표시하세요.
+            5. content에는 제목, 본문, 항목 구조를 모두 포함하세요.
+            6. preview는 content의 핵심 항목 3~5개로 작성하세요.
+            """.formatted(
                 typeLabel,
                 category,
                 dept,
                 situation,
                 tone,
-                includeTitle ? "??" : "???",
-                includeParagraphs ? "??" : "???",
-                includeSignature ? "??" : "???"
+                includeTitle ? "포함" : "미포함",
+                includeParagraphs ? "포함" : "미포함",
+                includeSignature ? "포함" : "미포함"
         );
     }
 
@@ -454,7 +433,7 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
 
     private List<String> buildPreviewFromContent(String content) {
         if (content == null || content.isBlank()) {
-            return List.of("1. ??", "2. ?? ??", "3. ?? ??", "4. ?? ??");
+            return List.of("1. 제목", "2. 주요 내용", "3. 세부 항목", "4. 마무리");
         }
 
         List<String> lines = content.lines()
@@ -464,7 +443,7 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
                 .toList();
 
         if (lines.isEmpty()) {
-            return List.of("1. ??", "2. ?? ??", "3. ?? ??", "4. ?? ??");
+            return List.of("1. 제목", "2. 주요 내용", "3. 세부 항목", "4. 마무리");
         }
 
         return lines;
@@ -478,29 +457,29 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
             String tone,
             Boolean includeSignature
     ) {
-        String title = situation + " ???";
+        String title = situation + " 템플릿";
 
         String content = """
-                %s
+            %s
 
-                1. ??
-                - ?? ??: [??]
-                - ?? ??: [??]
+            1. 개요
+            - 작성 목적: [입력]
+            - 작성 배경: [입력]
 
-                2. ?? ??
-                - ?? ??: %s
-                - ?? ??: %s
+            2. 주요 내용
+            - 사용 부서: %s
+            - 사용 상황: %s
 
-                3. ?? ??
-                - ??: [??]
-                - ???: [??]
-                - ?? ??: [??]
+            3. 세부 항목
+            - 항목: [입력]
+            - 담당자: [입력]
+            - 처리 기한: [입력]
 
-                4. ?? ??
-                - ?? ?? ??: [??]
-                - ?? ?? ? ??: [??]
-                %s
-                """.formatted(
+            4. 요청 사항
+            - 검토 요청 내용: [입력]
+            - 추가 확인 사항: [입력]
+            %s
+            """.formatted(
                 title,
                 dept,
                 situation,
@@ -514,8 +493,8 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
                 .situation(situation)
                 .tone(tone)
                 .title(title)
-                .description(dept + " ??? " + situation + " ??? ?? ?? ??????.")
-                .preview(List.of("1. ??", "2. ?? ??", "3. ?? ??", "4. ?? ??"))
+                .description(dept + "에서 사용할 " + situation + " 업무 템플릿입니다.")
+                .preview(List.of("1. 개요", "2. 주요 내용", "3. 세부 항목", "4. 요청 사항"))
                 .content(content)
                 .modelName("gemini-fallback")
                 .fallback(true)
@@ -545,57 +524,58 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
         };
     }
 
-    // ?? ?? ?? ??? ?? ?? ????? ???.
+    // 문서 유형별 초안 생성 프롬프트를 구성한다.
     private String buildDraftPrompt(AssistantDraftRequestDto requestDto) {
         String documentType = normalizeDocumentType(requestDto.getType());
-        // referenceText? ?? ?? ?? ?? ?? ??? ???.
+
+        // referenceText가 있으면 첨부 참고 자료 본문을 프롬프트에 포함한다.
         String referenceSection = buildReferenceTextSection(requestDto.getReferenceText());
 
         String typeLabel = switch (documentType) {
-            case "MINUTES" -> "???";
-            case "APPROVAL" -> "?? ???";
-            default -> "???";
+            case "MINUTES" -> "회의록";
+            case "APPROVAL" -> "결재 사유";
+            default -> "보고서";
         };
 
         String typeInstruction = switch (documentType) {
             case "MINUTES" -> """
-                ?? ??, ?? ?? ??, ?? ??, ?? ??? ??? ?????.
-                ???? ??? ?? ??? ???? ?? ??? ?? ?? ???? ?????.
-                """;
+            회의 개요, 주요 논의 내용, 결정 사항, 액션 아이템을 포함해 주세요.
+            정리되지 않은 회의 내용을 공식 회의록 문체로 정돈해 주세요.
+            """;
             case "APPROVAL" -> """
-                ?? ??, ???, ?? ??, ?? ?? ??? ?????.
-                ??? ??? ??? ???? ???? ?? ?????.
-                """;
+            신청 배경, 필요성, 기대 효과, 결재 요청 문구를 포함해 주세요.
+            업무상 필요성과 승인 사유가 명확하게 드러나도록 작성해 주세요.
+            """;
             default -> """
-                ??, ?? ??, ?? ??, ???, ?? ?? ??? ?????.
-                ?? ??? ???? ???? ???? ?????.
-                """;
+            개요, 현황 분석, 주요 내용, 기대 효과, 결론을 포함해 주세요.
+            보고 대상자가 빠르게 이해할 수 있도록 구조화해 주세요.
+            """;
         };
 
         return """
-            ??? ?? ????? AI ?? ?? ?????.
+        당신은 사내 문서를 작성하는 AI 비서입니다.
 
-            ?? ???? ???? %s ??? ?????.
+        아래 입력값을 바탕으로 %s 초안을 작성해 주세요.
 
-            ?? ??:
-            1. ???? ?????.
-            2. ?? ??? ??? ???? ??? ??? ?????.
-            3. ???? ?? ???? ??, ??, ???? ???? ???.
-            4. ??? ???? ??? ?? ?? ?????.
-            5. ???? ?? ?? ?? ??? ?????.
-            6. ???? ??(#, ##, ###, *, -)? ???? ?? ?? ?? ???? ?????.
+        작성 기준:
+        1. 한국어로 작성하세요.
+        2. 업무 문서에 적합한 공식적인 문체를 사용하세요.
+        3. 문서 유형에 맞는 구조를 갖추어 작성하세요.
+        4. 불필요한 설명 없이 바로 사용할 수 있는 초안을 작성하세요.
+        5. 사용자가 입력한 조건을 최대한 반영하세요.
+        6. 필요한 경우 제목(#, ##, ###), 목록(*, -), 표 형식을 적절히 사용하세요.
 
-            ??? ??:
-            %s%s
+        문서 유형별 작성 지침:
+        %s%s
 
-            ???:
-            - ??: %s
-            - ?? ??: %s
-            - ?? ??: %s
-            - ?? ??: %s
-            - ?? ??: %s
-            - ??? ??/??: %s
-            """.formatted(
+        사용자 입력:
+        - 제목: %s
+        - 작성 목적: %s
+        - 대상 독자: %s
+        - 보고 대상: %s
+        - 상세 요청: %s
+        - 분량/형식: %s
+        """.formatted(
                 typeLabel,
                 typeInstruction,
                 referenceSection,
@@ -614,39 +594,39 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
             return "";
         }
 
-        // ????? ????? ????? ? ? ? ????.
+        // 프롬프트 길이가 과도하게 커지지 않도록 첨부 본문 길이를 제한한다.
         String limitedText = normalized.length() > MAX_REFERENCE_TEXT_PROMPT_LENGTH
                 ? normalized.substring(0, MAX_REFERENCE_TEXT_PROMPT_LENGTH)
                 : normalized;
 
         return """
 
-            [?? ?? ?? ??]
-            ?? ??? ???? ??? ???? ?? ??? ?????.
-            ? ??? ?? ????, ?? ??? ?? ??? ??? ??? ???.
+        [첨부 참고 자료 본문]
+        아래 내용은 사용자가 첨부한 참고 자료에서 추출한 본문입니다.
+        이 내용을 우선 참고하되, 필요한 경우 사용자의 입력 조건과 함께 종합해 주세요.
 
-            %s
-            """.formatted(limitedText);
+        %s
+        """.formatted(limitedText);
     }
 
     private String buildFallbackDraft(AssistantDraftRequestDto requestDto) {
         String typeLabel = switch (safe(requestDto.getType())) {
-            case "MINUTES" -> "???";
-            case "APPROVAL" -> "?? ???";
-            default -> "???";
+            case "MINUTES" -> "회의록";
+            case "APPROVAL" -> "결재 사유";
+            default -> "보고서";
         };
 
         return """
-                %s ?? ??? ????? ??? ? ?? ?????.
+            %s 초안 생성에 일시적인 문제가 발생했습니다.
 
-                ?? ?? ??? ???? ?? ?? ??? ??? ???.
+            아래 입력 내용을 기준으로 문서 초안을 다시 생성해 주세요.
 
-                ??: %s
-                ?? ??: %s
-                ?? ??: %s
-                ?? ??:
-                %s
-                """.formatted(
+            제목: %s
+            작성 목적: %s
+            대상 독자: %s
+            상세 요청:
+            %s
+            """.formatted(
                 typeLabel,
                 safe(requestDto.getTitle()),
                 safe(requestDto.getPurpose()),
@@ -695,33 +675,33 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
 
     private String buildRevisePrompt(AssistantReviseRequestDto requestDto) {
         String typeLabel = switch (safe(requestDto.getType())) {
-            case "MINUTES" -> "???";
-            case "APPROVAL" -> "?? ???";
-            default -> "???";
+            case "MINUTES" -> "회의록";
+            case "APPROVAL" -> "결재 사유";
+            default -> "보고서";
         };
 
         return """
-            ??? ?? ????? AI ?? ?? ?????.
+        당신은 사내 문서를 수정하는 AI 비서입니다.
 
-            ??? ?? %s ??? ???? ?? ??? ?? ?? ?????.
+        아래 기존 %s 문서를 사용자의 수정 요청에 맞게 다시 작성해 주세요.
 
-            ?? ??:
-            1. ???? ?????.
-            2. ?? ??? ?? ??? ?????.
-            3. ???? ?? ??? ?? ?????.
-            4. ???? ?? ???? ??, ??, ???? ???? ???.
-            5. ???? ?? ?? ??? ?? ??? ?????.
-            6. ???? ??(#, ##, ###, *, -)? ???? ?? ?? ?? ???? ?????.
+        수정 기준:
+        1. 한국어로 작성하세요.
+        2. 사용자의 수정 요청을 충실히 반영하세요.
+        3. 기존 문서의 핵심 내용은 유지하세요.
+        4. 문서 유형에 맞는 제목, 본문, 목록, 표 형식을 유지하세요.
+        5. 불필요한 설명 없이 수정된 문서만 작성하세요.
+        6. 필요한 경우 제목(#, ##, ###), 목록(*, -), 표 형식을 적절히 사용하세요.
 
-            ?? ??:
-            %s
+        문서 제목:
+        %s
 
-            ?? ??:
-            %s
+        기존 문서:
+        %s
 
-            ??? ?? ??:
-            %s
-            """.formatted(
+        사용자 수정 요청:
+        %s
+        """.formatted(
                 typeLabel,
                 safe(requestDto.getTitle()),
                 safe(requestDto.getCurrentContent()),
@@ -731,14 +711,14 @@ public class AiAssistantDraftServiceImpl implements AiAssistantDraftService {
 
     private String buildReviseFallback(AssistantReviseRequestDto requestDto) {
         return """
-            ?? ?? ??? ?? ??? ? ?? ?????.
-
-            ??? ?? ?? ?????.
-            ?? ? ?? ?? ??? ??? ???.
-
+            문서 수정 중 일시적인 문제가 발생했습니다.
+    
+            기존 문서 내용을 유지합니다.
+            잠시 후 다시 수정 요청을 시도해 주세요.
+    
             %s
             """.formatted(
-                safe(requestDto.getCurrentContent())
+                    safe(requestDto.getCurrentContent())
         );
     }
 

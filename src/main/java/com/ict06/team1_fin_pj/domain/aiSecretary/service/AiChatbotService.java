@@ -1,15 +1,16 @@
 /**
  * @FileName : AiChatbotService.java
- * @Description : 사용자 챗봇 질문 처리 서비스 인터페이스
+ * @Description : 사용자 챗봇 질문 처리, RAG 검색 결과 기반 답변 생성 및 retrieval trace 저장 담당
  * @Author : 송혜진
  * @Date : 2026. 04. 28
  * @Modification_History
  * @
  * @ 수정일         수정자        수정내용
  * @ ----------    ---------    ----------------------------------------
- * @ 2026.04.28    송혜진        최초 생성 (챗봇 질문 처리 메서드 정의)
- * @ 2026.05.12    송혜진        챗봇 세션 기반 질문/응답 처리 구조 반영
- * @ 2026.05.22    송혜진        RAG 기반 챗봇 응답 및 trace 저장 흐름에 맞춰 구현체 연동 기준 정리
+ * @ 2026.04.28    송혜진        최초 생성 (챗봇 질문 처리 및 AI 응답 메시지 저장)
+ * @ 2026.05.12    송혜진        챗봇 세션 기반 질문 처리 및 AI_LOG 저장 흐름 정리
+ * @ 2026.05.22    송혜진        RAG 검색 결과를 프롬프트에 반영하고 중복 threshold 후처리 제거
+ * @ 2026.05.22    송혜진        답변에 사용된 RAG chunk 기준으로 AI_RETRIEVAL_TRACE 저장 연동
  */
 
 package com.ict06.team1_fin_pj.domain.aiSecretary.service;

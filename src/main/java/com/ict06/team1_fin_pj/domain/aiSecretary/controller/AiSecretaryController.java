@@ -1,3 +1,24 @@
+/**
+ * @FileName : AiSecretaryController.java
+ * @Description : 사용자 AI 비서 및 챗봇 API 컨트롤러
+ *                - AI 비서 문서 초안 생성, 수정, 템플릿 생성 요청 처리
+ *                - 문장 다듬기 및 참고 자료 본문 추출 API 제공
+ *                - 사내 AI 챗봇 세션 생성, 질문/답변 처리
+ *                - 사용자 템플릿 요청 및 자료 등록 요청 처리
+ *                - AI 대화 세션 및 메시지 조회 기능 제공
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.12  송혜진       AI 비서/챗봇 세션 및 메시지 API 정리
+ * @ 2026.05.27  송혜진       챗봇 참고 문서 references 응답 구조 반영
+ * @ 2026.05.28  송혜진       참고 자료 본문 추출 및 문서 작성 API 보강
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.controller;
 
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.AiChatMessageCreateRequestDto;

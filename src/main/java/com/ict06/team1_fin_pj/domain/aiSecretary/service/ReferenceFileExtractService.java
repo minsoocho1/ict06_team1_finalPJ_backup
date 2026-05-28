@@ -1,3 +1,20 @@
+/**
+ * @FileName : ReferenceFileExtractService.java
+ * @Description : AI 비서 참고 자료 파일 본문 추출 Service
+ *                - 사용자가 첨부한 TXT/PDF/DOCX 파일의 본문 텍스트 추출
+ *                - Apache Tika 기반 파일 타입 감지 및 텍스트 파싱 처리
+ *                - 추출 텍스트 길이 제한 및 truncated 여부 반환
+ *                - AI 문서 작성 요청의 referenceText 반영을 위한 일회성 본문 추출 처리
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 05. 28
+ * @Modification_History
+ * @
+ * @ 수정일        수정자       수정내용
+ * @ ----------    ---------    ----------------------------------------
+ * @ 2026.05.28    송혜진       최초 생성
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.service;
 
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.ReferenceExtractResponseDto;
