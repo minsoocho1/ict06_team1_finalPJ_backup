@@ -1,30 +1,30 @@
 /**
  * @FileName : aiSecretaryApi.js
- * @Description : AI 비서 / AI 챗봇 세션 및 메시지 API
- * @Author : 송혜진
+ * @Description : AI ??쑴苑?/ AI 筌?ロ겦 ?紐꾨?獄?筌롫뗄?놅쭪? API
+ * @Author : ??レ굺筌?
  * @Date : 2026. 04. 28
  * @Modification_History
  * @
- * @ 수정일         수정자        수정내용
+ * @ ??륁젟??        ??륁젟??       ??륁젟??곸뒠
  * @ ----------    ---------    ----------------------------------------
- * @ 2026.04.28    송혜진        최초 생성 / BACKEND 연결
- * @ 2026.05.05    송혜진        문장 다듬기 API 추가
- * @ 2026.05.06    송혜진        AI 비서 리스트 추가 API 추가
- * @ 2026.05.07    송혜진        문서 유형 type 값을 REPORT / MINUTES / APPROVAL 기준으로 보정
- * @ 2026.05.07    송혜진        템플릿 요청 API + 조직 조회 API 추가
+ * @ 2026.04.28    ??レ굺筌?       筌ㅼ뮇????밴쉐 / BACKEND ?怨뚭퍙
+ * @ 2026.05.05    ??レ굺筌?       ?얜챷????삳쾳疫?API ?곕떽?
+ * @ 2026.05.06    ??レ굺筌?       AI ??쑴苑??귐딅뮞???곕떽? API ?곕떽?
+ * @ 2026.05.07    ??レ굺筌?       ?얜챷苑??醫륁굨 type 揶쏅???REPORT / MINUTES / APPROVAL 疫꿸퀣???곗쨮 癰귣똻??
+ * @ 2026.05.07    ??レ굺筌?       ??쀫탣???遺욧퍕 API + 鈺곌퀣彛?鈺곌퀬??API ?곕떽?
  */
 
 import axios from "axios";
 import { PATH } from 'src/constants/path';
 
-// AI 비서 전용 axios instance
+// AI ??쑴苑??袁⑹뒠 axios instance
 const api = axios.create({
   baseURL: PATH.API.BASE,
-  withCredentials: true, // CORS 상황에서 쿠키/인증 정보를 허용
+  withCredentials: true, // CORS ?怨뱀넺?癒?퐣 ?묒쥚沅??紐꾩쵄 ?類ｋ궖????됱뒠
 });
 
-// JWT 토큰 자동 첨부 ()
-// 로그인 성공 후 localStorage에 저장된 token을 꺼내 모든 AI 비서 API 요청에 Authorization Bearer 헤더로 붙임
+// JWT ?醫뤾쿃 ?癒?짗 筌ｂ뫀? ()
+// 嚥≪뮄????源껊궗 ??localStorage?????貫留?token???곗눖沅?筌뤴뫀諭?AI ??쑴苑?API ?遺욧퍕??Authorization Bearer ??삳쐭嚥??븐늿??
 api.interceptors.request.use((config) => {
   const accessToken = localStorage.getItem("accessToken");
 
@@ -41,15 +41,15 @@ api.interceptors.request.use((config) => {
 });
 
 
-// 백엔드 ApiResponse 구조 unwrap
-// response.data.data -> unwrapApiData(response)로 실제 data만 사용하기 위해
+// 獄쏄퉮肉??ApiResponse ?닌듼?unwrap
+// response.data.data -> unwrapApiData(response)嚥???쇱젫 data筌??????띾┛ ?袁る퉸
 export const unwrapApiData = (response) => {
   if (response?.data?.data !== undefined) return response.data.data;
   if (response?.data !== undefined) return response.data;
   return response;
 };
 
-/* 백엔드 응답 구조:
+/* 獄쏄퉮肉???臾먮뼗 ?닌듼?
  * {
  *   success: true,
  *   message: "...",
@@ -57,7 +57,7 @@ export const unwrapApiData = (response) => {
  * }
  */
 
-// 문서 유형을 백엔드/DB 기준 대문자로 보정
+// ?얜챷苑??醫륁굨??獄쏄퉮肉??DB 疫꿸퀣? ???얜챷?꾣에?癰귣똻??
 export const toApiDocumentType = (type) => {
   const normalized = String(type || "").trim().toUpperCase();
 
@@ -66,30 +66,30 @@ export const toApiDocumentType = (type) => {
   return "REPORT";
 };
 
-// 문서 유형 type이 들어가는 payload를 API 기준으로 보정
+// ?얜챷苑??醫륁굨 type????쇰선揶쎛??payload??API 疫꿸퀣???곗쨮 癰귣똻??
 const normalizeDocumentPayload = (payload = {}) => ({
   ...payload,
   type: toApiDocumentType(payload?.type),
 });
 
 // -----------------------------------------------------
-// 세션 관련 API
+// ?紐꾨??온??API
 // -----------------------------------------------------
 
 /**
- * 공통 세션 생성
+ * ?⑤벏???紐꾨???밴쉐
  *
- * 현재 주요 흐름:
- * - CHATBOT 세션은 getOrCreateChatbotSession 사용
- * - ASSISTANT 세션은 /assistant/draft 내부에서 백엔드가 생성
+ * ?袁⑹삺 雅뚯눘???癒?カ:
+ * - CHATBOT ?紐꾨?? getOrCreateChatbotSession ????
+ * - ASSISTANT ?紐꾨?? /assistant/draft ????癒?퐣 獄쏄퉮肉??? ??밴쉐
  *
- * 따라서 이 함수는 단독 테스트 또는 예비용에 가깝다.
+ * ?怨뺤뵬??????λ땾????ㅻ즴 ???뮞???癒?뮉 ??덊돩??밸퓠 揶쎛繹먯빖??
  */
 export const createSession = (payload) =>
   api.post("/ai-secretary/sessions", payload);
 
 
-// CHATBOT 최근 세션 조회 또는 생성
+// CHATBOT 筌ㅼ뮄???紐꾨?鈺곌퀬???癒?뮉 ??밴쉐
 export const getOrCreateChatbotSession = (empNo) =>
   api.post("/ai-secretary/chatbot/session", null, {
     params: {
@@ -97,7 +97,7 @@ export const getOrCreateChatbotSession = (empNo) =>
     },
   });
 
-// AI 비서 최근 작성 목록 조회
+// AI ??쑴苑?筌ㅼ뮄???臾믨쉐 筌뤴뫖以?鈺곌퀬??
 export const getAssistantSessionList = (empNo) =>
   api.get("/ai-secretary/sessions", {
     params: {
@@ -106,7 +106,7 @@ export const getAssistantSessionList = (empNo) =>
     },
   });
 
-// 공통 세션 목록 조회
+// ?⑤벏???紐꾨?筌뤴뫖以?鈺곌퀬??
 export const getSessionList = (empNo, sessionType) =>
   api.get("/ai-secretary/sessions", {
     params: {
@@ -115,44 +115,55 @@ export const getSessionList = (empNo, sessionType) =>
     },
   });
 
-// 세션 내 메시지 목록 조회 (챗봇 메시지 재조회/ 최근 작성 문서 클릭 시 ASSISTANT 세션 메시지 로딩)
+// ?紐꾨???筌롫뗄?놅쭪? 筌뤴뫖以?鈺곌퀬??(筌?ロ겦 筌롫뗄?놅쭪? ????? 筌ㅼ뮄???臾믨쉐 ?얜챷苑???????ASSISTANT ?紐꾨?筌롫뗄?놅쭪? 嚥≪뮆逾?
 export const getMessages = (sessionId) =>
   api.get(`/ai-secretary/sessions/${sessionId}/messages`);
 
-// 세션 내 메시지 저장
+// ?紐꾨???筌롫뗄?놅쭪? ????
 export const sendMessage = (sessionId, payload) =>
   api.post(`/ai-secretary/sessions/${sessionId}/messages`, payload);
 
 // -----------------------------------------------------
-// 챗봇 API
+// 筌?ロ겦 API
 // -----------------------------------------------------
 
-// Gemini 기반 챗봇 질문
-// USER 메시지 저장 → Gemini 호출 → ASSISTANT 메시지 저장 → AI_LOG 저장
+// Gemini 疫꿸퀡而?筌?ロ겦 筌욌뜄揆
+// USER 筌롫뗄?놅쭪? ??????Gemini ?紐꾪뀱 ??ASSISTANT 筌롫뗄?놅쭪? ??????AI_LOG ????
 export const askChatbot = (payload) =>
   api.post("/ai-secretary/chatbot/ask", payload);
 
 // -----------------------------------------------------
-// 문장 다듬기 API
+// ?얜챷????삳쾳疫?API
 // -----------------------------------------------------
 
-// 문장 다듬기 프롬프트 실행
-// 입력 문장과 mode 전달 → Gemini 문장 다듬기 → fallback 처리 → AI_LOG 저장
+// ?얜챷????삳쾳疫??袁⑨세?袁る뱜 ??쎈뻬
+// ??낆젾 ?얜챷?ｆ?mode ?袁⑤뼎 ??Gemini ?얜챷????삳쾳疫???fallback 筌ｌ꼶????AI_LOG ????
 export const correctText = (payload) =>
   api.post("/ai-secretary/correction", payload);
 
 // -----------------------------------------------------
-// AI 비서 문서 작성 API
+// AI ??쑴苑??얜챷苑??臾믨쉐 API
 // -----------------------------------------------------
 
-// AI 비서 문서 초안 생성
+// AI ??쑴苑??얜챷苑??λ뜆釉???밴쉐
 export const createAssistantDraft = (payload) =>
   api.post(
     "/ai-secretary/assistant/draft",
     normalizeDocumentPayload(payload)
   );
 
-// AI 비서 문서 추가 수정 (WriterScreen에서 “더 간결하게”, “표로 정리해줘” 등 추가 수정 요청)
+// 참고 자료 첨부 파일을 서버에 보내 본문 텍스트만 추출한다.
+export const extractReferenceText = (file) => {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return api.post("/ai-secretary/assistant/reference/extract", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+};
+
 export const reviseAssistantDraft = (payload) =>
   api.post(
     "/ai-secretary/assistant/revise",
@@ -160,17 +171,17 @@ export const reviseAssistantDraft = (payload) =>
   );
 
 // -----------------------------------------------------
-// AI 비서 > 템플릿 요청 API
+// AI ??쑴苑?> ??쀫탣???遺욧퍕 API
 // -----------------------------------------------------
 
-// 추천 템플릿 목록 추가 요청 저장
+// ?곕뗄荑???쀫탣??筌뤴뫖以??곕떽? ?遺욧퍕 ????
 export const createTemplateRequest = (payload) =>
   api.post(
     "/ai-secretary/template-request",
     normalizeDocumentPayload(payload)
   );
 
-// 내 추천 템플릿 추가 요청 목록 조회
+// ???곕뗄荑???쀫탣???곕떽? ?遺욧퍕 筌뤴뫖以?鈺곌퀬??
 export const getMyTemplateRequests = (empNo) =>
   api.get("/ai-secretary/template-request/my", {
     params: {
@@ -178,7 +189,7 @@ export const getMyTemplateRequests = (empNo) =>
     },
   });
 
-// AI 템플릿 생성
+// AI ??쀫탣????밴쉐
 export const createAssistantTemplate = (payload) =>
   api.post("/ai-secretary/assistant/template", {
     ...payload,
@@ -186,7 +197,7 @@ export const createAssistantTemplate = (payload) =>
   });
 
 // -----------------------------------------------------
-// 조직 조회 API
+// 鈺곌퀣彛?鈺곌퀬??API
 // -----------------------------------------------------
 
 export const getDepartmentTree = () =>
@@ -200,7 +211,7 @@ export const getEmployeesByDepartment = (deptId) =>
   });
 
 // -----------------------------------------------------
-// 사용자 자료 등록 요청 API
+// ??????癒?┷ ?源낆쨯 ?遺욧퍕 API
 // -----------------------------------------------------
 
 export const createKnowledgeRequest = (payload) =>

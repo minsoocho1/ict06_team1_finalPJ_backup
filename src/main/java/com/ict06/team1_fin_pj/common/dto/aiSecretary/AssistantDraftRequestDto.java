@@ -14,7 +14,7 @@ public class AssistantDraftRequestDto {
     private String empNo;
 
     @NotBlank(message = "문서 유형은 필수입니다.")
-    private String type; // REPORT / MINUTES / approval
+    private String type; // REPORT / MINUTES / APPROVAL
 
     @NotBlank(message = "제목은 필수입니다.")
     private String title;
@@ -30,4 +30,7 @@ public class AssistantDraftRequestDto {
     private String amount;
 
     private String tone;
+
+    // 참고 자료 첨부 파일에서 추출한 1회성 본문 텍스트
+    private String referenceText;
 }

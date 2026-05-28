@@ -1,16 +1,16 @@
 /**
  * @FileName : AiSecretaryServiceImpl.java
- * @Description : AI 비서/챗봇 세션 및 메시지 관리 서비스 구현체
- * @Author : 송혜진
+ * @Description : AI 鍮꾩꽌/梨쀫큸 ?몄뀡 諛?硫붿떆吏 愿由??쒕퉬??援ы쁽泥?
+ * @Author : ?≫삙吏?
  * @Date : 2026. 04. 28
  * @Modification_History
  * @
- * @ 수정일         수정자        수정내용
+ * @ ?섏젙??        ?섏젙??       ?섏젙?댁슜
  * @ ----------    ---------    ----------------------------------------
- * @ 2026.04.28    송혜진        최초 생성 (세션 생성 및 메시지 저장, 목록 조회 메서드 추가)
- * @ 2026.05.05    송혜진        CHATBOT 최근 48시간 내 단일 세션 조회 또는 생성 메서드 추가
- * @ 2026.05.12    송혜진        ASSISTANT 세션 장기 유지 및 최근 작성 목록 조회 기준 반영
- * @ 2026.05.22    송혜진        챗봇 세션 소유자 empNo 기반 RAG 검색 연동 흐름 정리
+ * @ 2026.04.28    ?≫삙吏?       理쒖큹 ?앹꽦 (?몄뀡 ?앹꽦 諛?硫붿떆吏 ??? 紐⑸줉 議고쉶 硫붿꽌??異붽?)
+ * @ 2026.05.05    ?≫삙吏?       CHATBOT 理쒓렐 48?쒓컙 ???⑥씪 ?몄뀡 議고쉶 ?먮뒗 ?앹꽦 硫붿꽌??異붽?
+ * @ 2026.05.12    ?≫삙吏?       ASSISTANT ?몄뀡 ?κ린 ?좎? 諛?理쒓렐 ?묒꽦 紐⑸줉 議고쉶 湲곗? 諛섏쁺
+ * @ 2026.05.22    ?≫삙吏?       梨쀫큸 ?몄뀡 ?뚯쑀??empNo 湲곕컲 RAG 寃???곕룞 ?먮쫫 ?뺣━
  */
 
 package com.ict06.team1_fin_pj.domain.aiSecretary.service;
@@ -50,7 +50,7 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
     private final AiRetrievalTraceRepository aiRetrievalTraceRepository;
     private final EmpRepository empRepository;
 
-    // 공통 세션 생성 진입점
+    // 怨듯넻 ?몄뀡 ?앹꽦 吏꾩엯??
     @Override
     @Transactional
     public AiChatSessionEntity createSession(String empNo, SessionType sessionType, String title) {
@@ -62,13 +62,13 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
         return createAssistantSession(empNo, title);
     }
 
-    // ASSISTANT 세션 생성
+    // ASSISTANT ?몄뀡 ?앹꽦
     @Override
     @Transactional
     public AiChatSessionEntity createAssistantSession(String empNo, String title) {
 
         EmpEntity employee = empRepository.findByEmpNo(empNo)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원입니다. empNo=" + empNo));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 ?ъ썝?낅땲?? empNo=" + empNo));
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -82,7 +82,7 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
         return aiChatSessionRepository.save(session);
     }
 
-    // CHATBOT 최근 48시간 내 단일 세션 조회 또는 생성
+    // CHATBOT 理쒓렐 48?쒓컙 ???⑥씪 ?몄뀡 議고쉶 ?먮뒗 ?앹꽦
     @Override
     @Transactional
     public AiChatSessionEntity getOrCreateChatbotSession(String empNo) {
@@ -95,14 +95,14 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
                         SessionType.CHATBOT,
                         cutoff
                 )
-                .orElseGet(() -> createNewChatbotSession(empNo)); // orElseGet() 값이 비어 있을 대만 대체할 값 생성
+                .orElseGet(() -> createNewChatbotSession(empNo)); // orElseGet() 媛믪씠 鍮꾩뼱 ?덉쓣 ?留??泥댄븷 媛??앹꽦
     }
 
-    // CHATBOT 신규 세션 생성
+    // CHATBOT ?좉퇋 ?몄뀡 ?앹꽦
     private AiChatSessionEntity createNewChatbotSession(String empNo) {
 
         EmpEntity employee = empRepository.findByEmpNo(empNo)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 사원입니다. empNo=" + empNo));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 ?ъ썝?낅땲?? empNo=" + empNo));
 
         LocalDateTime now = LocalDateTime.now();
 
@@ -116,7 +116,7 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
         return aiChatSessionRepository.save(session);
     }
 
-    // 세션 목록 조회
+    // ?몄뀡 紐⑸줉 議고쉶
     @Override
     public List<AiChatSessionEntity> getSessionList(String empNo, SessionType sessionType) {
 
@@ -131,7 +131,7 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
                 );
     }
 
-    // 메시지 목록 조회
+    // 硫붿떆吏 紐⑸줉 議고쉶
     @Override
     public List<AiChatMessageEntity> getMessageList(Integer sessionId) {
 
@@ -198,7 +198,7 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
             referencesByDocId.computeIfAbsent(docId, ignored ->
                     ChatbotReferenceDto.builder()
                             .docId(docId)
-                            .title(safe(trace.getDocument().getTitle(), "참고 문서 " + docId))
+                            .title(safe(trace.getDocument().getTitle(), "李멸퀬 臾몄꽌 " + docId))
                             .url(normalizeReferenceUrl(trace.getDocument().getFilePath()))
                             .build()
             );
@@ -211,13 +211,13 @@ public class AiSecretaryServiceImpl implements AiSecretaryService {
         return result;
     }
 
-    // 메시지 저장
+    // 硫붿떆吏 ???
     @Override
     @Transactional
     public AiChatMessageEntity saveMessage(Integer sessionId, AiChatMessageEntity message) {
 
         AiChatSessionEntity session = aiChatSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 세션입니다. sessionId=" + sessionId));
+                .orElseThrow(() -> new IllegalArgumentException("議댁옱?섏? ?딅뒗 ?몄뀡?낅땲?? sessionId=" + sessionId));
 
         Integer lastSeqNo = aiChatMessageRepository
                 .findTopBySessionSessionIdOrderBySeqNoDesc(sessionId)
