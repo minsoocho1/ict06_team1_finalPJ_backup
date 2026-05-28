@@ -89,31 +89,136 @@ const mapSessionToRecentDoc = (session) => ({
   updatedAt: session.lastMessageAt || session.updatedAt || session.createdAt,
 });
 
+const normalizeMessageRole = (role) =>
+  String(role || "").trim().toUpperCase();
+
+const isAssistantMessage = (message) => {
+  const role = normalizeMessageRole(message?.role);
+  return role === "ASSISTANT" || role === "AI";
+};
+
+const isUserMessage = (message) =>
+  normalizeMessageRole(message?.role) === "USER";
+
+const normalizeVersionRequestText = (requestText) => {
+  const raw = String(requestText || "").trim();
+
+  if (!raw) {
+    return "요청 내용 없음";
+  }
+
+  // 신규 저장 정책으로 들어온 짧은 요청문은 그대로 사용한다.
+  if (!raw.includes("??") && !raw.includes("\n")) {
+    return raw;
+  }
+
+  const lines = raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length === 0) {
+    return "요청 내용 없음";
+  }
+
+  const excludedTokens = new Set([
+    "REPORT",
+    "MINUTES",
+    "APPROVAL",
+    "TEMPLATE",
+    "BUSINESS",
+  ]);
+
+  const findNaturalRequest = [...lines].reverse().find((line) => {
+    const colonIndex = line.lastIndexOf(":");
+    if (colonIndex < 0) {
+      return false;
+    }
+
+    const tail = line.slice(colonIndex + 1).trim();
+    if (!tail || excludedTokens.has(tail.toUpperCase())) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (findNaturalRequest) {
+    return findNaturalRequest.slice(findNaturalRequest.lastIndexOf(":") + 1).trim();
+  }
+
+  const possibleTitleLine = lines.find((line) => {
+    const colonIndex = line.lastIndexOf(":");
+    const tail = colonIndex >= 0 ? line.slice(colonIndex + 1).trim() : line;
+
+    if (!tail || excludedTokens.has(tail.toUpperCase())) {
+      return false;
+    }
+
+    return tail.length >= 4;
+  });
+
+  if (possibleTitleLine) {
+    const colonIndex = possibleTitleLine.lastIndexOf(":");
+    const titleCandidate =
+      colonIndex >= 0
+        ? possibleTitleLine.slice(colonIndex + 1).trim()
+        : possibleTitleLine.trim();
+
+    if (titleCandidate) {
+      return `${titleCandidate} 작성 요청`;
+    }
+  }
+
+  return "이전 요청 내용";
+};
+
 const buildVersionsFromMessages = (messages) => {
-  const assistantMessages = (Array.isArray(messages) ? messages : [])
-    .filter((message) =>
-      String(message?.role || "").trim().toUpperCase() === "ASSISTANT"
-    )
+  const sortedMessages = (Array.isArray(messages) ? messages : [])
+    .slice()
     .sort((left, right) => (left?.seqNo || 0) - (right?.seqNo || 0));
 
-  return assistantMessages.map((message, index) => {
-    const versionNumber = index + 1;
+  const versions = [];
+  let lastUserMessage = null;
 
-    return {
+  sortedMessages.forEach((message) => {
+    if (isUserMessage(message)) {
+      lastUserMessage = message;
+      return;
+    }
+
+    if (!isAssistantMessage(message)) {
+      return;
+    }
+
+    const versionNumber = versions.length + 1;
+    const requestText = String(lastUserMessage?.content || "").trim();
+    const responseText = String(message?.content || "").trim();
+
+    versions.push({
       id: `v${versionNumber}-${message?.messageId ?? versionNumber}`,
+      versionNo: versionNumber,
+      requestMessageId: lastUserMessage?.messageId ?? null,
+      requestText,
+      displayRequestText: normalizeVersionRequestText(requestText),
+      responseMessageId: message?.messageId ?? null,
+      responseText,
       messageId: message?.messageId ?? null,
       label: `V${versionNumber}`,
       title: `V${versionNumber}`,
-      summary: message?.modelName
-        ? `${message.modelName} 응답`
-        : "DB에서 불러온 버전입니다.",
-      content: message?.content || "",
+      summary: requestText || "요청 사항이 없습니다.",
+      content: responseText,
       createdAt: message?.createdAt || null,
       seqNo: message?.seqNo ?? versionNumber,
       modelName: message?.modelName || "",
-      current: index === assistantMessages.length - 1,
-    };
+      current: false,
+    });
   });
+
+  return versions.map((version, index) => ({
+    ...version,
+    current: index === versions.length - 1,
+  }));
 };
 
 const buildReferenceTargets = (referenceFiles, referenceMemo) => {
@@ -135,6 +240,28 @@ const buildReferenceTargets = (referenceFiles, referenceMemo) => {
   }
 
   return targets;
+};
+
+const buildDraftRequestSummary = (formData, formType) => {
+  const title = String(formData?.title || "").trim();
+  if (title) {
+    return `${title} 작성 요청`;
+  }
+
+  const purpose = String(formData?.purpose || "").replace(/\s+/g, " ").trim();
+  if (purpose) {
+    return purpose;
+  }
+
+  const detail = String(formData?.detail || "").replace(/\s+/g, " ").trim();
+  if (detail) {
+    return detail.length > 120 ? `${detail.slice(0, 120).trim()}...` : detail;
+  }
+
+  const normalizedType = normalizeFormType(formType || "REPORT");
+  if (normalizedType === "MINUTES") return "회의록 작성 요청";
+  if (normalizedType === "APPROVAL") return "결재 사유 작성 요청";
+  return "AI 문서 초안 작성 요청";
 };
 
 function normalizeTemplateDeptLabel(value) {
@@ -262,6 +389,10 @@ const buildTemplateSeedFromCard = (card) => {
       ? card.templateSeed.referenceFiles
       : [],
     referenceMemo: card?.templateSeed?.referenceMemo || "",
+    referenceText: card?.templateSeed?.referenceText || "",
+    referenceExtractStatus: card?.templateSeed?.referenceExtractStatus || "idle",
+    referenceExtractMessage: card?.templateSeed?.referenceExtractMessage || "",
+    referenceExtractTruncated: Boolean(card?.templateSeed?.referenceExtractTruncated),
     organizationSeed: card?.templateSeed?.organizationSeed || organizationSeed,
     deptText:
       card?.templateSeed?.deptText ||
@@ -530,11 +661,9 @@ export default function AiSecretary({ userInfo }) {
 
         const lastAssistantMessage = [...messages]
           .reverse()
-          .find((message) => message.role === "ASSISTANT");
+          .find((message) => isAssistantMessage(message));
 
-        const firstUserMessage = messages.find(
-          (message) => message.role === "USER"
-        );
+        const firstUserMessage = messages.find((message) => isUserMessage(message));
 
         if (!lastAssistantMessage) {
           return;
@@ -558,7 +687,7 @@ export default function AiSecretary({ userInfo }) {
  * 왼쪽 AI 대화 영역의 DB 메시지를 그대로 복원한다.
            */
           chat: messages.map((message) => ({
-            role: message.role === "USER" ? "user" : "ai",
+            role: isUserMessage(message) ? "user" : "ai",
             text: message.content,
             time: "방금",
           })),
@@ -613,6 +742,8 @@ export default function AiSecretary({ userInfo }) {
     setDraftError("");
 
     try {
+      // 기존 파일명/메모 기반 참고 정보는 유지하고,
+      // 추가로 추출 본문 referenceText를 함께 넘겨 1회성 참고 자료로 사용한다.
       const response = await createAssistantDraft({
         empNo: String(empNo),
         type: currentFormType,
@@ -629,9 +760,14 @@ export default function AiSecretary({ userInfo }) {
         detail: formData.detail,
         amount: formData.amount,
         tone: "BUSINESS",
+        referenceText: formData.referenceText || "",
       });
 
       const data = unwrapApiData(response);
+      const draftRequestSummary = buildDraftRequestSummary(
+        formData,
+        currentFormType
+      );
 
       setWriterState((prev) => ({
         ...prev,
@@ -663,6 +799,13 @@ export default function AiSecretary({ userInfo }) {
         // 최초 생성 버전
         // content를 바탕으로 v1 미리보기/복원 정상 동작
         versions: buildVersionsFromMessages([
+          {
+            messageId: data.userMessageId,
+            role: "USER",
+            content: draftRequestSummary,
+            seqNo: 0,
+            createdAt: new Date().toISOString(),
+          },
           {
             messageId: data.aiMessageId,
             role: "ASSISTANT",
@@ -836,6 +979,7 @@ export default function AiSecretary({ userInfo }) {
             const nextTemplateSeed =
               card?.templateSeed || buildTemplateSeedFromCard(card);
 
+            // 템플릿 진입 시에도 참고 자료 관련 상태 모양은 유지해 화면 구조를 맞춘다.
             setTemplateSeed(nextTemplateSeed);
             setFormData((prev) => ({
               ...prev,
@@ -851,6 +995,14 @@ export default function AiSecretary({ userInfo }) {
                 ? nextTemplateSeed.referenceFiles
                 : [],
               referenceMemo: nextTemplateSeed.referenceMemo || "",
+              referenceText: nextTemplateSeed.referenceText || "",
+              referenceExtractStatus:
+                nextTemplateSeed.referenceExtractStatus || "idle",
+              referenceExtractMessage:
+                nextTemplateSeed.referenceExtractMessage || "",
+              referenceExtractTruncated: Boolean(
+                nextTemplateSeed.referenceExtractTruncated
+              ),
             }));
 
             goAssistantForm(inferredType, { keepTemplateSeed: true });
