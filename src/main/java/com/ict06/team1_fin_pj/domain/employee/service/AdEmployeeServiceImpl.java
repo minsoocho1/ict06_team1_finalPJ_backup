@@ -28,7 +28,10 @@ import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /*
  * 인사관리 서비스 구현 클래스
@@ -668,5 +671,89 @@ public class AdEmployeeServiceImpl implements AdEmployeeService {
 
         // DB에는 실제 파일 경로가 아니라 웹에서 접근할 수 있는 경로를 저장한다.
         return "/employee/uploads/" + folderName + "/" + savedFileName;
+    }
+
+    @Override
+    public EmployeeStatisticsDto getEmployeeStatistics() {
+
+        /*
+         * 재직 상태 통계
+         */
+        long activeCount =
+                adEmployeeRepository.countByStatusAndIsDeleted("재직", "N");
+
+        long leaveCount =
+                adEmployeeRepository.countByStatusAndIsDeleted("휴직", "N");
+
+        long resignCount =
+                adEmployeeRepository.countByStatusAndIsDeleted("퇴사", "N");
+
+        /*
+         * 권한 상태 통계
+         */
+        long adminCount =
+                adEmployeeRepository.countByRole_RoleIdAndIsDeleted(1, "N");
+
+        long leaderCount =
+                adEmployeeRepository.countByRole_RoleIdAndIsDeleted(2, "N");
+
+        long totalCount =
+                adEmployeeRepository.count();
+
+        long userCount =
+                totalCount - adminCount - leaderCount;
+
+        /*
+         * 부서별 인원 통계
+         */
+        Map<String, Long> departmentStatistics =
+                adEmployeeRepository.countEmployeesByDepartment()
+                        .stream()
+                        .collect(
+                                Collectors.toMap(
+                                        row -> (String) row[0],
+                                        row -> (Long) row[1],
+                                        (a, b) -> a,
+                                        LinkedHashMap::new
+                                )
+                        );
+
+        /*
+         * 직급별 인원 통계
+         */
+        Map<String, Long> positionStatistics =
+                adEmployeeRepository.countEmployeesByPosition()
+                        .stream()
+                        .collect(
+                                Collectors.toMap(
+                                        row -> (String) row[0],
+                                        row -> (Long) row[1],
+                                        (a, b) -> a,
+                                        LinkedHashMap::new
+                                )
+                        );
+
+        /*
+         * DTO 반환
+         */
+        return EmployeeStatisticsDto.builder()
+
+                // 재직 상태
+                .activeCount(activeCount)
+                .leaveCount(leaveCount)
+                .resignCount(resignCount)
+
+                // 권한 상태
+                .adminCount(adminCount)
+                .leaderCount(leaderCount)
+                .userCount(userCount)
+
+                // 부서별 인원 통계
+                .departmentStatistics(departmentStatistics)
+
+                // 직급별 인원 통계
+                .positionStatistics(positionStatistics)
+
+                .build();
     }
 }
