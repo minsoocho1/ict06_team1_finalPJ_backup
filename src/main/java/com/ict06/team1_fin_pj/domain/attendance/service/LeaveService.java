@@ -6,6 +6,8 @@ import com.ict06.team1_fin_pj.common.dto.attendance.AdLeaveStatusDTO;
 
 import org.springframework.data.domain.Page;
 
+import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.util.List;
 
 // 연차 현황 Service 인터페이스
@@ -79,6 +81,17 @@ public interface LeaveService {
             String keyword,
             Integer deptId,
             String sortType
+    );
+
+    /**
+     * 휴가 신청 기간에서 실제 연차 차감 대상 일수를 계산한다.
+     *
+     * 토요일, 일요일, HOLIDAY 테이블에 등록된 활성 공휴일은 차감 일수에서 제외한다.
+     * 전자결재 부재 일정 승인 시에도 같은 기준을 사용해 연차 차감 기준을 통일한다.
+     */
+    BigDecimal calculateLeaveDaysExcludingHoliday(
+            LocalDate startDate,
+            LocalDate endDate
     );
 
     /**
