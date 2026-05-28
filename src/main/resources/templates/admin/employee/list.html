@@ -10,6 +10,7 @@
     - 사원 목록 검색 조건에서 본부/팀을 2단계로 선택한다.
     - 화면 동작 JS는 /static/js/employee/list.js 로 분리했다.
     - 조직도 탭 동작 JS는 /static/js/employee/org.js 로 분리했다.
+    - 통계 탭은 관리자 인사 통계 데이터를 Chart.js로 시각화한다.
 -->
 <head th:include="/admin/common/head.html :: common_header">
     <title id="page_title">사원 관리</title>
@@ -168,6 +169,54 @@
         padding: 24px 0;
         text-align: center;
     }
+
+    /*
+     * 통계 탭 전용 스타일
+     *
+     * 통계 탭은 카드 내부에 요약 수치와 원형 차트를 함께 보여준다.
+     * 기존 Bootstrap/AdminLTE card 스타일을 유지하면서 차트 크기만 보정한다.
+     */
+    .statistics-card {
+        min-height: 320px;
+    }
+
+    .statistics-summary p {
+        font-size: 15px;
+    }
+
+    .statistics-chart-box {
+        width: 240px;
+        height: 240px;
+        flex-shrink: 0;
+    }
+
+    @media (max-width: 768px) {
+        .statistics-card .card-body > .d-flex {
+            flex-direction: column;
+            align-items: flex-start !important;
+            gap: 16px;
+        }
+
+        .statistics-chart-box {
+            width: 100%;
+            max-width: 260px;
+            height: 240px;
+            margin: 0 auto;
+        }
+    }
+
+    /*
+     * 2행 통계 차트 영역
+     *
+     * bar chart와 doughnut chart 높이를 고정해서
+     * 카드 높이가 깨지지 않도록 한다.
+     */
+    .statistics-large-chart-box {
+        position: relative;
+        width: 100%;
+        height: 320px;
+    }
+
 </style>
 
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
@@ -225,6 +274,20 @@
                                 aria-controls="employee-org-pane"
                                 aria-selected="false">
                             조직도
+                        </button>
+                    </li>
+
+                    <!-- 통계 탭 -->
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link"
+                                id="employee-statistics-tab"
+                                data-bs-toggle="tab"
+                                data-bs-target="#employee-statistics-pane"
+                                type="button"
+                                role="tab"
+                                aria-controls="employee-statistics-pane"
+                                aria-selected="false">
+                            통계
                         </button>
                     </li>
                 </ul>
@@ -594,6 +657,138 @@
                         </div>
                     </div>
 
+                    <!-- 통계 탭 -->
+                    <div class="tab-pane fade"
+                         id="employee-statistics-pane"
+                         role="tabpanel"
+                         aria-labelledby="employee-statistics-tab">
+
+                        <!-- ================================================= -->
+                        <!-- 1행 통계 -->
+                        <!-- ================================================= -->
+                        <div class="row g-4">
+
+                            <!-- 재직 상태 통계 카드 -->
+                            <div class="col-lg-6">
+                                <div class="card statistics-card">
+                                    <div class="card-header">
+                                        <strong>재직 상태 현황</strong>
+                                        <span class="text-muted ms-2">전체 사원의 재직 상태를 확인합니다</span>
+                                    </div>
+
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+
+                                            <!-- 상태 요약 수치 -->
+                                            <div class="statistics-summary">
+                                                <p class="mb-3">
+                                                    재직 :
+                                                    <strong th:text="${statistics.activeCount}">0</strong>명
+                                                </p>
+
+                                                <p class="mb-3">
+                                                    휴직 :
+                                                    <strong th:text="${statistics.leaveCount}">0</strong>명
+                                                </p>
+
+                                                <p class="mb-3">
+                                                    퇴사 :
+                                                    <strong th:text="${statistics.resignCount}">0</strong>명
+                                                </p>
+                                            </div>
+
+                                            <!-- 재직 상태 원형 차트 -->
+                                            <div class="statistics-chart-box">
+                                                <canvas id="employmentChart"></canvas>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 권한 통계 카드 -->
+                            <div class="col-lg-6">
+                                <div class="card statistics-card">
+                                    <div class="card-header">
+                                        <strong>권한 현황</strong>
+                                        <span class="text-muted ms-2">관리자/팀장/사용자 권한 비율을 확인합니다</span>
+                                    </div>
+
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-center">
+
+                                            <!-- 권한 요약 수치 -->
+                                            <div class="statistics-summary">
+                                                <p class="mb-3">
+                                                    관리자 :
+                                                    <strong th:text="${statistics.adminCount}">0</strong>명
+                                                </p>
+
+                                                <p class="mb-3">
+                                                    팀장 :
+                                                    <strong th:text="${statistics.leaderCount}">0</strong>명
+                                                </p>
+
+                                                <p class="mb-3">
+                                                    사용자 :
+                                                    <strong th:text="${statistics.userCount}">0</strong>명
+                                                </p>
+                                            </div>
+
+                                            <!-- 권한 현황 원형 차트 -->
+                                            <div class="statistics-chart-box">
+                                                <canvas id="roleChart"></canvas>
+                                            </div>
+
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                        <!-- ================================================= -->
+                        <!-- 2행 통계 -->
+                        <!-- ================================================= -->
+                        <div class="row g-4 mt-1">
+
+                            <!-- 부서별 인원 현황 -->
+                            <div class="col-lg-6">
+                                <div class="card statistics-card">
+                                    <div class="card-header">
+                                        <strong>부서별 인원 현황</strong>
+                                        <span class="text-muted ms-2">부서별 인원 분포를 확인합니다</span>
+                                    </div>
+
+                                    <div class="card-body">
+                                        <div class="statistics-large-chart-box">
+                                            <canvas id="departmentChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 직급별 인원 현황 -->
+                            <div class="col-lg-6">
+                                <div class="card statistics-card">
+                                    <div class="card-header">
+                                        <strong>직급별 인원 현황</strong>
+                                        <span class="text-muted ms-2">직급별 인원 비율을 확인합니다</span>
+                                    </div>
+
+                                    <div class="card-body">
+                                        <div class="statistics-large-chart-box">
+                                            <canvas id="positionChart"></canvas>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+
+                    </div>
+
                 </div>
 
             </div>
@@ -612,6 +807,161 @@
 
 <!-- 조직도 탭 화면 전용 JS -->
 <script th:src="@{/js/employee/org.js}"></script>
+
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<!-- 통계 탭 화면 전용 Chart.js -->
+<script th:inline="javascript">
+    /*
+     * Controller에서 전달한 통계 데이터
+     *
+     * statistics 객체는 AdEmployeeController에서
+     * model.addAttribute("statistics", ...) 형태로 전달되어야 한다.
+     */
+    const statistics = [[${statistics}]];
+
+    /*
+     * 차트 생성 함수
+     *
+     * 통계 데이터가 아직 전달되지 않았거나,
+     * 통계 탭의 canvas가 없는 경우에도 화면이 깨지지 않도록 방어한다.
+     */
+    document.addEventListener("DOMContentLoaded", function () {
+        if (!statistics) {
+            return;
+        }
+
+        const employmentCanvas = document.getElementById("employmentChart");
+        const roleCanvas = document.getElementById("roleChart");
+        const departmentCanvas = document.getElementById("departmentChart");
+        const positionCanvas = document.getElementById("positionChart");
+
+        /*
+         * 재직 상태 원형 차트
+         */
+        if (employmentCanvas) {
+            new Chart(employmentCanvas, {
+                type: "doughnut",
+                data: {
+                    labels: ["재직", "휴직", "퇴사"],
+                    datasets: [{
+                        data: [
+                            statistics.activeCount,
+                            statistics.leaveCount,
+                            statistics.resignCount
+                        ],
+                        backgroundColor: ["#2eb85c", "#f9b115", "#6c757d"]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: "bottom"
+                        }
+                    }
+                }
+            });
+        }
+
+        /*
+         * 권한 현황 원형 차트
+         */
+        if (roleCanvas) {
+            new Chart(roleCanvas, {
+                type: "doughnut",
+                data: {
+                    labels: ["관리자", "팀장", "사용자"],
+                    datasets: [{
+                        data: [
+                            statistics.adminCount,
+                            statistics.leaderCount,
+                            statistics.userCount
+                        ],
+                        backgroundColor: ["#321fdb", "#3399ff", "#ced2d8"]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: "bottom"
+                        }
+                    }
+                }
+            });
+        }
+
+        /*
+         * 부서별 인원 차트
+         */
+        if (departmentCanvas && statistics.departmentStatistics) {
+            new Chart(departmentCanvas, {
+                type: "bar",
+                data: {
+                    labels: Object.keys(statistics.departmentStatistics),
+                    datasets: [{
+                        label: "부서별 인원 수",
+                        data: Object.values(statistics.departmentStatistics),
+                        backgroundColor: "#3399ff"
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        /*
+         * 직급별 인원 차트
+         */
+        if (positionCanvas && statistics.positionStatistics) {
+            new Chart(positionCanvas, {
+                type: "doughnut",
+                data: {
+                    labels: Object.keys(statistics.positionStatistics),
+                    datasets: [{
+                        data: Object.values(statistics.positionStatistics),
+                        backgroundColor: [
+                            "#321fdb",
+                            "#3399ff",
+                            "#2eb85c",
+                            "#f9b115",
+                            "#e55353",
+                            "#6c757d"
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: "bottom"
+                        }
+                    }
+                }
+            });
+        }
+    });
+</script>
 
 </body>
 </html>

@@ -208,4 +208,54 @@ public interface AdEmployeeRepository extends JpaRepository<EmpEntity, String> {
 
     // 수정할 때 계좌번호 중복 확인
     boolean existsByAccountNoAndEmpNoNot(String accountNo, String empNo);
+
+    /*
+     * 상태별 사원 수 조회
+     */
+    long countByStatusAndIsDeleted(String status, String isDeleted);
+
+    /*
+     * 권한별 사원 수 조회
+     */
+    long countByRole_RoleIdAndIsDeleted(Integer roleId, String isDeleted);
+
+    /*
+     * 부서별 인원 수 조회
+     *
+     * 반환 예:
+     * [
+     *   [개발팀, 10],
+     *   [인사팀, 5]
+     * ]
+     */
+    @Query("""
+    select d.deptName, count(e)
+    from EmpEntity e
+    join e.department d
+    where e.isDeleted = 'N'
+    group by d.deptName
+    order by count(e) desc
+""")
+    List<Object[]> countEmployeesByDepartment();
+
+    /*
+     * 직급별 인원 수 조회
+     *
+     * 반환 예:
+     * [
+     *   [사원, 10],
+     *   [대리, 5]
+     * ]
+     */
+    @Query("""
+    select p.positionName, count(e)
+    from EmpEntity e
+    join e.position p
+    where e.isDeleted = 'N'
+    group by p.positionName, p.positionId
+    order by p.positionId asc
+""")
+    List<Object[]> countEmployeesByPosition();
+
+
 }
