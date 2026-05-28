@@ -629,6 +629,16 @@ document.addEventListener("DOMContentLoaded", function () {
     });
   }
 
+  function uniqueDeptIds(values) {
+    return Array.from(new Set(
+      (Array.isArray(values) ? values : [])
+        .map(function (value) {
+          return safeDatasetValue(value);
+        })
+        .filter(Boolean)
+    ));
+  }
+
   function loadDepartmentTree() {
     if (Array.isArray(orgCache.departmentTree)) {
       return Promise.resolve(orgCache.departmentTree);
@@ -852,21 +862,24 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     function loadEmployeesForSelectedTeam() {
-      if (!state.teamDeptIds.length) {
+      if (!state.teamDeptIds.length || !state.headquarterId) {
         return Promise.resolve([]);
       }
 
-      const teamIds = state.teamDeptIds.includes(allOptionValue)
-        ? getRenderableTeamOptions().map(function (team) { return getDeptId(team); })
-        : state.teamDeptIds;
+      const scopeDeptIds = uniqueDeptIds([
+        state.headquarterId,
+        ...getRenderableTeamOptions().map(function (team) {
+          return getDeptId(team);
+        })
+      ]);
 
-      if (!teamIds.length) {
+      if (!scopeDeptIds.length) {
         return Promise.resolve([]);
       }
 
       return Promise.all(
-        teamIds.map(function (teamId) {
-          return loadEmployees(teamId).catch(function () {
+        scopeDeptIds.map(function (deptId) {
+          return loadEmployees(deptId).catch(function () {
             return [];
           });
         })
