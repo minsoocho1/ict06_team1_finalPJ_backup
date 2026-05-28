@@ -38,6 +38,7 @@ import com.ict06.team1_fin_pj.domain.attendance.service.LeaveService;
 import com.ict06.team1_fin_pj.domain.attendance.service.AdAttendanceService;
 import com.ict06.team1_fin_pj.domain.employee.entity.DepartmentEntity;
 import com.ict06.team1_fin_pj.domain.employee.repository.DepartmentRepository;
+import com.ict06.team1_fin_pj.domain.attendance.service.HolidayApiService;
 
 import java.security.Principal;
 import java.io.IOException;
@@ -66,15 +67,22 @@ public class AdAttendanceController {
     // 연차/휴가 현황 조회 Service
     private final LeaveService leaveService;
 
+    // 공공데이터포털 공휴일 API Service
+    private final HolidayApiService holidayApiService;
+
     // 생성자 주입
     public AdAttendanceController(
             AdAttendanceService adAttendanceService,
             DepartmentRepository departmentRepository,
-            LeaveService leaveService
+            LeaveService leaveService,
+            HolidayApiService holidayApiService
     ) {
         this.adAttendanceService = adAttendanceService;
         this.departmentRepository = departmentRepository;
         this.leaveService = leaveService;
+
+        // 공공데이터포털 공휴일 API Service
+        this.holidayApiService = holidayApiService;
     }
 
     // [근태 관리 메인]
@@ -388,7 +396,7 @@ public class AdAttendanceController {
 
         // redirect 후 1회성 메시지 전달
         redirectAttributes.addFlashAttribute(
-                "successMessage",
+                "leaveSuccessMessage",
                 message
         );
 
@@ -574,4 +582,31 @@ public class AdAttendanceController {
 
         return "admin/attendance/attendanceLog";
     }
+
+    /**
+     * 공공데이터포털 공휴일 API 수동 동기화
+     *
+     * 처리 후 문자열 화면을 보여주는 것이 아니라
+     * 관리자 근태 메인 화면으로 다시 이동한다.
+     */
+    @GetMapping("/holiday/sync")
+    public String syncHolidayFromApi(
+            RedirectAttributes redirectAttributes
+    ) {
+        // 현재 연도 기준 공휴일 API 조회
+        int currentYear = LocalDate.now().getYear();
+
+        // API에서 공휴일을 조회해 HOLIDAY 테이블에 저장
+        int savedCount = holidayApiService.saveHolidaysByYear(currentYear);
+
+        // redirect 후 관리자 화면에서 1회만 보여줄 메시지
+        redirectAttributes.addFlashAttribute(
+                "holidaySuccessMessage",
+                "공휴일 데이터 갱신 완료: " + savedCount + "건 저장"
+        );
+
+        // 관리자 근태 메인 화면으로 이동
+        return "redirect:/admin/attendance/leave";
+    }
+
 }
