@@ -507,7 +507,8 @@ public class LeaveServiceImpl implements LeaveService {
      * - 토/일 제외
      * - 실제 사용 연차는 금요일 + 월요일 = 2일
      */
-    private BigDecimal calculateLeaveDaysExcludingHoliday(
+    @Override
+    public BigDecimal calculateLeaveDaysExcludingHoliday(
             LocalDate startDate,
             LocalDate endDate
     ) {
@@ -607,6 +608,11 @@ public class LeaveServiceImpl implements LeaveService {
         // 이번 휴가 신청의 실제 사용 연차 일수
         BigDecimal leaveDays =
                 leaveRequest.getLeaveDays();
+
+        // 주말/공휴일만 포함된 신청처럼 실제 차감 일수가 0이면 연차 발생 내역을 변경하지 않는다.
+        if (leaveDays == null || leaveDays.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
 
         // 가장 최신 연차 발생 내역 사용
         // 현재 구조에서는 1개만 존재하는 경우가 대부분
