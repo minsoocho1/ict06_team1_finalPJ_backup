@@ -8,6 +8,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.19    김다솜        관리자 세션 기반 알림 API 경로 변경 및 백그라운드 처리 실패 알림 로직 추가
  * @ 2026.05.29    김다솜        사용자 페이지와 동일한 폰트/색상 톤의 관리자 헤더 UI로 개선
+ * @ 2026.05.29    김다솜        관리자 프로필 버튼을 로그인 관리자 사원 상세 화면으로 연결
  -->
 <!--begin::Header-->
 <style>
@@ -171,21 +172,21 @@
             <li class="nav-item dropdown user-menu">
                 <a href="#" class="nav-link dropdown-toggle corework-admin-pill" data-bs-toggle="dropdown">
                     <span class="corework-admin-avatar"><i class="bi bi-person-fill"></i></span>
-                    <span class="d-none d-md-inline" th:text="${session.loginName != null ? session.loginName : '관리자'}">관리자</span>
+                    <span class="d-none d-md-inline" th:text="${adminLoginName != null ? adminLoginName : '관리자'}">관리자</span>
                 </a>
                 <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end corework-admin-dropdown p-0 overflow-hidden">
                     <!--begin::User Image-->
                     <li class="user-header corework-user-card">
                         <i class="bi bi-person-circle" style="font-size: 3rem;"></i>
                         <p class="mb-0 mt-2">
-                            <span th:text="${session.loginName != null ? session.loginName : '관리자'}">관리자</span>
+                            <span th:text="${adminLoginName != null ? adminLoginName : '관리자'}">관리자</span>
                             <small class="d-block mt-1">COREWORK Admin Center</small>
                         </p>
                     </li>
                     <!--end::User Image-->
                     <!--begin::Menu Footer-->
                     <li class="user-footer corework-user-footer">
-                        <a href="#" class="btn btn-outline-secondary">프로필</a>
+                        <a th:href="${adminProfileUrl != null ? adminProfileUrl : '/admin/home'}" class="btn btn-outline-secondary">프로필</a>
                         <a th:href="@{/admin/logout}" class="btn btn-primary">로그아웃</a>
                     </li>
                     <!--end::Menu Footer-->

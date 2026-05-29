@@ -11,6 +11,7 @@
  * @ 2026.05.12    김다솜        관리자 대시보드 실제 데이터 연동 및 최근 활동 바인딩
  * @ 2026.05.18    김다솜        AI 통계 서버 장애 시 DB 기반 통계 대체 조회 추가
  * @ 2026.05.29    김다솜        온보딩 학습 완료 최근 활동을 사원별 일정 상세 화면으로 연결
+ * @ 2026.05.29    김다솜        최근 시스템 활동의 평가/학습 완료 중복 표시 보정
  */
 package com.ict06.team1_fin_pj.domain.auth.controller;
 
@@ -228,14 +229,20 @@ public class AdDashboardController {
 
                     select '온보딩 학습 완료' as title,
                            e.name || ' · ' || ri.item_title as message,
-                           now() as activity_time,
+                           max(cp.completed_at) as activity_time,
                            'border-primary' as border_class,
                            'text-primary' as text_class,
                            '/admin/onboarding/schedules/' || rp.emp_no as activity_url
                     from road_progress rp
                     join road_item ri on ri.item_id = rp.item_id
                     join employee e on e.emp_no = rp.emp_no
+                    left join checklist c on c.related_content_id = ri.content_id
+                    left join checklist_progress cp
+                           on cp.checklist_id = c.checklist_id
+                          and cp.emp_no = rp.emp_no
+                          and cp.status = 'COMPLETED'
                     where rp.status = 'COMPLETED'
+                    group by e.name, ri.item_title, rp.emp_no
 
                     union all
 
