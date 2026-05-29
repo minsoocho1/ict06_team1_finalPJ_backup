@@ -146,18 +146,37 @@ export default function Sidebar({
         </div>
       </div>
 
-      <div style={{ padding: "16px 18px 16px" }}>
+      <div
+        style={{
+          padding: "16px 18px 16px",
+          minWidth: 0,
+          overflowX: "hidden",
+          boxSizing: "border-box",
+        }}
+      >
         <div
           style={{
             borderTop: `1px solid ${C.border}`,
             paddingTop: 14,
+            minWidth: 0,
+            overflowX: "hidden",
+            boxSizing: "border-box",
           }}
         >
           <div style={{ fontSize: 12, fontWeight: 900, color: C.muted }}>
             최근 작성
           </div>
 
-          <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+          <div
+            style={{
+              marginTop: 10,
+              display: "grid",
+              gap: 8,
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+            }}
+          >
             {latestRecents.length === 0 ? (
               <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5 }}>
                 아직 최근 작성 문서가 없습니다.
@@ -175,6 +194,11 @@ export default function Sidebar({
                     padding: 10,
                     cursor: "pointer",
                     textAlign: "left",
+                    width: "100%",
+                    maxWidth: "100%",
+                    boxSizing: "border-box",
+                    overflow: "hidden",
+                    display: "block",
                   }}
                 >
                   <div
@@ -182,6 +206,8 @@ export default function Sidebar({
                       fontSize: 13,
                       fontWeight: 800,
                       color: C.text,
+                      display: "block",
+                      maxWidth: "100%",
                       overflow: "hidden",
                       textOverflow: "ellipsis",
                       whiteSpace: "nowrap",
@@ -196,6 +222,11 @@ export default function Sidebar({
                       marginTop: 4,
                       fontSize: 11,
                       color: C.sub,
+                      display: "block",
+                      maxWidth: "100%",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
                     }}
                   >
                     {typeLabelMap[doc.type] || docMeta?.[doc.type]?.label || "문서"}

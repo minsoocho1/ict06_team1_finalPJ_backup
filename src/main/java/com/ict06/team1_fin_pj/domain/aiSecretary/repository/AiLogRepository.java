@@ -1,3 +1,20 @@
+/**
+ * @FileName : AiLogRepository.java
+ * @Description : AI 사용 로그 Repository
+ *                - AI 비서/챗봇 사용 이력 저장 및 조회
+ *                - 성공 여부, 응답 시간, 기능 유형별 사용 통계 조회
+ *                - 관리자 AI 운영 대시보드 및 권한 차단 로그 조회에 사용
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.27  송혜진       권한 차단 로그 및 AI 사용 통계 조회 기준 반영
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.repository;
 
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiLogEntity;
