@@ -1,64 +1,199 @@
-<!-- 관리자용 페이지에 필요한 공통 header 파일 (협의 없이 수정 금지!)-->
-<!-- 2026.05.19 김다솜: 관리자 세션 기반 알림 API 경로 변경 및 백그라운드 처리 실패 알림 폴링 추가 -->
+<!-- 관리자용 페이지에 필요한 공통 header 파일 (협의 없이 수정 금지!) -->
+<!--
+ * @FileName : header.html
+ * @Description : 관리자 페이지 공통 상단 헤더
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.19    김다솜        관리자 세션 기반 알림 API 경로 변경 및 백그라운드 처리 실패 알림 로직 추가
+ * @ 2026.05.29    김다솜        사용자 페이지와 동일한 폰트/색상 톤의 관리자 헤더 UI로 개선
+ -->
 <!--begin::Header-->
-<nav class="app-header navbar navbar-expand bg-body">
+<style>
+    .corework-admin-header {
+        min-height: 68px;
+        background:
+            linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 247, 251, 0.94) 100%);
+        border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+        box-shadow: 0 12px 28px rgba(15, 23, 42, 0.06);
+        font-family: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+        backdrop-filter: blur(12px);
+    }
+
+    .corework-admin-header .container-fluid {
+        min-height: 68px;
+        padding: 0 26px;
+    }
+
+    .corework-header-button {
+        width: 42px;
+        height: 42px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid rgba(37, 99, 235, 0.12);
+        border-radius: 14px;
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+        transition: all 0.18s ease;
+    }
+
+    .corework-header-button:hover,
+    .corework-header-button:focus {
+        color: #2563eb;
+        border-color: rgba(37, 99, 235, 0.28);
+        transform: translateY(-1px);
+    }
+
+    .corework-admin-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 42px;
+        padding: 6px 12px;
+        border: 1px solid rgba(37, 99, 235, 0.12);
+        border-radius: 999px;
+        background: #ffffff;
+        color: #0f172a;
+        box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+        font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+
+    .corework-admin-avatar {
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 55%, #0f172a 100%);
+        color: #ffffff;
+        font-size: 1rem;
+    }
+
+    .corework-admin-badge {
+        min-width: 18px;
+        height: 18px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0 5px;
+        border: 2px solid #ffffff;
+        border-radius: 999px;
+        background: #ef4444;
+        color: #ffffff;
+        font-size: 0.68rem;
+        font-weight: 900;
+        line-height: 1;
+    }
+
+    .corework-admin-dropdown {
+        min-width: 320px;
+        padding: 10px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 18px;
+        box-shadow: 0 20px 45px rgba(15, 23, 42, 0.16);
+        font-family: Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+    }
+
+    .corework-admin-dropdown .dropdown-header {
+        padding: 10px 12px;
+        border-radius: 12px;
+        background: #f4f7fb;
+        color: #0f172a;
+        font-weight: 900;
+    }
+
+    .corework-admin-dropdown .dropdown-item {
+        border-radius: 12px;
+    }
+
+    .corework-user-card {
+        padding: 22px 18px;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 55%, #0f172a 100%);
+        color: #ffffff;
+        text-align: center;
+    }
+
+    .corework-user-card small {
+        color: rgba(255, 255, 255, 0.72);
+        font-weight: 700;
+    }
+
+    .corework-user-footer {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        padding: 14px;
+    }
+
+    .corework-user-footer .btn {
+        min-width: 96px;
+        border-radius: 999px;
+        font-weight: 800;
+    }
+</style>
+
+<nav class="app-header navbar navbar-expand corework-admin-header">
     <!--begin::Container-->
     <div class="container-fluid">
-        <!--begin::좌측: 사이드바 토글-->
+        <!--begin::Left Navbar-->
         <ul class="navbar-nav">
             <li class="nav-item">
-                <a class="nav-link" data-lte-toggle="sidebar" href="#" role="button">
-                    <i class="bi bi-list"></i> <!-- 클릭 시 사이드바 접힘-->
+                <a class="nav-link corework-header-button" data-lte-toggle="sidebar" href="#" role="button" aria-label="사이드바 열기/닫기">
+                    <i class="bi bi-list fs-4"></i>
                 </a>
             </li>
         </ul>
-        <!--end::좌측: 사이드바 토글-->
+        <!--end::Left Navbar-->
 
-        <!--begin::우측 메뉴: 알림 및 사용자 프로필-->
-        <ul class="navbar-nav ms-auto">
+        <!--begin::Right Navbar-->
+        <ul class="navbar-nav ms-auto align-items-center gap-2">
             <!--begin::Notifications Dropdown Menu-->
             <li class="nav-item dropdown">
-                <a class="nav-link" data-bs-toggle="dropdown" href="#">
-                    <i class="bi bi-bell"></i>
-                    <span id="admin-noti-count" class="navbar-badge badge text-bg-warning d-none">0</span>
+                <a class="nav-link corework-header-button position-relative" data-bs-toggle="dropdown" href="#" aria-label="알림 목록">
+                    <i class="bi bi-bell fs-5"></i>
+                    <span id="admin-noti-count" class="position-absolute top-0 start-100 translate-middle corework-admin-badge d-none">0</span>
                 </a>
-                <div id="admin-noti-list" class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
+                <div id="admin-noti-list" class="dropdown-menu dropdown-menu-lg dropdown-menu-end corework-admin-dropdown">
                     <span class="dropdown-item dropdown-header"><span id="admin-noti-header-count">0</span>개의 새로운 알림</span>
                     <div class="dropdown-divider"></div>
-                    <!-- 알림 아이템이 여기에 자바스크립트로 삽입됩니다 -->
                     <div id="admin-noti-items"></div>
-                    <a href="/admin/home" class="dropdown-item dropdown-footer">대시보드에서 확인</a>
+                    <a href="/admin/home" class="dropdown-item dropdown-footer text-center fw-bold text-primary">대시보드에서 확인</a>
                 </div>
             </li>
             <!--end::Notifications Dropdown Menu-->
 
             <!--begin::User Menu Dropdown-->
             <li class="nav-item dropdown user-menu">
-                <a href="#" class="nav-link dropdown-toggle d-flex align-items-center" data-bs-toggle="dropdown">
-                    <i class="bi bi-person-circle fs-4 me-2"></i>
+                <a href="#" class="nav-link dropdown-toggle corework-admin-pill" data-bs-toggle="dropdown">
+                    <span class="corework-admin-avatar"><i class="bi bi-person-fill"></i></span>
                     <span class="d-none d-md-inline" th:text="${session.loginName != null ? session.loginName : '관리자'}">관리자</span>
                 </a>
-                <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end">
+                <ul class="dropdown-menu dropdown-menu-lg dropdown-menu-end corework-admin-dropdown p-0 overflow-hidden">
                     <!--begin::User Image-->
-                    <li class="user-header text-bg-primary">
+                    <li class="user-header corework-user-card">
                         <i class="bi bi-person-circle" style="font-size: 3rem;"></i>
-                        <p>
+                        <p class="mb-0 mt-2">
                             <span th:text="${session.loginName != null ? session.loginName : '관리자'}">관리자</span>
-                            <small>시스템 관리자</small>
+                            <small class="d-block mt-1">COREWORK Admin Center</small>
                         </p>
                     </li>
                     <!--end::User Image-->
                     <!--begin::Menu Footer-->
-                    <li class="user-footer">
+                    <li class="user-footer corework-user-footer">
                         <a href="#" class="btn btn-outline-secondary">프로필</a>
-                        <a th:href="@{/admin/logout}" class="btn btn-outline-danger float-end">로그아웃</a>
+                        <a th:href="@{/admin/logout}" class="btn btn-primary">로그아웃</a>
                     </li>
                     <!--end::Menu Footer-->
                 </ul>
             </li>
             <!--end::User Menu Dropdown-->
         </ul>
-        <!--end::End Navbar Links-->
+        <!--end::Right Navbar-->
     </div>
     <!--end::Container-->
 </nav>
@@ -66,7 +201,6 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // 관리자 실시간 업무 알림 데이터 로드 및 렌더링
         loadNotifications();
         setInterval(loadNotifications, 15000);
     });
@@ -91,20 +225,22 @@
                 const itemsContainer = document.getElementById('admin-noti-items');
 
                 if (data && data.totalCount > 0) {
-                    // 1. 배지 카운트 업데이트 및 표시
                     if (countBadge) {
                         countBadge.textContent = data.totalCount;
                         countBadge.classList.remove('d-none');
                     }
                     if (headerCount) headerCount.textContent = data.totalCount;
 
-                    // 2. 알림 목록 아이템 생성
                     if (itemsContainer && data.items) {
                         itemsContainer.innerHTML = data.items.map(item => `
-                            <a href="javascript:void(0);" onclick="markAsRead(${item.notiId}, '${item.link}')" class="dropdown-item">
-                                <i class="bi ${item.icon} me-2"></i>
-                                <span class="small text-wrap">[${item.category}] ${item.title}</span>
-                                <div class="text-end"><span class="text-secondary fs-7">${item.timeAgo}</span></div>
+                            <a href="javascript:void(0);" onclick="markAsRead(${item.notiId}, '${item.link}')" class="dropdown-item py-2">
+                                <div class="d-flex gap-2 align-items-start">
+                                    <i class="bi ${item.icon} text-primary"></i>
+                                    <div class="flex-grow-1">
+                                        <span class="small text-wrap fw-bold">[${item.category}] ${item.title}</span>
+                                        <div class="text-end"><span class="text-secondary fs-7">${item.timeAgo}</span></div>
+                                    </div>
+                                </div>
                             </a>
                             <div class="dropdown-divider"></div>
                         `).join('');
@@ -116,7 +252,7 @@
                     }
                     if (headerCount) headerCount.textContent = '0';
                     if (itemsContainer) {
-                        itemsContainer.innerHTML = '<span class="dropdown-item text-secondary small">새 알림이 없습니다.</span>';
+                        itemsContainer.innerHTML = '<span class="dropdown-item text-secondary small">새로운 알림이 없습니다.</span>';
                     }
                 }
             })
