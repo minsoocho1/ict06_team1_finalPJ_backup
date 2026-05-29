@@ -33,4 +33,10 @@ public class ScheduleParticipantEntity {
 
     @Column(name = "responded_at")
     private LocalDateTime respondedAt;
+
+    // 참석자가 일정 초대에 응답하면 상태와 응답 시각을 함께 갱신한다.
+    public void updateStatus(ParticipantStatus status) {
+        this.status = status;
+        this.respondedAt = LocalDateTime.now();
+    }
 }
