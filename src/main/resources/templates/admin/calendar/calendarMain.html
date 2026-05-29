@@ -421,7 +421,6 @@
                                 <select id="adminCalendarDetailFormVisibility" class="admin-calendar-form-control">
                                     <option value="PRIVATE">비공개</option>
                                     <option value="COMPANY">공개</option>
-                                    <option value="DEPARTMENT">부서 공개</option>
                                 </select>
 
                                 <div class="admin-calendar-detail-form-footer">
@@ -429,7 +428,7 @@
                                         취소
                                     </button>
                                     <button type="submit" id="adminCalendarDetailFormSubmit" class="admin-calendar-primary-btn">
-                                        저장
+                                        등록
                                     </button>
                                 </div>
                             </form>
@@ -469,6 +468,9 @@
                                     <select id="adminCalendarParticipantDeptSelect" class="admin-calendar-form-control" hidden>
                                         <option value="">부서를 선택해주세요.</option>
                                     </select>
+
+                                    <!-- Org mode department tree is rendered here to match the user calendar modal. -->
+                                    <div id="adminCalendarParticipantDeptTree" class="admin-calendar-participant-dept-tree" hidden></div>
                                 </div>
 
                                 <div class="admin-calendar-participant-list-wrap">

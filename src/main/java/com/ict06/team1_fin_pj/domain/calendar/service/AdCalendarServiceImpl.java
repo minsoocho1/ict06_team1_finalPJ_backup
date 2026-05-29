@@ -14,6 +14,7 @@ import jakarta.persistence.PersistenceContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -185,7 +186,7 @@ public class AdCalendarServiceImpl implements AdCalendarService {
 
     // 등록/수정 공통 필수값 검증
     // 화면 검증을 우회해도 서버에서 제목/시간 필수 조건을 한 번 더 막는다.
-    private void validateScheduleRequiredFields(String title, Object startTime, Object endTime) {
+    private void validateScheduleRequiredFields(String title, LocalDateTime startTime, LocalDateTime endTime) {
         if (title == null || title.trim().isEmpty()) {
             throw new IllegalArgumentException("일정 제목은 필수입니다.");
         }
@@ -196,6 +197,10 @@ public class AdCalendarServiceImpl implements AdCalendarService {
 
         if (endTime == null) {
             throw new IllegalArgumentException("종료 시간은 필수입니다.");
+        }
+
+        if (endTime.isBefore(startTime)) {
+            throw new IllegalArgumentException("종료 시간은 시작 시간보다 빠를 수 없습니다.");
         }
     }
 

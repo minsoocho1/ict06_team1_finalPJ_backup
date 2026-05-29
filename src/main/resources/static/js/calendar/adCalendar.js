@@ -28,6 +28,10 @@ let adminCalendarMemberOrgMembers = [];
 let adminCalendarMemberOrgDeptId = '';
 let adminCalendarSelectedMemberScheduleNos = new Set();
 
+// 저장/삭제 요청 중 중복 클릭으로 같은 요청이 여러 번 나가는 것을 막는다.
+let adminCalendarSaving = false;
+let adminCalendarDeleting = false;
+
 // 구성원 수가 늘어도 색이 바로 겹치지 않도록 넉넉한 팔레트를 둔다.
 const adminCalendarMemberColorPalette = [
     '#3b82f6', '#10b981', '#f59e0b', '#ef4444',
@@ -439,6 +443,10 @@ function bindAdminCalendarDetailPopup(calendar) {
             return;
         }
 
+        if (adminCalendarDeleting) {
+            return;
+        }
+
         // 반복 일정은 원본 일정 삭제로 처리되므로 전체 삭제 안내를 보여준다.
         const deleteMessage = adminCalendarSelectedSchedule.repeatRule
             ? '반복 일정 전체가 삭제됩니다. 삭제할까요?'
@@ -449,6 +457,7 @@ function bindAdminCalendarDetailPopup(calendar) {
         }
 
         try {
+            adminCalendarDeleting = true;
             const response = await fetch('/admin/calendar/schedules/' + adminCalendarSelectedSchedule.scheduleId, {
                 method: 'DELETE'
             });
@@ -459,10 +468,12 @@ function bindAdminCalendarDetailPopup(calendar) {
 
             closeAdminCalendarDetailPopup();
             calendar.refetchEvents();
-            alert('일정이 삭제되었습니다.');
+            showAdminCalendarToast('일정이 삭제되었습니다.');
         } catch (error) {
             console.error(error);
-            alert('일정 삭제 중 오류가 발생했습니다.');
+            showAdminCalendarToast('일정 삭제 중 오류가 발생했습니다.', 'error');
+        } finally {
+            adminCalendarDeleting = false;
         }
     });
 
@@ -779,7 +790,7 @@ async function updateAdminParticipantStatus(calendar, status) {
         calendar.refetchEvents();
     } catch (error) {
         console.error(error);
-        alert('참석여부 변경 중 오류가 발생했습니다.');
+        showAdminCalendarToast('참석여부 변경 중 오류가 발생했습니다.', 'error');
     }
 }
 
@@ -833,6 +844,26 @@ function setTextContent(id, value) {
     if (target) {
         target.textContent = value;
     }
+}
+
+// 사용자 캘린더처럼 저장/수정/삭제 결과를 상단 토스트로 보여준다.
+function showAdminCalendarToast(message, type = 'success') {
+    let toast = document.getElementById('adminCalendarToast');
+
+    if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'adminCalendarToast';
+        toast.className = 'admin-calendar-toast';
+        document.body.appendChild(toast);
+    }
+
+    toast.textContent = message;
+    toast.className = 'admin-calendar-toast admin-calendar-toast-' + type + ' is-visible';
+
+    window.clearTimeout(showAdminCalendarToast.timer);
+    showAdminCalendarToast.timer = window.setTimeout(function () {
+        toast.classList.remove('is-visible');
+    }, 2200);
 }
 
 // 아이콘이 포함된 시간 영역처럼 HTML 조각이 필요한 요소에만 사용한다.
@@ -1127,10 +1158,19 @@ function bindAdminCalendarForm(calendar) {
     document.getElementById('adminCalendarSimpleForm')?.addEventListener('submit', async function (event) {
         event.preventDefault();
 
+        if (adminCalendarSaving) {
+            return;
+        }
+
         try {
             // 간단등록은 상세등록으로 넘기지 않고 바로 저장한다.
             const payload = buildAdminCalendarSimplePayload();
 
+            if (!validateAdminCalendarPayload(payload)) {
+                return;
+            }
+
+            adminCalendarSaving = true;
             const response = await fetch('/admin/calendar/schedules', {
                 method: 'POST',
                 headers: {
@@ -1143,22 +1183,35 @@ function bindAdminCalendarForm(calendar) {
                 throw new Error('관리자 간단 일정 등록 실패');
             }
 
-            alert('일정이 등록되었습니다.');
+            showAdminCalendarToast('일정이 등록되었습니다.');
             closeAdminCalendarSimpleForm();
             calendar.refetchEvents();
         } catch (error) {
             console.error(error);
-            alert('일정 등록 중 오류가 발생했습니다.');
+            showAdminCalendarToast('일정 등록 중 오류가 발생했습니다.', 'error');
+        } finally {
+            adminCalendarSaving = false;
         }
     });
 
     document.getElementById('adminCalendarDetailForm')?.addEventListener('submit', async function (event) {
         event.preventDefault();
 
+        if (adminCalendarSaving) {
+            return;
+        }
+
         try {
             const scheduleId = document.getElementById('adminCalendarDetailFormScheduleId').value;
             const payload = buildAdminCalendarPayload();
+
+            if (!validateAdminCalendarPayload(payload)) {
+                return;
+            }
+
             const isEdit = Boolean(scheduleId);
+
+            adminCalendarSaving = true;
             const response = await fetch(
                 isEdit ? '/admin/calendar/schedules/' + scheduleId : '/admin/calendar/schedules',
                 {
@@ -1177,10 +1230,12 @@ function bindAdminCalendarForm(calendar) {
             closeAdminCalendarForm();
             closeAdminCalendarDetailPopup();
             calendar.refetchEvents();
-            alert(isEdit ? '일정이 수정되었습니다.' : '일정이 등록되었습니다.');
+            showAdminCalendarToast(isEdit ? '일정이 수정되었습니다.' : '일정이 등록되었습니다.');
         } catch (error) {
             console.error(error);
-            alert('일정 저장 중 오류가 발생했습니다.');
+            showAdminCalendarToast('일정 저장 중 오류가 발생했습니다.', 'error');
+        } finally {
+            adminCalendarSaving = false;
         }
     });
 }
@@ -1243,6 +1298,7 @@ function openAdminCalendarDetailForm(options) {
     const layer = document.getElementById('adminCalendarDetailFormLayer');
     const popup = document.getElementById('adminCalendarDetailFormPopup');
     const titleEl = document.getElementById('adminCalendarDetailFormTitle');
+    const submitEl = document.getElementById('adminCalendarDetailFormSubmit');
     const schedule = options?.schedule || null;
     const isEdit = options?.mode === 'edit';
     const defaultTimeRange = getAdminDefaultTimeRange();
@@ -1265,6 +1321,10 @@ function openAdminCalendarDetailForm(options) {
 
     if (titleEl) {
         titleEl.textContent = isEdit ? '일정 수정' : '일정 상세 등록';
+    }
+
+    if (submitEl) {
+        submitEl.textContent = isEdit ? '저장' : '등록';
     }
 
     setFormValue('adminCalendarDetailFormScheduleId', isEdit ? schedule.scheduleId : '');
@@ -1596,6 +1656,35 @@ function buildAdminCalendarPayload() {
     };
 }
 
+// 저장 전에 화면에서 먼저 기본 입력값과 시간 순서를 검증한다.
+function validateAdminCalendarPayload(payload) {
+    const title = String(payload?.title || '').trim();
+    const startDate = new Date(payload?.startTime || '');
+    const endDate = new Date(payload?.endTime || '');
+
+    if (!title) {
+        showAdminCalendarToast('제목을 입력해 주세요.', 'error');
+        return false;
+    }
+
+    if (!payload?.startTime || Number.isNaN(startDate.getTime())) {
+        showAdminCalendarToast('시작 시간을 확인해 주세요.', 'error');
+        return false;
+    }
+
+    if (!payload?.endTime || Number.isNaN(endDate.getTime())) {
+        showAdminCalendarToast('종료 시간을 확인해 주세요.', 'error');
+        return false;
+    }
+
+    if (endDate < startDate) {
+        showAdminCalendarToast('종료 시간은 시작 시간보다 빠를 수 없습니다.', 'error');
+        return false;
+    }
+
+    return true;
+}
+
 // 참석자 선택 모달의 버튼/검색/전체 선택 이벤트를 한 번만 연결한다.
 function bindAdminParticipantModalEvents() {
     document.getElementById('adminCalendarParticipantClose')?.addEventListener('click', closeAdminParticipantModal);
@@ -1611,12 +1700,14 @@ function bindAdminParticipantModalEvents() {
     document.getElementById('adminCalendarParticipantTeamMode')?.addEventListener('click', function () {
         adminCalendarParticipantMode = 'TEAM';
         adminCalendarOrgDeptId = '';
-        document.getElementById('adminCalendarParticipantDeptSelect')?.setAttribute('hidden', 'hidden');
+        hideAdminParticipantDepartmentPicker();
+        syncAdminParticipantModeControls();
         loadAdminParticipantMembers();
     });
 
     document.getElementById('adminCalendarParticipantOrgMode')?.addEventListener('click', function () {
         adminCalendarParticipantMode = 'ORG';
+        syncAdminParticipantModeControls();
         loadAdminParticipantDepartments();
     });
 
@@ -1643,7 +1734,8 @@ function openAdminParticipantModal() {
     adminCalendarOrgDeptId = '';
 
     setFormValue('adminCalendarParticipantKeyword', '');
-    document.getElementById('adminCalendarParticipantDeptSelect')?.setAttribute('hidden', 'hidden');
+    hideAdminParticipantDepartmentPicker();
+    syncAdminParticipantModeControls();
 
     modal.hidden = false;
     loadAdminParticipantMembers();
@@ -1661,6 +1753,8 @@ function closeAdminParticipantModal() {
     adminCalendarOrgDeptId = '';
     adminCalendarParticipantMembers = [];
     setFormValue('adminCalendarParticipantKeyword', '');
+    hideAdminParticipantDepartmentPicker();
+    syncAdminParticipantModeControls();
 }
 
 // 현재 선택된 참석자를 실제 폼 참석자 목록에 반영한다.
@@ -1765,14 +1859,19 @@ async function fetchAdminEmployeesFromDepartmentTree() {
 
 async function loadAdminParticipantDepartments() {
     const deptSelect = document.getElementById('adminCalendarParticipantDeptSelect');
+    const deptTree = document.getElementById('adminCalendarParticipantDeptTree');
 
-    if (!deptSelect) {
+    if (!deptSelect || !deptTree) {
         return;
     }
 
     try {
         setAdminParticipantModeTitle('조직도 멤버');
         setAdminParticipantListMessage('부서를 선택해주세요.');
+
+        deptSelect.setAttribute('hidden', 'hidden');
+        deptTree.hidden = false;
+        deptTree.innerHTML = '<div class="admin-calendar-participant-empty">조직도를 불러오는 중입니다.</div>';
 
         const response = await fetch('/api/organization/departments/tree');
 
@@ -1791,15 +1890,89 @@ async function loadAdminParticipantDepartments() {
                 })
                 .join('');
 
-        deptSelect.removeAttribute('hidden');
+        renderAdminParticipantDepartmentTree();
         adminCalendarParticipantMembers = [];
         renderAdminParticipantList();
     } catch (error) {
         console.error(error);
         adminCalendarOrgDepartments = [];
         adminCalendarParticipantMembers = [];
+        deptTree.innerHTML = '<div class="admin-calendar-participant-empty">부서를 불러오지 못했습니다.</div>';
         setAdminParticipantListMessage('조직도 부서 목록을 불러오지 못했습니다.');
     }
+}
+
+
+function hideAdminParticipantDepartmentPicker() {
+    const deptSelect = document.getElementById('adminCalendarParticipantDeptSelect');
+    const deptTree = document.getElementById('adminCalendarParticipantDeptTree');
+
+    if (deptSelect) {
+        deptSelect.setAttribute('hidden', 'hidden');
+    }
+
+    if (deptTree) {
+        deptTree.hidden = true;
+        deptTree.innerHTML = '';
+    }
+}
+
+function syncAdminParticipantModeControls() {
+    const teamModeButton = document.getElementById('adminCalendarParticipantTeamMode');
+    const orgModeButton = document.getElementById('adminCalendarParticipantOrgMode');
+
+    // The user calendar shows only the button that switches to the other mode.
+    if (teamModeButton) {
+        teamModeButton.hidden = adminCalendarParticipantMode === 'TEAM';
+    }
+
+    if (orgModeButton) {
+        orgModeButton.hidden = adminCalendarParticipantMode === 'ORG';
+    }
+}
+
+function renderAdminParticipantDepartmentTree() {
+    const deptTree = document.getElementById('adminCalendarParticipantDeptTree');
+
+    if (!deptTree) {
+        return;
+    }
+
+    const departments = normalizeAdminArrayResponse(adminCalendarOrgDepartments);
+
+    if (!departments.length) {
+        deptTree.innerHTML = '<div class="admin-calendar-participant-empty">표시할 부서가 없습니다.</div>';
+        return;
+    }
+
+    deptTree.innerHTML = buildAdminParticipantDepartmentButtons(departments, 0);
+    deptTree.querySelectorAll('[data-admin-participant-dept-id]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            adminCalendarOrgDeptId = button.dataset.adminParticipantDeptId || '';
+            renderAdminParticipantDepartmentTree();
+            loadAdminParticipantMembersByDept(adminCalendarOrgDeptId);
+        });
+    });
+}
+
+function buildAdminParticipantDepartmentButtons(departments, depth) {
+    return normalizeAdminArrayResponse(departments).map(function (department) {
+        const deptId = String(department.deptId || '');
+        const selected = deptId && String(adminCalendarOrgDeptId) === deptId;
+        const children = normalizeAdminArrayResponse(department.children);
+        const marker = children.length ? '▸' : '•';
+
+        return '' +
+            '<div class="admin-calendar-participant-dept-node">' +
+                '<button type="button" class="admin-calendar-participant-dept-button ' + (selected ? 'is-selected' : '') + '" ' +
+                    'style="padding-left: ' + (8 + depth * 14) + 'px" ' +
+                    'data-admin-participant-dept-id="' + escapeHtml(deptId) + '">' +
+                    '<span class="admin-calendar-participant-dept-marker">' + marker + '</span>' +
+                    '<span>' + escapeHtml(department.deptName || department.name || department.label || '부서') + '</span>' +
+                '</button>' +
+                (children.length ? buildAdminParticipantDepartmentButtons(children, depth + 1) : '') +
+            '</div>';
+    }).join('');
 }
 
 
@@ -2117,7 +2290,7 @@ function syncAdminCalendarVisibilityByType() {
     }
 
     if (type === 'DEPARTMENT') {
-        visibilityEl.value = 'DEPARTMENT';
+        visibilityEl.value = 'COMPANY';
         visibilityEl.disabled = true;
 
         // 반복 일정은 사용자 캘린더 기준으로 개인일정에서만 허용한다.
@@ -2195,14 +2368,16 @@ function positionAdminCalendarPopup(popup, anchorEl, popupWidth, popupHeight) {
 
 // 상세 등록/수정 팝업은 사용자 상세등록처럼 화면 상단 기준으로 안정적으로 배치한다.
 function positionAdminCalendarDetailFormPopup(popup) {
-    const popupWidth = Math.min(560, window.innerWidth - 48);
-    const top = 80;
-    const left = Math.max(24, Math.round((window.innerWidth - popupWidth) / 2));
+    const popupWidth = Math.min(540, window.innerWidth - 40);
+    const top = window.innerWidth <= 720 ? 16 : 56;
+    const sidePadding = window.innerWidth <= 720 ? 12 : 20;
+    const bottomPadding = window.innerWidth <= 720 ? 16 : 16;
+    const left = Math.max(sidePadding, Math.round((window.innerWidth - popupWidth) / 2));
 
     popup.style.top = top + 'px';
     popup.style.left = left + 'px';
     popup.style.width = popupWidth + 'px';
-    popup.style.maxHeight = 'calc(100vh - ' + top + 'px - 24px)';
+    popup.style.maxHeight = 'calc(100vh - ' + top + 'px - ' + bottomPadding + 'px)';
 }
 
 // 폼 date/time 값을 LocalDateTime 문자열로 만든다.
@@ -2257,7 +2432,7 @@ function clearAdminCalendarDraftEvent() {
 
 function getAdminVisibilityValue(schedule) {
     if (schedule.type === 'DEPARTMENT') {
-        return 'DEPARTMENT';
+        return 'COMPANY';
     }
 
     if (schedule.type === 'COMPANY') {
