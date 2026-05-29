@@ -1,27 +1,28 @@
-/**
+﻿/**
  * @FileName : WriterScreen.js
  * @Description : AiSecretary.js 전용 사용자 AI 비서 문서 작성/수정 화면
  *                - AI가 생성한 초안 문서를 화면에 표시
  *                - 사용자가 추가 수정 요청을 입력하면 /assistant/revise API 호출
  *                - 수정된 문서를 writerState.content에 반영
- *                - 각 수정 결과를 versions에 content와 함께 저장
- *                - 버전 미리보기 / 복원 / 복사 / 다운로드 기능 제공
-
+ *                - 각 수정 결과를 versions에 저장하고 버전 미리보기/복원 지원
+ *                - 복사, TXT 다운로드, PDF 저장/인쇄 기능 제공
+ *
  * @Author : 송혜진
  * @Date : 2026. 04. 28
  * @Modification_History
  * @
- * @ 수정일       수정자       수정내용
+ * @ 수정일        수정자       수정내용
  * @ ----------  ---------   ----------------------------------------
  * @ 2026.04.28  송혜진       최초 생성
  * @ 2026.05.13  송혜진       템플릿 생성 조건 변경
+ * @ 2026.05.28  송혜진       문서 미리보기/버전 기록 한글 깨짐 복구
  */
 
 /*
   주의
   --------------------------------------------------
-  - template는 문서 유형이 아니다.
-  - correction은 문장 다듬기 입력 기능이다.
+  - template은 문서 유형이 아닙니다.
+  - correction은 문장 다듬기 입력 기능입니다.
 */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -35,7 +36,7 @@ import { reviseAssistantDraft, unwrapApiData } from "../api/aiSecretaryApi";
  * 문서 유형별 화면 메타 정보
  *
  * 기존 documentMap은 정적 목업 문서 전체를 들고 있었지만,
- * 실제 Gemini 초안 생성과 연결된 이후에는 chipLabel, fallbackTitle 정도만 필요합니다.
+ * 실제 Gemini 초안 생성과 연결된 이후에는 chipLabel, fallbackTitle 정보만 필요합니다.
  */
 const DOCUMENT_META_MAP = {
   REPORT: {
@@ -80,6 +81,23 @@ function isTableDivider(line) {
   return /^(\|?\s*:?-{3,}:?\s*)+\|?$/.test(trimmed);
 }
 
+function isHorizontalRule(line = "") {
+  const trimmed = String(line || "").trim();
+  return trimmed === "***" || trimmed === "---" || trimmed === "___";
+}
+
+/**
+ * Gemini가 반환한 Markdown 일부를 화면용 block으로 변환합니다.
+ *
+ * 현재 발표 안정화 기준:
+ * - 제목: #, ##, ###
+ * - 굵게: **텍스트**
+ * - 구분선: ***, ---, ___
+ * - 표: Markdown table
+ * - 목록: -, *, 1.
+ *
+ * 전체 Markdown renderer는 도입하지 않고 기존 미리보기 렌더러만 유지합니다.
+ */
 function parseContentBlocks(content) {
   const lines = String(content || "").split(/\r?\n/);
   const blocks = [];
@@ -100,6 +118,13 @@ function parseContentBlocks(content) {
     if (!trimmed) {
       pushParagraph(paragraphBuffer);
       paragraphBuffer = [];
+      continue;
+    }
+
+    if (isHorizontalRule(trimmed)) {
+      pushParagraph(paragraphBuffer);
+      paragraphBuffer = [];
+      blocks.push({ type: "divider" });
       continue;
     }
 
@@ -138,6 +163,7 @@ function parseContentBlocks(content) {
         runLength += 1;
       }
 
+      // 단독 번호 문단은 보고서 섹션 제목으로 보여주는 기존 UX 유지
       if (ordered && runLength === 1) {
         blocks.push({
           type: "heading",
@@ -209,6 +235,19 @@ function parseContentBlocks(content) {
   return blocks;
 }
 
+function renderInlineMarkdown(text = "") {
+  const source = String(text ?? "");
+  const parts = source.split(/(\*\*[^*]+\*\*)/g);
+
+  return parts.map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return <strong key={`strong-${index}`}>{part.slice(2, -2)}</strong>;
+    }
+
+    return <React.Fragment key={`text-${index}`}>{part}</React.Fragment>;
+  });
+}
+
 function renderBlock(block, key) {
   if (block.type === "heading") {
     const HeadingTag = block.level === 3 ? "h3" : "h2";
@@ -222,7 +261,7 @@ function renderBlock(block, key) {
           lineHeight: 1.35,
         }}
       >
-        {block.text}
+        {renderInlineMarkdown(block.text)}
       </HeadingTag>
     );
   }
@@ -240,10 +279,24 @@ function renderBlock(block, key) {
       >
         {block.items.map((item, itemIndex) => (
           <li key={`${key}-${itemIndex}`} style={{ marginBottom: 4 }}>
-            {item}
+            {renderInlineMarkdown(item)}
           </li>
         ))}
       </ListTag>
+    );
+  }
+
+  if (block.type === "divider") {
+    return (
+      <hr
+        key={key}
+        className="ai-doc-divider"
+        style={{
+          border: 0,
+          borderTop: "2px solid #CBD5E1",
+          margin: "24px 0",
+        }}
+      />
     );
   }
 
@@ -288,7 +341,7 @@ function renderBlock(block, key) {
                     verticalAlign: "top",
                   }}
                 >
-                  {block.header?.[index] || ""}
+                  {renderInlineMarkdown(block.header?.[index] || "")}
                 </th>
               ))}
             </tr>
@@ -309,7 +362,7 @@ function renderBlock(block, key) {
                       verticalAlign: "top",
                     }}
                   >
-                    {row?.[index] || ""}
+                    {renderInlineMarkdown(row?.[index] || "")}
                   </td>
                 ))}
               </tr>
@@ -330,17 +383,89 @@ function renderBlock(block, key) {
         fontSize: 15,
       }}
     >
-      {block.text}
+      {renderInlineMarkdown(block.text)}
     </p>
   );
 }
 
 /**
- * WriterScreen 역할의 문서 유형 메타 정보
+ * 기존에 DB에 저장된 깨진 USER 메시지 표시용 보정.
  *
-  * 목적:
-  * - 문서 저장 과정에서 URL이나 메타 값이 섞이지 않도록
-  *   화면 기준에서는 REPORT / MINUTES / APPROVAL 문자열로 다룬다.
+ * 주의:
+ * - DB 값을 수정하지 않습니다.
+ * - 버전 카드 표시용 문구만 정리합니다.
+ * - 새로 저장되는 USER content는 백엔드에서 정상 저장되어야 합니다.
+ */
+function normalizeVersionRequestText(value) {
+  const source = String(value || "").trim();
+
+  if (!source) {
+    return "요청 내용이 없습니다.";
+  }
+
+  const collapsed = source.replace(/\s+/g, " ").trim();
+
+  if (!source.includes("??")) {
+    return collapsed;
+  }
+
+  const lines = source
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  const ignoredValues = new Set([
+    "REPORT",
+    "MINUTES",
+    "APPROVAL",
+    "TEMPLATE",
+    "자세히",
+    "보통",
+    "간단히",
+  ]);
+
+  const valuesAfterColon = lines
+    .map((line) => {
+      const colonIndex = line.lastIndexOf(":");
+      if (colonIndex < 0) return "";
+      return line.slice(colonIndex + 1).trim();
+    })
+    .filter(Boolean)
+    .filter((text) => !ignoredValues.has(text.toUpperCase()))
+    .filter((text) => !ignoredValues.has(text));
+
+  const instructionLike = valuesAfterColon.filter((text) =>
+    /(해줘|해주세요|바꿔|변경|추가|강조|구분|기울|수정|제외|작성|정리)/.test(text)
+  );
+
+  if (instructionLike.length > 0) {
+    return instructionLike[instructionLike.length - 1].replace(/\s+/g, " ").trim();
+  }
+
+  const titleLike = valuesAfterColon.find((text) => {
+    if (text.length < 4 || text.length > 80) return false;
+    if (text.includes(">")) return false;
+    if (text.includes("대상 본부")) return false;
+    if (text.includes("참고 자료")) return false;
+    return true;
+  });
+
+  if (titleLike) {
+    const normalizedTitle = titleLike.replace(/\s+/g, " ").trim();
+    return normalizedTitle.endsWith("작성 요청")
+      ? normalizedTitle
+      : `${normalizedTitle} 작성 요청`;
+  }
+
+  return "이전 요청 내용";
+}
+
+/**
+ * WriterScreen에서 사용하는 문서 유형 정규화.
+ *
+ * 목적:
+ * - 문서 저장 과정에서 URL이나 메타 값이 앞지르지 않도록
+ *   화면 기준에서 REPORT / MINUTES / APPROVAL / TEMPLATE 문자로 고정합니다.
  */
 const normalizeWriterType = (type) => {
   const normalized = String(type || "").trim().toUpperCase();
@@ -357,43 +482,37 @@ export default function WriterScreen({
   setWriterState,
   writerType = "REPORT",
 }) {
-  /**
-   * writerType 안전 보정
-   */
   const safeWriterType = normalizeWriterType(writerType);
 
-  /**
-   * writerState 안전 처리
-   * --------------------------------------------------
-   * writerState.chat / writerState.versions가 undefined인 경우에도
-   * 화면이 깨지지 않도록 배열 보정
-   */
   const chatMessages = Array.isArray(writerState?.chat)
     ? writerState.chat
     : [];
 
-  const versions = Array.isArray(writerState?.versions)
+  const rawVersions = Array.isArray(writerState?.versions)
     ? writerState.versions
     : [];
 
-  /**
-   * 현재 미리보기 중인 버전 ID
-   * --------------------------------------------------
-   * - 현재 버전(current)이면 해당 버전을 기본 미리보기 대상으로 설정
-   * - 없으면 마지막 버전
-   * - 아무 버전도 없으면 null
-   */
-  const [previewVersionId, setPreviewVersionId] = useState(null);
+  const versions = useMemo(
+    () =>
+      rawVersions.map((version) => {
+        const requestSource =
+          version?.displayRequestText ||
+          version?.requestText ||
+          version?.summary ||
+          "";
 
+        return {
+          ...version,
+          displayRequestText: normalizeVersionRequestText(requestSource),
+        };
+      }),
+    [rawVersions]
+  );
+
+  const [previewVersionId, setPreviewVersionId] = useState(null);
   const [actionMessage, setActionMessage] = useState("");
   const [isRevising, setIsRevising] = useState(false);
 
-  /**
-   * 안내 메시지 타이머 관리
-   *
-   * 기존 showActionMessage._timer 방식은 함수가 새로 생성되어
-   * 타이머 관리가 불안정할 수 있으므로 useRef로 관리한다.
-   */
   const actionTimerRef = useRef(null);
   const previewContentRef = useRef(null);
   const documentPrintRef = useRef(null);
@@ -405,24 +524,27 @@ export default function WriterScreen({
   const getVersionLabel = (version, index) =>
     version?.label || version?.title || `V${index + 1}`;
 
-  /**
-   * 결재 사유 문서 여부
-   *
-   * APPROVAL 문서일 때만 전자결재로 내보내기 버튼을 노출한다.
-   */
-  const isApprovalDocument = safeWriterType === "APPROVAL";
+  const formatVersionDate = (value) => {
+    if (!value) {
+      return "-";
+    }
 
-  /**
-   * 실제 문서 표시 데이터 계산
-   * --------------------------------------------------
-   * draftTitle:
-   * - writerState.title이 있으면 실제 문서 제목
-   * - 없으면 문서 유형별 fallbackTitle
-   *
-   * draftContent:
-   * - writerState.content가 있으면 실제 Gemini 생성/수정 문서
-   * - 없으면 안내 문구
-   */
+    const parsed = new Date(value);
+
+    if (Number.isNaN(parsed.getTime())) {
+      return "-";
+    }
+
+    return new Intl.DateTimeFormat("ko-KR", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(parsed);
+  };
+
   const fallbackContent =
     "초기 생성된 초안이 없습니다. 문서 작성 시작 화면에서 AI 초안을 먼저 생성해 주세요.";
 
@@ -431,20 +553,11 @@ export default function WriterScreen({
 
   const draftContent = writerState?.content || fallbackContent;
 
-  /**
-   * 버전 미리보기 계산
-   * --------------------------------------------------
-   * previewVersionId가 선택되어 있고 해당 버전의 content가 있으면
-   * 오른쪽 문서 영역에는 해당 버전의 content를 보여줌
-   *
-   * 없으면 현재 writerState.content를 보여줌
-   */
   const previewVersion = versions.find(
     (version) => version.id === previewVersionId
   );
 
   const displayContent = previewVersion?.content || draftContent;
-
   const displayTitle = writerState?.title || draftTitle;
 
   const documentBlocks = useMemo(
@@ -452,11 +565,9 @@ export default function WriterScreen({
     [displayContent]
   );
 
-  const displayStats = "글자 수 " + (displayContent || "").length.toLocaleString() + "자";
+  const displayStats =
+    "글자 수 " + (displayContent || "").length.toLocaleString() + "자";
 
-  /**
-   * 상단/하단 액션 메시지 표시
-   */
   useEffect(() => {
     if (!versions.length) {
       setPreviewVersionId(null);
@@ -505,6 +616,14 @@ export default function WriterScreen({
     return () => {
       observer.disconnect();
     };
+  }, [displayContent]);
+
+  useEffect(() => {
+    return () => {
+      if (actionTimerRef.current) {
+        window.clearTimeout(actionTimerRef.current);
+      }
+    };
   }, []);
 
   const showActionMessage = (message) => {
@@ -519,22 +638,10 @@ export default function WriterScreen({
     }, 2000);
   };
 
-  /**
-   * 踰꾩쟾 誘몃━蹂닿린
-   *
-   * 실제 writerState.content를 바꾸지 않고,
-   * 오른쪽 문서 표시만 해당 버전 content로 변경한다.
-   */
   const handlePreviewVersion = (versionId) => {
     setPreviewVersionId(versionId);
   };
 
-  /**
-   * 踰꾩쟾 蹂듭썝
-   *
-   * 선택한 버전의 content를 writerState.content에 반영한다.
-   * 즉, 복원은 미리보기와 별개로 실제 현재 문서 상태를 바꾼다.
-   */
   const handleRestoreVersion = (versionId) => {
     setWriterState((prev) => {
       const safeVersions = Array.isArray(prev?.versions)
@@ -557,20 +664,9 @@ export default function WriterScreen({
     });
 
     setPreviewVersionId(versionId);
-    showActionMessage(versionId + " 버전으로 복원했습니다.");
+    showActionMessage(`${versionId} 버전으로 복원했습니다.`);
   };
 
-  /**
-   * AI 추가 수정 요청
-   *
-   * 사용자가 "더 간결하게", "줄로 정리해줘" 같은 입력을 하면
-   * 현재 화면에 표시 중인 문서(displayContent)를 기준으로 /assistant/revise API를 호출.
-   *
-   * 성공 시
-   * - writerState.content를 수정된 문서로 교체
-   * - versions에 새 버전 content 저장
-   * - 채팅 영역에 사용자 요청/AI 응답 표시
-   */
   const addMessage = async () => {
     const instruction = (writerState?.prompt || "").trim();
 
@@ -595,10 +691,6 @@ export default function WriterScreen({
 
     setIsRevising(true);
 
-    /**
-      * 사용자의 메시지를 먼저 화면에 반영한다.
-      * 실제 AI 응답은 API 성공 후 추가한다.
-     */
     setWriterState((prev) => {
       const safeChat = Array.isArray(prev?.chat) ? prev.chat : [];
 
@@ -612,19 +704,13 @@ export default function WriterScreen({
     try {
       const response = await reviseAssistantDraft({
         sessionId: writerState.sessionId,
-
-        /**
-         * API에는 REPORT / MINUTES / APPROVAL 대문자 문자열로 전달한다.
-         */
         type: safeWriterType,
-
         title: displayTitle,
         currentContent: displayContent,
         instruction,
       });
 
       const data = unwrapApiData(response);
-
       const revisedContent = data?.content || displayContent;
 
       const aiMessage = {
@@ -635,18 +721,21 @@ export default function WriterScreen({
         time: "방금",
       };
 
-      /**
-       * 새 버전 ID는 현재 versions 기준으로 생성한다.
-       * isRevising으로 중복 클릭을 막고 있으므로 일반 사용자에게서 안정적이다.
-       */
+      const nextVersionNumber = versions.length + 1;
       const nextVersion = {
-        id: `v${versions.length + 1}`,
-        label: `V${versions.length + 1}`,
+        id: `v${nextVersionNumber}`,
+        versionNo: nextVersionNumber,
+        requestMessageId: data?.userMessageId ?? null,
+        requestText: instruction,
+        displayRequestText: normalizeVersionRequestText(instruction),
+        responseMessageId: data?.aiMessageId ?? null,
+        responseText: revisedContent,
+        label: `V${nextVersionNumber}`,
         title: "추가 수정",
         summary: instruction,
         content: revisedContent,
         createdAt: new Date().toISOString(),
-        seqNo: versions.length + 1,
+        seqNo: nextVersionNumber,
         modelName: data?.modelName ?? writerState?.modelName ?? "",
         current: true,
       };
@@ -698,11 +787,6 @@ export default function WriterScreen({
     }
   };
 
-  /**
-   * 현재 표시 중인 문서 복사
-   *
-   * 미리보기 중인 버전이면 해당 버전 content를 복사한다.
-   */
   const handleCopy = async () => {
     const textToCopy = displayTitle + "\n\n" + displayContent;
 
@@ -732,9 +816,6 @@ export default function WriterScreen({
     }
   };
 
-  /**
-   * 현재 표시 중인 문서 다운로드
-   */
   const handleDownload = () => {
     const blob = new Blob([displayTitle + "\n\n" + displayContent], {
       type: "text/plain;charset=utf-8",
@@ -818,6 +899,12 @@ export default function WriterScreen({
         width: 100%;
         border-collapse: collapse;
       }
+
+      .ai-doc-divider {
+        border: 0;
+        border-top: 2px solid #CBD5E1;
+        margin: 24px 0;
+      }
     </style>
   </head>
   <body>
@@ -846,48 +933,6 @@ export default function WriterScreen({
     }, 150);
   };
 
-  /**
-   * 전자결재로 내보내기
-   *
-   * 아직 실제 전자결재 API와 연결하지 않았으므로
-   * 현재의 버전 기록에 내보내기 기록만 남긴다.
-   */
-  const handleExportToApproval = () => {
-    const nextVersion = {
-      id: "v" + (versions.length + 1),
-      label: "V" + (versions.length + 1),
-      summary: "문서를 전자결재 > 임시보관함 용도로 내보냈습니다.",
-      content: displayContent,
-      createdAt: new Date().toISOString(),
-      seqNo: versions.length + 1,
-      modelName: writerState?.modelName || "",
-      current: true,
-    };
-
-    setWriterState((prev) => {
-      const safeVersions = Array.isArray(prev?.versions)
-        ? prev.versions
-        : [];
-
-      return {
-        ...prev,
-        content: displayContent,
-        type: safeWriterType,
-        showHistory: true,
-        versions: [
-          ...safeVersions.map((version) => ({
-            ...version,
-            current: false,
-          })),
-          nextVersion,
-        ],
-      };
-    });
-
-    setPreviewVersionId(nextVersion.id);
-    showActionMessage("전자결재 > 임시보관함에 문서가 저장되었습니다.");
-  };
-
   return (
     <div
       style={{
@@ -896,6 +941,12 @@ export default function WriterScreen({
       }}
     >
       <style>{`
+        .ai-doc-divider {
+          border: 0;
+          border-top: 2px solid #CBD5E1;
+          margin: 24px 0;
+        }
+
         @media print {
           @page {
             size: auto;
@@ -932,7 +983,6 @@ export default function WriterScreen({
         }
       `}</style>
 
-      {/* 상단 제목 영역 */}
       <div className="ai-no-print" style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <h1
@@ -963,7 +1013,7 @@ export default function WriterScreen({
         </div>
 
         <p style={{ margin: "10px 0 0", color: C.sub, fontSize: 16 }}>
-          문서를 구조화해 미리보기하고 수정할 수 있습니다.
+          문서를 구조화해 미리보기하고 추가 수정할 수 있습니다.
         </p>
       </div>
 
@@ -977,7 +1027,6 @@ export default function WriterScreen({
           alignItems: "start",
         }}
       >
-        {/* 좌측: AI 대화 영역 */}
         <div
           className="ai-no-print"
           style={{
@@ -1043,7 +1092,6 @@ export default function WriterScreen({
             </div>
           </div>
 
-          {/* 수정 요청 입력 영역 */}
           <div style={{ flexShrink: 0 }}>
             <div
               style={{
@@ -1073,7 +1121,7 @@ export default function WriterScreen({
                 placeholder={
                   isRevising
                     ? "AI가 문서를 수정하는 중입니다..."
-                    : "수정 요청을 입력하세요..."
+                    : "수정 요청을 입력하세요."
                 }
                 style={{
                   flex: 1,
@@ -1112,11 +1160,10 @@ export default function WriterScreen({
           </div>
         </div>
 
-        {/* 가운데: 문서 미리보기 영역 */}
-          <div
-            ref={previewContentRef}
-            style={{ ...styles.card, overflow: "hidden", alignSelf: "start" }}
-          >
+        <div
+          ref={previewContentRef}
+          style={{ ...styles.card, overflow: "hidden", alignSelf: "start" }}
+        >
           <div
             className="ai-no-print"
             style={{ padding: 18, borderBottom: `1px solid ${C.border}` }}
@@ -1142,15 +1189,6 @@ export default function WriterScreen({
                 <Icon>{I.history}</Icon>
                 버전 기록
               </AppButton>
-
-              {isApprovalDocument && (
-                <AppButton
-                  style={{ height: 36 }}
-                  onClick={handleExportToApproval}
-                >
-                  전자결재로 내보내기
-                </AppButton>
-              )}
 
               <AppButton
                 variant="secondary"
@@ -1248,11 +1286,20 @@ export default function WriterScreen({
           </div>
         </div>
 
-        {/* 우측: 버전 기록 영역 */}
         {writerState?.showHistory && (
           <div
             className="ai-no-print"
-            style={{ ...styles.card, padding: 20, minHeight: 760, height: "100%" }}
+            style={{
+              ...styles.card,
+              padding: 20,
+              minHeight: 760,
+              height: "100%",
+              width: "100%",
+              maxWidth: "100%",
+              minWidth: 0,
+              overflowX: "hidden",
+              boxSizing: "border-box",
+            }}
           >
             <div
               style={{
@@ -1310,7 +1357,16 @@ export default function WriterScreen({
               이전 버전을 미리보기하고, 원하는 버전으로 복원할 수 있습니다.
             </div>
 
-            <div style={{ marginTop: 22, display: "grid", gap: 16 }}>
+            <div
+              style={{
+                marginTop: 22,
+                display: "grid",
+                gap: 16,
+                width: "100%",
+                maxWidth: "100%",
+                minWidth: 0,
+              }}
+            >
               {versions.length === 0 ? (
                 <div
                   style={{
@@ -1330,93 +1386,115 @@ export default function WriterScreen({
                   .slice()
                   .reverse()
                   .map((version, index) => (
-                  <div
-                    key={version.id}
-                    style={{
-                      ...styles.card,
-                      padding: 16,
-                      border:
-                        previewVersionId === version.id
-                          ? `1px solid ${C.accent}`
-                          : `1px solid ${C.border}`,
-                      background:
-                        previewVersionId === version.id ? "#F8FBFF" : "#fff",
-                    }}
-                  >
                     <div
+                      key={version.id}
                       style={{
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
+                        ...styles.card,
+                        padding: 16,
+                        width: "100%",
+                        maxWidth: "100%",
+                        minWidth: 0,
+                        overflow: "hidden",
+                        boxSizing: "border-box",
+                        border:
+                          previewVersionId === version.id
+                            ? `1px solid ${C.accent}`
+                            : `1px solid ${C.border}`,
+                        background:
+                          previewVersionId === version.id ? "#F8FBFF" : "#fff",
                       }}
                     >
                       <div
                         style={{
-                          width: 42,
-                          height: 42,
-                          borderRadius: "50%",
-                          border: `2px solid ${C.accent}`,
-                          color: C.accent,
                           display: "flex",
                           alignItems: "center",
-                          justifyContent: "center",
-                          fontWeight: 900,
+                          justifyContent: "space-between",
                         }}
                       >
+                        <div
+                          style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: "50%",
+                            border: `2px solid ${C.accent}`,
+                            color: C.accent,
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontWeight: 900,
+                          }}
+                        >
+                          {getVersionLabel(version, versions.length - 1 - index)}
+                        </div>
+
+                        {version.current && (
+                          <div
+                            style={{
+                              height: 26,
+                              padding: "0 10px",
+                              borderRadius: 999,
+                              background: C.softGreen,
+                              color: C.success,
+                              display: "flex",
+                              alignItems: "center",
+                              fontSize: 12,
+                              fontWeight: 800,
+                            }}
+                          >
+                            현재
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ marginTop: 12, fontWeight: 900 }}>
                         {getVersionLabel(version, versions.length - 1 - index)}
                       </div>
 
-                      {version.current && (
-                        <div
-                          style={{
-                            height: 26,
-                            padding: "0 10px",
-                            borderRadius: 999,
-                            background: C.softGreen,
-                            color: C.success,
-                            display: "flex",
-                            alignItems: "center",
-                            fontSize: 12,
-                            fontWeight: 800,
-                          }}
+                      <div
+                        style={{
+                          marginTop: 6,
+                          fontSize: 12,
+                          color: C.muted,
+                          fontWeight: 600,
+                        }}
+                      >
+                        {formatVersionDate(version.createdAt)}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 8,
+                          fontSize: 13,
+                          color: C.sub,
+                          lineHeight: 1.6,
+                          wordBreak: "break-word",
+                          overflowWrap: "anywhere",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden",
+                        }}
+                      >
+                        요청: {version.displayRequestText || "요청 내용이 없습니다."}
+                      </div>
+
+                      <div
+                        style={{
+                          marginTop: 14,
+                          width: "100%",
+                          maxWidth: "100%",
+                          minWidth: 0,
+                          boxSizing: "border-box",
+                        }}
+                      >
+                        <AppButton
+                          style={{ width: "100%", minWidth: 0, height: 38 }}
+                          onClick={() => handleRestoreVersion(version.id)}
                         >
-                          현재
-                        </div>
-                      )}
+                          이 버전으로 복원
+                        </AppButton>
+                      </div>
                     </div>
-
-                    <div style={{ marginTop: 12, fontWeight: 900 }}>
-                      {getVersionLabel(version, versions.length - 1 - index)}
-                    </div>
-
-                    <div
-                      style={{
-                        marginTop: 8,
-                        fontSize: 13,
-                        color: C.sub,
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {version.summary}
-                    </div>
-
-                    <div style={{ display: "flex", gap: 8, marginTop: 14 }}>
-                      <AppButton
-                        variant="secondary"
-                        style={{ flex: 1 }}
-                        onClick={() => handlePreviewVersion(version.id)}
-                      >
-                        미리보기
-                      </AppButton>
-
-                      <AppButton
-                        style={{ flex: 1 }}
-                        onClick={() => handleRestoreVersion(version.id)}
-                      >
-                        이 버전으로 복원
-                      </AppButton>
-                    </div>
-                  </div>
                   ))
               )}
             </div>

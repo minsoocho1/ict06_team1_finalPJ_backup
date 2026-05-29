@@ -5,28 +5,26 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ict06.team1_fin_pj.domain.approval.entity.ApprovalEntity;
 import com.ict06.team1_fin_pj.domain.attendance.entity.AttendanceEntity;
 import com.ict06.team1_fin_pj.domain.attendance.entity.AttendanceStatus;
-import com.ict06.team1_fin_pj.domain.attendance.entity.LeaveOccurrenceEntity;
 import com.ict06.team1_fin_pj.domain.attendance.entity.LeaveRequestEntity;
 import com.ict06.team1_fin_pj.domain.attendance.entity.LeaveStatus;
 import com.ict06.team1_fin_pj.domain.attendance.entity.LeaveTypeEntity;
 import com.ict06.team1_fin_pj.domain.attendance.repository.AttendanceRepository;
-import com.ict06.team1_fin_pj.domain.attendance.repository.LeaveOccurrenceRepository;
+import com.ict06.team1_fin_pj.domain.attendance.repository.HolidayRepository;
 import com.ict06.team1_fin_pj.domain.attendance.repository.LeaveRequestRepository;
 import com.ict06.team1_fin_pj.domain.attendance.repository.LeaveTypeRepository;
+import com.ict06.team1_fin_pj.domain.attendance.service.LeaveService;
 import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -72,7 +70,8 @@ public class ApprovalAttendanceSyncService {
     private final AttendanceRepository attendanceRepository;
     private final LeaveRequestRepository leaveRequestRepository;
     private final LeaveTypeRepository leaveTypeRepository;
-    private final LeaveOccurrenceRepository leaveOccurrenceRepository;
+    private final HolidayRepository holidayRepository;
+    private final LeaveService leaveService;
 
     /*
      * [결재-근태 연동용]: 승인된 결재 문서의 JSON 본문에서 서식 필드 id와 입력값을 꺼내기 위한 mapper입니다.
@@ -184,10 +183,6 @@ public class ApprovalAttendanceSyncService {
                 .orElseThrow(() -> new IllegalArgumentException("등록되지 않은 부재 유형입니다. typeName=" + absenceTypeName));
         BigDecimal leaveDays = calculateLeaveDays(absenceTypeName, startDate, endDate, fieldValues);
 
-        if (Boolean.TRUE.equals(leaveType.getIsAnnualDeduct())) {
-            deductLeaveOccurrence(writer.getEmpNo(), startDate.getYear(), leaveDays);
-        }
-
         LeaveRequestEntity leaveRequest = LeaveRequestEntity.builder()
                 .employee(writer)
                 .leaveType(leaveType)
@@ -199,7 +194,15 @@ public class ApprovalAttendanceSyncService {
                 .reason(reason)
                 .approvedAt(LocalDateTime.now())
                 .build();
-        leaveRequestRepository.save(leaveRequest);
+        LeaveRequestEntity savedLeaveRequest = leaveRequestRepository.save(leaveRequest);
+
+        /*
+         * [결재-근태 연동용]: 연차 차감은 근태 도메인의 전용 메서드에 위임합니다.
+         * 전자결재는 승인된 LeaveRequest를 생성하고, 실제 used/remain_days 변경 기준은 근태 도메인과 공유합니다.
+         */
+        if (Boolean.TRUE.equals(leaveType.getIsAnnualDeduct()) && leaveDays.compareTo(BigDecimal.ZERO) > 0) {
+            leaveService.applyApprovedLeaveUsage(savedLeaveRequest.getLeaveRequestId());
+        }
 
         applyAbsenceAttendance(approval, writer, absenceTypeName, startDate, endDate, reason);
     }
@@ -220,6 +223,12 @@ public class ApprovalAttendanceSyncService {
 
         LocalDate cursor = startDate;
         while (!cursor.isAfter(endDate)) {
+            // [결재-근태 연동용]: 주말/공휴일은 휴가 차감 대상이 아니므로 Attendance 기록도 남기지 않습니다.
+            if (isNonWorkingDay(cursor)) {
+                cursor = cursor.plusDays(1);
+                continue;
+            }
+
             LocalDate workDate = cursor;
             AttendanceEntity attendance = attendanceRepository
                     .findByEmployee_EmpNoAndWorkDate(writer.getEmpNo(), workDate)
@@ -327,11 +336,23 @@ public class ApprovalAttendanceSyncService {
             LocalDate endDate,
             Map<String, String> fieldValues
     ) {
+        /*
+         * [결재-근태 연동용]: 연차 차감 대상 일수는 근태 도메인의 공휴일 제외 계산 기준을 재사용합니다.
+         * 연차/병가/경조사처럼 여러 날짜를 선택할 수 있는 서식은 주말과 HOLIDAY 테이블의 활성 공휴일을 제외합니다.
+         */
         if (LEAVE_AM_HALF.equals(absenceTypeName) || LEAVE_PM_HALF.equals(absenceTypeName)) {
+            if (isNonWorkingDay(startDate)) {
+                return BigDecimal.ZERO;
+            }
+
             return BigDecimal.valueOf(0.5);
         }
 
         if (LEAVE_EARLY.equals(absenceTypeName)) {
+            if (isNonWorkingDay(startDate)) {
+                return BigDecimal.ZERO;
+            }
+
             LocalTime absenceStartTime = parseTime(fieldValues.get(FIELD_ABSENCE_START_TIME), FIELD_ABSENCE_START_TIME);
             if (!absenceStartTime.isBefore(STANDARD_END_TIME)) {
                 throw new IllegalArgumentException("조퇴 시작 시간은 18시 이전이어야 합니다.");
@@ -343,40 +364,18 @@ public class ApprovalAttendanceSyncService {
                     .divide(STANDARD_WORK_HOURS, 1, RoundingMode.HALF_UP);
         }
 
-        return BigDecimal.valueOf(ChronoUnit.DAYS.between(startDate, endDate) + 1);
+        return leaveService.calculateLeaveDaysExcludingHoliday(startDate, endDate);
     }
 
     /**
-     * [결재-근태 연동용]: 연차 차감 대상 부재라면 만료일이 빠른 발생분부터 잔여 휴가를 차감합니다.
+     * [결재-근태 연동용]: 주말 또는 HOLIDAY 테이블에 등록된 활성 공휴일인지 확인합니다.
      */
-    private void deductLeaveOccurrence(String empNo, Integer targetYear, BigDecimal leaveDays) {
-        BigDecimal remainingDaysToDeduct = leaveDays;
-        List<LeaveOccurrenceEntity> occurrences = leaveOccurrenceRepository
-                .findByEmployee_EmpNoAndTargetYear(empNo, targetYear)
-                .stream()
-                .sorted(Comparator.comparing(LeaveOccurrenceEntity::getExpiryDate, Comparator.nullsLast(Comparator.naturalOrder())))
-                .toList();
+    private boolean isNonWorkingDay(LocalDate date) {
+        DayOfWeek dayOfWeek = date.getDayOfWeek();
+        boolean isWeekend = dayOfWeek == DayOfWeek.SATURDAY || dayOfWeek == DayOfWeek.SUNDAY;
+        boolean isHoliday = holidayRepository.existsByHolidayDateAndIsActiveTrue(date);
 
-        for (LeaveOccurrenceEntity occurrence : occurrences) {
-            if (remainingDaysToDeduct.compareTo(BigDecimal.ZERO) <= 0) {
-                break;
-            }
-
-            BigDecimal remainDays = occurrence.getRemain_days() == null
-                    ? BigDecimal.ZERO
-                    : occurrence.getRemain_days();
-            if (remainDays.compareTo(BigDecimal.ZERO) <= 0) {
-                continue;
-            }
-
-            BigDecimal deductDays = remainDays.min(remainingDaysToDeduct);
-            occurrence.useDays(deductDays);
-            remainingDaysToDeduct = remainingDaysToDeduct.subtract(deductDays);
-        }
-
-        if (remainingDaysToDeduct.compareTo(BigDecimal.ZERO) > 0) {
-            throw new IllegalStateException("잔여 휴가 일수가 부족합니다.");
-        }
+        return isWeekend || isHoliday;
     }
 
     /**

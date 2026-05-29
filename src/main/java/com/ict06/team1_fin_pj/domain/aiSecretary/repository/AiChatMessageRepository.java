@@ -1,5 +1,21 @@
-package com.ict06.team1_fin_pj.domain.aiSecretary.repository;
+/**
+ * @FileName : AiChatMessageRepository.java
+ * @Description : AI 대화 메시지 Repository
+ *                - AI 비서/챗봇 메시지 조회 및 저장
+ *                - 세션별 메시지 목록 조회
+ *                - USER/ASSISTANT 메시지 순서 및 버전 기록 복원에 사용
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.28  송혜진       USER/ASSISTANT 메시지 기반 버전 기록 복원 기준 반영
+ */
 
+package com.ict06.team1_fin_pj.domain.aiSecretary.repository;
 
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatMessageEntity;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.MessageRole;

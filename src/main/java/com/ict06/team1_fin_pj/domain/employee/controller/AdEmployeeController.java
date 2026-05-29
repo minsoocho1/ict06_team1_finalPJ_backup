@@ -142,6 +142,10 @@ public class AdEmployeeController {
 
         // 사용자가 선택한 검색 조건을 화면에 다시 유지하기 위해 전달
         model.addAttribute("condition", conditionDto);
+        model.addAttribute(
+                "statistics",
+                adEmployeeService.getEmployeeStatistics()
+        );
 
         // templates/admin/employee/list.html 화면으로 이동
         return "admin/employee/list";

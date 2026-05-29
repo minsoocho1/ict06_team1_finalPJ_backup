@@ -15,6 +15,10 @@ import AppButton from "../components/AppButton";
 import Field from "../components/Field";
 import TextInput from "../components/TextInput";
 import OrganizationSelector from "../components/OrganizationSelector";
+import {
+  extractReferenceText,
+  unwrapApiData,
+} from "../api/aiSecretaryApi";
 import { docMeta } from "../constants/aiSecretaryData";
 import { I, Icon } from "../constants/aiSecretaryIcons";
 import { C, styles } from "../styles/aiSecretaryTheme";
@@ -41,11 +45,14 @@ export default function StartFormScreen({
 
   const [amountMode, setAmountMode] = useState("normal");
   const [customAmount, setCustomAmount] = useState("");
+  // 파일 본문 추출은 별도 API 호출이므로 화면 로딩 상태를 분리한다.
+  const [referenceExtracting, setReferenceExtracting] = useState(false);
   const referenceInputRef = useRef(null);
 
   const maxReferenceFiles = 3;
-  const maxReferenceFileSize = 10 * 1024 * 1024;
+  const maxReferenceFileSize = 5 * 1024 * 1024;
   const referenceInputId = "ai-secretary-reference-files";
+  const referencePreviewMaxLength = 600;
 
   const safeFormType =
     formType === "REPORT" || formType === "MINUTES" || formType === "APPROVAL"
@@ -65,6 +72,10 @@ export default function StartFormScreen({
       ? formData.referenceFiles
       : [],
     referenceMemo: formData?.referenceMemo || "",
+    referenceText: formData?.referenceText || "",
+    referenceExtractStatus: formData?.referenceExtractStatus || "idle",
+    referenceExtractMessage: formData?.referenceExtractMessage || "",
+    referenceExtractTruncated: Boolean(formData?.referenceExtractTruncated),
   };
 
   const organizationSeed =
@@ -90,7 +101,94 @@ export default function StartFormScreen({
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  const handleReferenceFilesChange = (event) => {
+  // 파일을 제거하거나 화면을 초기화할 때 추출 결과도 함께 정리한다.
+  const resetReferenceExtractState = () => {
+    onChangeFormData("referenceText", "");
+    onChangeFormData("referenceExtractStatus", "idle");
+    onChangeFormData("referenceExtractMessage", "");
+    onChangeFormData("referenceExtractTruncated", false);
+  };
+
+  const buildReferencePreview = (text) => {
+    const normalized = String(text || "").trim();
+    if (!normalized) return "";
+    if (normalized.length <= referencePreviewMaxLength) return normalized;
+    return `${normalized.slice(0, referencePreviewMaxLength)}...`;
+  };
+
+  // 첨부 파일을 바로 분석해 referenceText로 저장한다.
+  // 실패해도 문서 작성 자체는 막지 않고 기존 파일명/메모 fallback을 유지한다.
+  const handleReferenceExtraction = async (files) => {
+    if (!Array.isArray(files) || files.length === 0) {
+      resetReferenceExtractState();
+      return;
+    }
+
+    setReferenceExtracting(true);
+    onChangeFormData("referenceExtractStatus", "loading");
+    onChangeFormData(
+      "referenceExtractMessage",
+      "첨부 파일 본문을 추출하고 있습니다."
+    );
+    onChangeFormData("referenceText", "");
+    onChangeFormData("referenceExtractTruncated", false);
+
+    const extractedSections = [];
+    const failedFiles = [];
+    const messages = [];
+    let truncated = false;
+
+    for (const file of files) {
+      // 여러 파일을 붙인 경우 파일별로 추출한 뒤 하나의 참고 본문으로 합친다.
+      try {
+        const response = await extractReferenceText(file);
+        const payload = unwrapApiData(response);
+        const extractedText = String(payload?.extractedText || "").trim();
+
+        if (payload?.message) {
+          messages.push(`${file.name}: ${payload.message}`);
+        }
+
+        if (extractedText) {
+          extractedSections.push(`[${file.name}]\n${extractedText}`);
+          truncated = truncated || Boolean(payload?.truncated);
+        } else {
+          failedFiles.push(file.name);
+        }
+      } catch (error) {
+        failedFiles.push(file.name);
+      }
+    }
+
+    const combinedText = extractedSections.join("\n\n").trim();
+    const hasSuccess = Boolean(combinedText);
+    const hasFailure = failedFiles.length > 0;
+    const status = hasSuccess
+      ? hasFailure
+        ? "partial"
+        : "success"
+      : "failed";
+
+    let message = "";
+    if (status === "success") {
+      message = messages[0] || "본문 추출 완료";
+    } else if (status === "partial") {
+      message =
+        "일부 파일은 본문 추출에 실패했습니다. 실패한 파일은 파일명과 작성 메모만 참고됩니다.";
+    } else {
+      message =
+        "파일 본문을 추출하지 못했습니다. 파일명과 작성 메모만 참고됩니다.";
+    }
+
+    onChangeFormData("referenceText", combinedText);
+    onChangeFormData("referenceExtractStatus", status);
+    onChangeFormData("referenceExtractMessage", message);
+    onChangeFormData("referenceExtractTruncated", truncated);
+    setReferenceExtracting(false);
+  };
+
+  // 파일 선택 즉시 추출 API를 호출해 사용자에게 결과를 보여준다.
+  const handleReferenceFilesChange = async (event) => {
     const selectedFiles = Array.from(event.target.files || [])
       .filter((file) => Number(file?.size || 0) <= maxReferenceFileSize)
       .slice(0, maxReferenceFiles);
@@ -107,16 +205,20 @@ export default function StartFormScreen({
         )
     );
 
-    onChangeFormData("referenceFiles", dedupedFiles.slice(0, maxReferenceFiles));
+    const nextFiles = dedupedFiles.slice(0, maxReferenceFiles);
+    onChangeFormData("referenceFiles", nextFiles);
     event.target.value = "";
+    await handleReferenceExtraction(nextFiles);
   };
 
-  const handleRemoveReferenceFile = (removeIndex) => {
+  // 파일 제거 후 남은 파일 기준으로 referenceText를 다시 계산한다.
+  const handleRemoveReferenceFile = async (removeIndex) => {
     const nextFiles = safeFormData.referenceFiles.filter(
       (_, index) => index !== removeIndex
     );
 
     onChangeFormData("referenceFiles", nextFiles);
+    await handleReferenceExtraction(nextFiles);
   };
 
   const baseFields = {
@@ -178,6 +280,7 @@ export default function StartFormScreen({
       onChangeFormData("amount", seededAmount);
       onChangeFormData("referenceFiles", []);
       onChangeFormData("referenceMemo", "");
+      resetReferenceExtractState();
 
       if (referenceInputRef.current) {
         referenceInputRef.current.value = "";
@@ -199,6 +302,7 @@ export default function StartFormScreen({
     onChangeFormData("amount", "보통");
     onChangeFormData("referenceFiles", []);
     onChangeFormData("referenceMemo", "");
+    resetReferenceExtractState();
     if (referenceInputRef.current) {
       referenceInputRef.current.value = "";
     }
@@ -466,14 +570,72 @@ export default function StartFormScreen({
                   }}
                 >
                   <Icon>{I.clip}</Icon>
-                  파일을 선택해 첨부해 주세요. 파일당 10MB 이하, 최대 3개
+                  파일을 선택해 첨부해 주세요. 파일당 5MB 이하, 최대 3개
                 </div>
 
-                <div style={{ marginTop: 10, fontSize: 13, lineHeight: 1.6 }}>
-                  PDF, DOCX, TXT 파일만 지원합니다.
-                  <br />
-                  선택한 파일명과 참고 메모가 문서 작성 참고 정보로 반영됩니다.
-                  현재 단계에서는 파일 본문 자동 분석은 지원하지 않습니다.
+                <div
+                  style={{
+                    marginTop: 12,
+                    border: `1px solid #DBEAFE`,
+                    borderRadius: 12,
+                    background: "#F8FBFF",
+                    padding: 14,
+                    display: "grid",
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      color: C.accent,
+                      fontWeight: 800,
+                      fontSize: 13,
+                    }}
+                  >
+                    <span
+                      aria-hidden="true"
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        width: 18,
+                        height: 18,
+                        borderRadius: 999,
+                        background: "#E8F0FF",
+                        fontSize: 12,
+                        lineHeight: 1,
+                      }}
+                    >
+                      ⓘ
+                    </span>
+                    참고 자료 안내
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: 13,
+                      lineHeight: 1.7,
+                      color: C.sub,
+                    }}
+                  >
+                    <div>
+                      - TXT, PDF, DOCX 파일의 본문을 자동 추출해 AI 문서
+                      작성에 참고합니다.
+                    </div>
+                    <div>
+                      - PDF는 텍스트 기반 PDF만 본문 분석을 지원합니다.
+                    </div>
+                    <div>
+                      - 스캔본/이미지형 PDF는 본문 추출이 제한될 수
+                      있습니다.
+                    </div>
+                    <div>
+                      - 파일 본문을 추출하지 못하면 파일명과 작성 메모만
+                      참고됩니다.
+                    </div>
+                  </div>
                 </div>
 
                 <input
@@ -548,6 +710,66 @@ export default function StartFormScreen({
                 </div>
               )}
 
+              {/* 본문 추출 상태와 미리보기는 첨부 기능에만 보조적으로 노출한다. */}
+              {(referenceExtracting ||
+                safeFormData.referenceExtractStatus !== "idle") && (
+                <div
+                  style={{
+                    border: `1px solid ${C.border}`,
+                    borderRadius: 12,
+                    padding: 12,
+                    background:
+                      safeFormData.referenceExtractStatus === "failed"
+                        ? "#FFF8F8"
+                        : "#F8FBFF",
+                    display: "grid",
+                    gap: 8,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color:
+                        safeFormData.referenceExtractStatus === "failed"
+                          ? "#c62828"
+                          : C.text,
+                    }}
+                  >
+                    {referenceExtracting
+                      ? "본문을 추출하고 있습니다..."
+                      : safeFormData.referenceExtractMessage ||
+                        "본문 추출 상태를 확인해 주세요."}
+                  </div>
+
+                  {safeFormData.referenceText && (
+                    <div
+                      style={{
+                        borderRadius: 10,
+                        background: "#fff",
+                        border: `1px solid ${C.border}`,
+                        padding: 12,
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        fontSize: 12,
+                        color: C.sub,
+                        lineHeight: 1.6,
+                        maxHeight: 180,
+                        overflowY: "auto",
+                      }}
+                    >
+                      {buildReferencePreview(safeFormData.referenceText)}
+                    </div>
+                  )}
+
+                  {safeFormData.referenceExtractTruncated && (
+                    <div style={{ fontSize: 12, color: C.sub }}>
+                      본문이 길어 앞부분만 AI 참고 자료로 사용됩니다.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <TextInput
                 textarea
                 value={safeFormData.referenceMemo}
@@ -593,6 +815,7 @@ export default function StartFormScreen({
               onChangeFormData("amount", "보통");
               onChangeFormData("referenceFiles", []);
               onChangeFormData("referenceMemo", "");
+              resetReferenceExtractState();
               if (referenceInputRef.current) {
                 referenceInputRef.current.value = "";
               }
@@ -602,9 +825,13 @@ export default function StartFormScreen({
           >
             초기화          </AppButton>
 
-          <AppButton onClick={onGenerateDraft} disabled={generating}>
+          <AppButton onClick={onGenerateDraft} disabled={generating || referenceExtracting}>
             <Icon>{I.spark}</Icon>
-            {generating ? "AI 초안 생성 중..." : "AI 초안 생성"}
+            {referenceExtracting
+              ? "본문 분석 중..."
+              : generating
+              ? "AI 초안 생성 중..."
+              : "AI 초안 생성"}
           </AppButton>
         </div>
 
