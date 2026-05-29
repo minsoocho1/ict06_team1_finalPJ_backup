@@ -10,6 +10,7 @@
  * @ 2026.05.06    김다솜        최초 생성 및 온보딩 대시보드 요약 카드 스타일 분리
  * @ 2026.05.12    김다솜        전체화면에서도 콘텐츠가 과도하게 확장되지 않도록 중앙 정렬 컨테이너 추가
  * @ 2026.05.15    김다솜        UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ * @ 2026.05.29    김다솜        온보딩 박스 버그 수정
  */
 
 export const dashboardPageStyle = {
@@ -62,12 +63,28 @@ export const progressTrack = {
   overflow: 'hidden',
 };
 
-export const progressFill = (percent) => ({
-  width: `${percent}%`,
-  height: '100%',
-  background: '#2563EB',
-  transition: 'width 0.3s ease',
-});
+export const normalizePercent = (percent) => {
+  const numericPercent = Number.parseFloat(percent);
+
+  if (Number.isNaN(numericPercent)) {
+    return 0;
+  }
+
+  return Math.min(100, Math.max(0, numericPercent));
+};
+
+export const progressFill = (percent) => {
+  const safePercent = normalizePercent(percent);
+
+  return {
+    width: `${safePercent}%`,
+    minWidth: safePercent >= 100 ? '100%' : 0,
+    height: '100%',
+    background: 'linear-gradient(90deg, #2563EB 0%, #1D4ED8 65%, #0F172A 100%)',
+    borderRadius: '20px',
+    transition: 'width 0.3s ease',
+  };
+};
 
 export const summaryGrid = {
   display: 'grid',

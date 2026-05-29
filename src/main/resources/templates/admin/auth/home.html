@@ -12,6 +12,7 @@
  * @ 2026.05.01    김다솜         최초 생성 및 관리자 홈 기본 화면 구성
  * @ 2026.05.12    김다솜         관리자 대시보드 배지/레이아웃 정리 및 실제 최근 시스템 활동 연동
  * @ 2026.05.13    김다솜         완료율/퀴즈 점수 차트 행 재배치 및 팀별/본부별 토글 UI 추가
+ * @ 2026.05.29    김다솜         평균 온보딩 완료율 소수점 둘째자리 표시 적용
  -->
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
@@ -51,7 +52,8 @@
                             <div class="mb-2">
                                 <span class="badge border" style="background-color: #eef2ff; color: #321fdb; border-color: #c7d2fe !important;">평균 온보딩 완료율</span>
                             </div>
-                            <div class="h3 mb-0 fw-bold text-dark" th:text="${avgProgress + '%'}">0%</div>
+                            <div class="h3 mb-0 fw-bold text-dark"
+                                 th:text="${#numbers.formatDecimal(avgProgress, 1, 2) + '%'}">0.00%</div>
                         </div>
                     </div>
                 </div>
