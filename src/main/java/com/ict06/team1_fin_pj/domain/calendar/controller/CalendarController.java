@@ -5,7 +5,15 @@ import com.ict06.team1_fin_pj.common.dto.calendar.ScheduleListResponseDto;
 import com.ict06.team1_fin_pj.common.dto.calendar.ScheduleUpdateRequestDto;
 import com.ict06.team1_fin_pj.domain.calendar.service.CalendarService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import com.ict06.team1_fin_pj.common.dto.calendar.CalendarHolidayDto;
+import com.ict06.team1_fin_pj.common.dto.calendar.CalendarUnavailableEmployeeDto;
+import com.ict06.team1_fin_pj.domain.calendar.service.CalendarAvailabilityService;
+import com.ict06.team1_fin_pj.domain.calendar.service.CalendarHolidayService;
+import org.springframework.format.annotation.DateTimeFormat;
+
+import java.time.LocalDateTime;
 
 import java.util.List;
 
@@ -19,6 +27,12 @@ public class CalendarController {
 
     @Autowired
     private CalendarService service;
+
+    @Autowired
+    private CalendarAvailabilityService calendarAvailabilityService;
+
+    @Autowired
+    private CalendarHolidayService calendarHolidayService;
 
     // 일정 등록
     @PostMapping("/create")
@@ -77,5 +91,30 @@ public class CalendarController {
         System.out.println("CalendarController - updateParticipantStatus()");
 
         service.updateParticipantStatus(scheduleId, empNo, status);
+    }
+
+    @GetMapping("/availability/unavailable-employees")
+    public List<CalendarUnavailableEmployeeDto> getUnavailableEmployees(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam(required = false) List<String> empNos
+    ) {
+        return calendarAvailabilityService.findUnavailableEmployees(start, end, empNos);
+    }
+
+    // 캘린더에 표시할 공휴일 라벨을 조회한다.
+    @GetMapping("/holidays")
+    public List<CalendarHolidayDto> getCalendarHolidays(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
+    ) {
+        return calendarHolidayService.findHolidays(start, end);
+    }
+
+    // 캘린더 등록/수정 검증 실패는 서버 오류가 아니라 사용자 입력 차단으로 응답한다.
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public String handleIllegalArgumentException(IllegalArgumentException e) {
+        return e.getMessage();
     }
 }

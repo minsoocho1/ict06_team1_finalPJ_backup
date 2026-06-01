@@ -30,6 +30,12 @@ public class CalendarServiceImpl implements CalendarService {
     @Autowired
     private CalendarRepository repository;
 
+    @Autowired
+    private CalendarAvailabilityService calendarAvailabilityService;
+
+    @Autowired
+    private CalendarHolidayService calendarHolidayService;
+
     @PersistenceContext
     private EntityManager entityManager;
 
@@ -54,6 +60,23 @@ public class CalendarServiceImpl implements CalendarService {
         if (dto.getEndTime() == null) {
             throw new IllegalArgumentException("종료 시간은 필수입니다.");
         }
+
+        // 공휴일에는 일정을 등록할 수 없다.
+        calendarHolidayService.validateNotHoliday(
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        // 휴가/병결 기간에는 본인 일정 등록과 참석자 초대를 막는다.
+        calendarAvailabilityService.validateCreatorAvailable(
+                dto.getCreatorNo(),
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        calendarAvailabilityService.validateParticipantsAvailable(
+                dto.getParticipantNos(),
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
 
         // 작성자 사번으로 Employee 참조
         EmpEntity creator = entityManager.getReference(EmpEntity.class, dto.getCreatorNo());
@@ -266,6 +289,23 @@ public class CalendarServiceImpl implements CalendarService {
         }
 
         validateScheduleOwner(schedule, requesterNo);
+
+        // 공휴일에는 일정을 수정할 수 없다.
+        calendarHolidayService.validateNotHoliday(
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        // 휴가/병결 기간에는 본인 일정 수정과 참석자 초대를 막는다.
+        calendarAvailabilityService.validateCreatorAvailable(
+                requesterNo,
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        calendarAvailabilityService.validateParticipantsAvailable(
+                dto.getParticipantNos(),
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
 
         String typeValue = (dto.getType() == null || dto.getType().trim().isEmpty())
                 ? "PERSONAL"

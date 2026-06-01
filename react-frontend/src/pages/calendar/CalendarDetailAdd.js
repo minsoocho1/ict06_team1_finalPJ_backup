@@ -15,15 +15,14 @@ import { request } from 'src/helpers/axios_helper';
 
 // [캘린더] 상세 등록 / 반복 / 참석자 일정 페이지
 const CalendarDetailAdd = ({
-    visible = true,
+    visible,
     onClose,
     selectedDateProp,
     popupPosition,
     onCreateSuccess,
     onDraftChange,
     popupMode = false,
-    mode = 'create',
-    initialSchedule = null,
+    onError,
 }) => {
 
     // DefaultLayout.js의 Outlet에서 보낸 userInfo 데이터 받기
@@ -41,10 +40,8 @@ const CalendarDetailAdd = ({
     // 바깥 클릭 여부 확인하기 위해 실제 상세등록 팝업 DOM을 기억한다.
     const popupRef = useRef(null);
 
-    // 상세/수정 모드 확인
-    // edit 모드면 기존 일정 데이터를 채우고, 이후 수정 로직을 호출.
-    const isEditMode = mode === 'edit';
-
+    // 상세등록 팝업은 새 일정 등록만 담당한다.
+    // 기존 일정 수정은 CalendarDetail.js에서 처리한다.
     // 일정 등록 권한은 현재 프로젝트의 직급 체계 기준으로 판단한다.
     const TEAM_LEADER_POSITION_NAMES = ['주임', '선임', '책임', '수석'];
 
@@ -164,31 +161,6 @@ const CalendarDetailAdd = ({
             return;
         }
 
-        if (isEditMode && initialSchedule) {
-            setFormData({
-                title: initialSchedule.title || '',
-                type: initialSchedule.type || 'PERSONAL',
-                category: initialSchedule.category || 'MEETING',
-                start: initialSchedule.startTime || '',
-                end: initialSchedule.endTime || '',
-                location: initialSchedule.location || '',
-                content: initialSchedule.content || '',
-                participants: [],
-                repeatRule: initialSchedule.repeatRule || '',
-                visibility: initialSchedule.isPublic ? 'COMPANY' : 'PRIVATE',
-            });
-
-            setAllDay(Boolean(initialSchedule.isAllDay));
-            setErrorMessage('');
-            setParticipantModalVisible(false);
-
-            if (onDraftChange) {
-                onDraftChange(null);
-            }
-
-            return;
-        }
-
         if (!selectedDate) {
             return;
         }
@@ -214,12 +186,12 @@ const CalendarDetailAdd = ({
             onDraftChange(null);
         }
 
-    }, [visible, selectedDate, isEditMode, initialSchedule, onDraftChange]);
+    }, [visible, selectedDate, onDraftChange]);
 
     // 종일 시간 반영
     // 새 일정 등록 중 종일 체크 시 해당 날짜의 처음부터 끝까지로 시간을 맞춤
     useEffect(() => {
-        if (!visible || !selectedDate || isEditMode) {
+        if (!visible || !selectedDate) {
             return;
         }
 
@@ -232,12 +204,12 @@ const CalendarDetailAdd = ({
                 ? `${selectedDate}T23:59`
                 : getDefaultDateTime(selectedDate, 1),
         }));
-    }, [visible, selectedDate, allDay, isEditMode]);
+    }, [visible, selectedDate, allDay]);
 
     // 일정 입력 미리보기
     // 새 일정 등록 중인 제목/시간만 부모 캘린더에 임시 일정으로 전달한다.
     useEffect(() => {
-        if (!visible || !selectedDate || !onDraftChange || isEditMode) {
+        if (!visible || !selectedDate || !onDraftChange) {
             return;
         }
 
@@ -247,7 +219,7 @@ const CalendarDetailAdd = ({
             end: formData.end,
             allDay,
         });
-    }, [visible, selectedDate, formData.title, formData.start, formData.end, allDay, onDraftChange, isEditMode]);
+    }, [visible, selectedDate, formData.title, formData.start, formData.end, allDay, onDraftChange]);
 
     // 바깥 클릭 닫기
     // document 전체 클릭을 감지하고, 상세등록 팝업 밖이면 닫는다
@@ -299,6 +271,20 @@ const CalendarDetailAdd = ({
         backgroundColor: '#ffffff',
         animation: 'calendarDetailPopupIn 0.18s ease-out',
         pointerEvents: 'auto',
+    };
+
+    // 상세등록 하단 버튼을 관리자 캘린더처럼 팝업 하단에 고정한다.
+    const detailFooterStyle = {
+        position: 'sticky',
+        bottom: 0,
+        margin: '18px -20px 0',
+        padding: '12px 20px 14px',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '8px',
+        borderTop: '1px solid #e5e7eb',
+        backgroundColor: '#ffffff',
+        zIndex: 2,
     };
 
     const fieldBlockStyle = {
@@ -793,12 +779,12 @@ const CalendarDetailAdd = ({
         setErrorMessage('');
 
         if (!formData.title.trim()) {
-            setErrorMessage('제목을 입력해 주세요.');
+            onError?.('제목을 입력해 주세요.');
             return;
         }
 
         if (!userInfo?.empNo) {
-            setErrorMessage('로그인 사용자 정보를 확인할 수 없습니다.');
+            onError?.('로그인 사용자 정보를 확인할 수 없습니다.');
             return;
         }
 
@@ -837,7 +823,8 @@ const CalendarDetailAdd = ({
             // 실패 메시지 표시
             // 서버에서 내려준 메시지가 있으면 우선 사용한다.
             const message = error.response?.data;
-            setErrorMessage(
+
+            onError?.(
                 typeof message === 'string' ? message : '상세 일정 등록에 실패했습니다.'
             );
         }
@@ -1122,14 +1109,9 @@ const CalendarDetailAdd = ({
                                 )}
                             </CFormSelect>
 
-                            {errorMessage && (
-                                <div style={{ marginTop: '16px', color: '#dc3545', fontSize: '14px' }}>
-                                    {errorMessage}
-                                </div>
-                            )}
-
                             {/* 취소/등록 버튼 영역 */}
-                            <div style={{ marginTop: '24px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            {/* 관리자 캘린더와 동일하게 버튼 영역을 팝업 하단에 고정한다. */}
+                            <div style={detailFooterStyle}>
                                 <CButton
                                     color="secondary"
                                     variant="outline"

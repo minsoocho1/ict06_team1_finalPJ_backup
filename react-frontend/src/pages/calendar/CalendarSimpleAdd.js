@@ -11,7 +11,7 @@ import { request } from 'src/helpers/axios_helper';
 
 // [캘린더] 일정 간단 등록 페이지
 const CalendarSimpleAdd = ({
-    visible = true,
+    visible,
     onClose,
     selectedDateProp,
     selectedDateTimeProp,
@@ -19,6 +19,7 @@ const CalendarSimpleAdd = ({
     onCreateSuccess,
     onOpenDetailAdd,
     onDraftChange,
+    onError,
 }) => {
 
     // js 코드로 페이지 이동할 때 사용하는 함수
@@ -512,12 +513,13 @@ const CalendarSimpleAdd = ({
         setErrorMessage('');
 
         if (!formData.title.trim()) {
-            setErrorMessage('제목을 입력해 주세요.');
+            // 입력 검증 메시지도 관리자처럼 상단 toast로 통일한다.
+            onError?.('제목을 입력해 주세요.');
             return;
         }
 
         if (!userInfo?.empNo) {
-            setErrorMessage('로그인 사용자 정보를 확인할 수 없습니다.');
+            onError?.('로그인 사용자 정보를 확인할 수 없습니다.');
             return;
         }
 
@@ -555,7 +557,9 @@ const CalendarSimpleAdd = ({
             console.error('일정 등록 실패:', error);
 
             const message = error.response?.data;
-            setErrorMessage(
+
+            // 공휴일/부재 차단 메시지는 팝업 내부가 아니라 상단 toast로 보여준다.
+            onError?.(
                 typeof message === 'string' ? message : '일정 등록에 실패했습니다.'
             );
         }
@@ -793,11 +797,6 @@ const CalendarSimpleAdd = ({
                                 </CButton>
                             </div>
                         </div>
-                        {errorMessage && (
-                            <div style={{ marginTop: '12px', color: '#dc3545', fontSize: '13px' }}>
-                                {errorMessage}
-                            </div>
-                        )}
                         {/* 등록/상세등록/취소 버튼 영역 */}
                         <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                             <CButton

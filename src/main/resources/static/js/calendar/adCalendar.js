@@ -7,6 +7,9 @@ let adminCalendarFormParticipants = [];
 // 간단등록 중 캘린더 셀에 보여줄 임시 일정이다.
 let adminCalendarDraftEvent = null;
 
+// 상세등록/수정 팝업을 마지막으로 클릭한 날짜/일정 옆에 띄우기 위한 기준 요소다.
+let adminCalendarFormAnchorEl = null;
+
 // 참석자 모달에서 임시로 편집 중인 선택 목록.
 // 닫기/취소 시 원래 폼 참석자를 건드리지 않고, 선택완료 시에만 반영한다.
 let adminCalendarParticipantDraft = [];
@@ -47,8 +50,9 @@ document.addEventListener('DOMContentLoaded', function () {
         return;
     }
 
+    // 내 일정은 개인일정 필터와 분리해서 제어한다.
     const filterState = {
-        scopes: new Set(['PERSONAL', 'DEPARTMENT', 'COMPANY']),
+        scopes: new Set(['MINE', 'PERSONAL', 'DEPARTMENT', 'COMPANY']),
         categories: new Set(['MEETING', 'WORK', 'NOTICE', 'ETC'])
     };
 
@@ -88,12 +92,28 @@ document.addEventListener('DOMContentLoaded', function () {
                     .filter(function (schedule) {
                         return isVisibleByAdminFilter(schedule, filterState);
                     })
-                    // 반복 일정은 DB 원본 1개를 현재 캘린더 화면 범위 안에서 여러 일정으로 펼쳐 보여준다.
                     .flatMap(function (schedule) {
                         return expandAdminRepeatedScheduleEvents(schedule, fetchInfo.start, fetchInfo.end);
                     });
 
-                successCallback(events);
+                // 관리자도 본인 + 선택 구성원 부재 라벨을 일정과 함께 표시한다.
+                // 부재 라벨 조회가 실패해도 기존 일정 목록은 유지한다.
+                let absenceEvents = [];
+                let holidayEvents = [];
+
+                try {
+                    absenceEvents = await fetchAdminAbsenceEvents(fetchInfo);
+                } catch (absenceError) {
+                    console.error(absenceError);
+                }
+
+                try {
+                    holidayEvents = await fetchAdminHolidayEvents(fetchInfo);
+                } catch (holidayError) {
+                    console.error(holidayError);
+                }
+
+                successCallback(holidayEvents.concat(events, absenceEvents));
             } catch (error) {
                 console.error(error);
                 failureCallback(error);
@@ -105,10 +125,28 @@ document.addEventListener('DOMContentLoaded', function () {
         // 사용자 캘린더처럼 일정 위에 마우스를 올리면 기본 툴팁으로 제목을 확인할 수 있게 한다.
         eventDidMount: function (info) {
             info.el.title = info.event.title || '';
+
+            // 종일 개인일정 라벨 색상은 FullCalendar 바깥 이벤트 요소에 CSS 변수로 심어준다.
+            const schedule = info.event.extendedProps || {};
+
+            if (info.event.allDay && (schedule.type || 'PERSONAL') === 'PERSONAL') {
+                const color = getAdminScheduleColor(schedule);
+
+                info.el.style.setProperty('--admin-calendar-event-color', color);
+                info.el.style.setProperty('--admin-calendar-all-day-bg', getAdminAllDayBackgroundColor(color));
+            }
         },
 
         // 클릭한 일정 데이터를 사용자 캘린더와 같은 간단 상세 팝업으로 표시한다.
         eventClick: function (info) {
+            // 부재 라벨은 일정이 아니므로 상세 팝업을 열지 않는다.
+            if (
+                info.event.extendedProps?.source === 'ABSENCE' ||
+                info.event.extendedProps?.source === 'HOLIDAY'
+            ) {
+                return;
+            }
+
             openAdminCalendarDetailPopup(info);
         },
 
@@ -249,14 +287,24 @@ function formatAdminCalendarEvent(schedule, startTime, endTime, repeatIndex = 0)
         isSelectedMemberSchedule: isSelectedMemberSchedule
     };
 
+    const isAllDay = Boolean(schedule.isAllDay);
+    const normalizedType = String(type || 'PERSONAL').toUpperCase();
+
     return {
         id: repeatIndex === 0 ? String(scheduleId) : scheduleId + '-repeat-' + repeatIndex,
         title: schedule.title || '(제목 없음)',
-        start: startTime || schedule.startTime,
-        end: endTime || schedule.endTime,
-        allDay: Boolean(schedule.isAllDay),
+
+        // FullCalendar 종일 일정은 날짜 문자열로 넘겨야 월간보기에서 바 라벨로 안정적으로 표시된다.
+        start: isAllDay
+            ? toAdminDateOnlyValue(startTime || schedule.startTime)
+            : (startTime || schedule.startTime),
+        end: isAllDay
+            ? toAdminAllDayExclusiveEnd(endTime || schedule.endTime || startTime || schedule.startTime)
+            : (endTime || schedule.endTime),
+
+        allDay: isAllDay,
         classNames: [
-            schedule.isAllDay && type === 'PERSONAL'
+            isAllDay && normalizedType === 'PERSONAL'
                 ? 'admin-calendar-event-all-day-personal'
                 : '',
             isSelectedMemberSchedule
@@ -265,6 +313,145 @@ function formatAdminCalendarEvent(schedule, startTime, endTime, repeatIndex = 0)
         ].filter(Boolean),
         extendedProps: normalizedSchedule
     };
+}
+
+// 부재 사유별 관리자 캘린더 라벨 색상
+function getAdminAbsenceEventColor(reasonType) {
+    const colors = {
+        LEAVE: { bg: '#ccfbf1', border: '#5eead4', text: '#0f766e' },
+        HALF_LEAVE: { bg: '#fef3c7', border: '#fbbf24', text: '#92400e' },
+        EARLY: { bg: '#ffedd5', border: '#fb923c', text: '#9a3412' },
+        SICK: { bg: '#fee2e2', border: '#f87171', text: '#991b1b' },
+        FAMILY_EVENT: { bg: '#f1f5f9', border: '#94a3b8', text: '#334155' },
+    };
+
+    return colors[reasonType] || colors.LEAVE;
+}
+
+// 관리자 캘린더에 표시할 부재 라벨 이벤트를 만든다.
+function formatAdminAbsenceEvent(absence) {
+    const color = getAdminAbsenceEventColor(absence.reasonType);
+    const isAllDay = absence.isAllDay === true || absence.allDay === true;
+
+    return {
+        id: 'absence-' + absence.empNo + '-' + absence.reasonType + '-' + absence.unavailableStartTime,
+        title: '[' + absence.reasonName + '] ' + absence.name,
+        start: absence.unavailableStartTime,
+        end: absence.unavailableEndTime,
+        allDay: isAllDay,
+        backgroundColor: color.bg,
+        borderColor: color.border,
+        textColor: color.text,
+        classNames: ['admin-calendar-absence-event'],
+        extendedProps: {
+            source: 'ABSENCE',
+            absence: absence,
+            absenceColor: color
+        }
+    };
+}
+
+async function fetchAdminAbsenceEvents(fetchInfo) {
+    const empNos = [
+        getAdminLoginEmpNo(),
+        ...Array.from(adminCalendarSelectedMemberScheduleNos)
+    ].filter(Boolean);
+
+    if (empNos.length === 0) {
+        return [];
+    }
+
+    const query =
+        '?start=' + encodeURIComponent(formatAdminCalendarDateTime(fetchInfo.start)) +
+        '&end=' + encodeURIComponent(formatAdminCalendarDateTime(fetchInfo.end)) +
+        '&empNos=' + encodeURIComponent(empNos.join(','));
+
+    const response = await fetch('/admin/calendar/availability/unavailable-employees' + query);
+
+    if (!response.ok) {
+        throw new Error('부재 라벨 조회 실패');
+    }
+
+    return normalizeAdminArrayResponse(await response.json()).map(formatAdminAbsenceEvent);
+}
+
+// 관리자 캘린더에 표시할 공휴일 라벨을 조회한다.
+async function fetchAdminHolidayEvents(fetchInfo) {
+    const query =
+        '?start=' + encodeURIComponent(formatAdminCalendarDateTime(fetchInfo.start)) +
+        '&end=' + encodeURIComponent(formatAdminCalendarDateTime(fetchInfo.end));
+
+    const response = await fetch('/admin/calendar/holidays' + query);
+
+    if (!response.ok) {
+        throw new Error('공휴일 조회 실패');
+    }
+
+    return normalizeAdminArrayResponse(await response.json()).map(formatAdminHolidayEvent);
+}
+
+// 공휴일 DTO를 FullCalendar 이벤트로 변환한다.
+function formatAdminHolidayEvent(holiday) {
+    const holidayDate = holiday.holidayDate;
+
+    return {
+        id: 'holiday-' + holidayDate,
+        title: holiday.holidayName || '공휴일',
+        start: holidayDate,
+        end: getAdminNextDateString(holidayDate),
+        allDay: true,
+        classNames: ['admin-calendar-holiday-event'],
+        extendedProps: {
+            source: 'HOLIDAY',
+            holiday: holiday
+        }
+    };
+}
+
+// yyyy-MM-dd 기준 다음 날짜 문자열을 만든다.
+function getAdminNextDateString(dateString) {
+    const parts = dateString.split('-').map(Number);
+    const date = new Date(parts[0], parts[1] - 1, parts[2]);
+
+    date.setDate(date.getDate() + 1);
+
+    return toAdminDateOnlyValue(date);
+}
+
+// FullCalendar 종일 일정용 날짜 값으로 변환한다.
+function toAdminDateOnlyValue(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+
+    return year + '-' + month + '-' + day;
+}
+
+// FullCalendar 종일 일정의 end는 exclusive라서 다음 날짜로 넘긴다.
+function toAdminAllDayExclusiveEnd(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    date.setDate(date.getDate() + 1);
+
+    return toAdminDateOnlyValue(date);
 }
 
 // 반복 간격을 계산한다.
@@ -369,12 +556,22 @@ function expandAdminRepeatedScheduleEvents(schedule, rangeStart, rangeEnd) {
     return events;
 }
 
-// 관리자 화면의 일정 범위/카테고리 필터 적용 여부를 판단한다.
 function isVisibleByAdminFilter(schedule, filterState) {
     const type = schedule.type || 'PERSONAL';
     const category = normalizeCategory(schedule.category);
+    const creatorNo = String(schedule.creatorNo || '');
+    const loginEmpNo = String(getAdminLoginEmpNo() || '');
 
-    return filterState.scopes.has(type) && filterState.categories.has(category);
+    if (!filterState.categories.has(category)) {
+        return false;
+    }
+
+    // 본인 개인일정은 "내 일정" 필터로 따로 제어한다.
+    if (type === 'PERSONAL' && (!creatorNo || creatorNo === loginEmpNo)) {
+        return filterState.scopes.has('MINE');
+    }
+
+    return filterState.scopes.has(type);
 }
 
 // DB에 저장된 카테고리 값이 비어있거나 예상 밖이면 기타로 처리한다.
@@ -434,7 +631,8 @@ function bindAdminCalendarDetailPopup(calendar) {
 
         openAdminCalendarForm(calendar, {
             mode: 'edit',
-            schedule: adminCalendarSelectedSchedule
+            schedule: adminCalendarSelectedSchedule,
+            eventEl: adminCalendarFormAnchorEl
         });
     });
 
@@ -639,6 +837,7 @@ function openAdminCalendarDetailPopup(info) {
     closeAdminCalendarFloatingLayers();
 
     adminCalendarSelectedSchedule = schedule;
+    adminCalendarFormAnchorEl = info.el;
     popup.dataset.scheduleId = schedule.scheduleId || '';
 
     setTextContent('adminCalendarDetailTitle', schedule.title || info.event.title || '(제목 없음)');
@@ -846,6 +1045,15 @@ function setTextContent(id, value) {
     }
 }
 
+// 서버가 내려준 검증 실패 메시지를 우선 사용한다.
+async function getAdminCalendarErrorMessage(response, fallbackMessage) {
+    const message = await response.text();
+
+    return message && message.trim()
+        ? message.trim()
+        : fallbackMessage;
+}
+
 // 사용자 캘린더처럼 저장/수정/삭제 결과를 상단 토스트로 보여준다.
 function showAdminCalendarToast(message, type = 'success') {
     let toast = document.getElementById('adminCalendarToast');
@@ -880,8 +1088,11 @@ function getAdminCalendarDetailTimeHtml(schedule) {
     const startText = formatAdminDateTime(schedule.startTime);
     const endText = formatAdminDateTime(schedule.endTime);
 
-    if (schedule.isAllDay) {
-        return '<i class="fa-regular fa-clock admin-calendar-detail-icon"></i><span>종일</span>';
+    // 종일 일정은 사용자 캘린더처럼 "날짜 + 종일"로 표시한다.
+    if (Boolean(schedule.isAllDay)) {
+        const dateText = formatAdminDateOnly(schedule.startTime || schedule.endTime);
+
+        return '<i class="fa-regular fa-clock admin-calendar-detail-icon"></i><span>' + dateText + ' 종일</span>';
     }
 
     return '<i class="fa-regular fa-clock admin-calendar-detail-icon"></i><span>' + startText + ' ~ ' + endText + '</span>';
@@ -926,12 +1137,52 @@ function formatAdminDateTime(value) {
     return dateText + '  ' + timeText;
 }
 
+// 종일 일정 상세팝업에서 시간 없이 날짜만 표시한다.
+function formatAdminDateOnly(value) {
+    if (!value) {
+        return '';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+        return '';
+    }
+
+    return date.toLocaleDateString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+    }).replace(/\. /g, '-').replace('.', '');
+}
+
 // 작성자 이름과 일정 구분을 함께 보여준다.
 function getAdminScheduleOwnerLabel(schedule) {
-    const creatorName = schedule.creatorName || '작성자 없음';
-    const typeLabel = getAdminTypeLabel(schedule.type || 'PERSONAL');
+    const type = schedule.type || 'PERSONAL';
 
-    return creatorName + ' ' + typeLabel;
+    // 사용자 캘린더처럼 조직 일정은 작성자보다 일정 범위를 우선 보여준다.
+    if (type === 'DEPARTMENT') {
+        return '부서 일정';
+    }
+
+    if (type === 'COMPANY') {
+        return '전사 일정';
+    }
+
+    const creatorNo = getAdminMemberEmpNo({
+        empNo: schedule?.creatorNo,
+        empId: schedule?.creatorId
+    });
+    const loginEmpNo = String(getAdminLoginEmpNo() || '');
+
+    // 로그인한 관리자의 개인일정은 작성자명이 아니라 "내 일정"으로 보여준다.
+    if (!creatorNo || creatorNo === loginEmpNo) {
+        return '내 일정';
+    }
+
+    return schedule.creatorName
+        ? schedule.creatorName + ' 일정'
+        : '작성자 일정';
 }
 
 // DB 카테고리 코드를 화면용 한글 라벨로 바꾼다.
@@ -995,6 +1246,31 @@ function getAdminScheduleColor(scheduleOrType) {
     return '#3b82f6';
 }
 
+// 종일 라벨은 원색보다 옅은 배경을 써서 사용자 캘린더 바 라벨처럼 보이게 한다.
+function getAdminAllDayBackgroundColor(color) {
+    const backgrounds = {
+        '#3b82f6': '#dbeafe', // 내 일정
+        '#64748b': '#e5e7eb', // 다른 멤버 기본
+        '#10b981': '#d1fae5',
+        '#f59e0b': '#fef3c7',
+        '#ef4444': '#fee2e2',
+        '#8b5cf6': '#ede9fe',
+        '#06b6d4': '#cffafe',
+        '#ec4899': '#fce7f3',
+        '#84cc16': '#ecfccb',
+        '#f97316': '#ffedd5',
+        '#14b8a6': '#ccfbf1',
+        '#6366f1': '#e0e7ff',
+        '#a855f7': '#f3e8ff',
+        '#22c55e': '#dcfce7',
+        '#eab308': '#fef9c3',
+        '#0ea5e9': '#e0f2fe',
+        '#d946ef': '#fae8ff'
+    };
+
+    return backgrounds[color] || '#e5e7eb';
+}
+
 // 구성원 사번을 기준으로 항상 같은 색을 반환한다.
 // 선택 목록 순서를 우선 사용하고, 목록에 없으면 해시로 팔레트 안에서 안정적으로 배정한다.
 function getAdminMemberScheduleColor(empNo) {
@@ -1025,6 +1301,28 @@ function getAdminMemberScheduleColor(empNo) {
 }
 
 function renderAdminCalendarEvent(eventInfo) {
+
+    if (eventInfo.event.extendedProps?.source === 'HOLIDAY') {
+        return {
+            html:
+                '<div class="admin-calendar-holiday-label">' +
+                    escapeHtml(eventInfo.event.title || '공휴일') +
+                '</div>'
+        };
+    }
+
+    if (eventInfo.event.extendedProps?.source === 'ABSENCE') {
+        const color = eventInfo.event.extendedProps.absenceColor || getAdminAbsenceEventColor('LEAVE');
+
+        return {
+            html:
+                '<div class="admin-calendar-absence-label" ' +
+                    'style="background:' + color.bg + '; border-color:' + color.border + '; color:' + color.text + ';">' +
+                    escapeHtml(eventInfo.event.title || '') +
+                '</div>'
+        };
+    }
+
     const schedule = eventInfo.event.extendedProps || {};
     const type = schedule.type || 'PERSONAL';
     const isAllDay = eventInfo.event.allDay;
@@ -1042,6 +1340,9 @@ function renderAdminCalendarEvent(eventInfo) {
     const memberColor = schedule.isSelectedMemberSchedule
         ? getAdminMemberScheduleColor(creatorNo)
         : null;
+
+    // 종일 개인일정도 내 일정/다른 멤버/선택 멤버 색상 정책을 그대로 따른다.
+    const eventColor = memberColor || getAdminScheduleColor(schedule);
 
     // 내가 초대받은 일정이면 참석 상태에 따라 캘린더 셀 표시를 다르게 보여준다.
     const myParticipant = getAdminMyParticipant(schedule);
@@ -1067,8 +1368,9 @@ function renderAdminCalendarEvent(eventInfo) {
 
     return {
         html:
-            '<div class="admin-calendar-event-line' + participantStatusClass + '">' +
-                '<span class="admin-calendar-event-dot" style="background:' + (memberColor || getAdminScheduleColor(schedule)) + '"></span>' +
+            '<div class="admin-calendar-event-line' + participantStatusClass + '" ' +
+                'style="--admin-calendar-event-color:' + eventColor + ';">' +
+                '<span class="admin-calendar-event-dot" style="background:' + eventColor + '"></span>' +
                 (!isAllDay && timeText ? '<span class="admin-calendar-event-time">' + escapeHtml(timeText) + '</span>' : '') +
                 '<span class="admin-calendar-event-text">' + title + '</span>' +
             '</div>'
@@ -1151,6 +1453,7 @@ function bindAdminCalendarForm(calendar) {
         openAdminCalendarForm(calendar, {
             mode: 'create-detail',
             dateStr: getFormValue('adminCalendarSimpleDate'),
+            dayEl: adminCalendarFormAnchorEl,
             fromSimple: true
         });
     });
@@ -1180,7 +1483,7 @@ function bindAdminCalendarForm(calendar) {
             });
 
             if (!response.ok) {
-                throw new Error('관리자 간단 일정 등록 실패');
+                throw new Error(await getAdminCalendarErrorMessage(response, '관리자 간단 일정 등록 실패'));
             }
 
             showAdminCalendarToast('일정이 등록되었습니다.');
@@ -1188,7 +1491,7 @@ function bindAdminCalendarForm(calendar) {
             calendar.refetchEvents();
         } catch (error) {
             console.error(error);
-            showAdminCalendarToast('일정 등록 중 오류가 발생했습니다.', 'error');
+            showAdminCalendarToast(error.message || '일정 등록 중 오류가 발생했습니다.', 'error');
         } finally {
             adminCalendarSaving = false;
         }
@@ -1224,7 +1527,10 @@ function bindAdminCalendarForm(calendar) {
             );
 
             if (!response.ok) {
-                throw new Error(isEdit ? '관리자 일정 수정 실패' : '관리자 일정 등록 실패');
+                throw new Error(await getAdminCalendarErrorMessage(
+                    response,
+                    isEdit ? '관리자 일정 수정 실패' : '관리자 일정 등록 실패'
+                ));
             }
 
             closeAdminCalendarForm();
@@ -1233,7 +1539,7 @@ function bindAdminCalendarForm(calendar) {
             showAdminCalendarToast(isEdit ? '일정이 수정되었습니다.' : '일정이 등록되었습니다.');
         } catch (error) {
             console.error(error);
-            showAdminCalendarToast('일정 저장 중 오류가 발생했습니다.', 'error');
+            showAdminCalendarToast(error.message || '일정 저장 중 오류가 발생했습니다.', 'error');
         } finally {
             adminCalendarSaving = false;
         }
@@ -1287,6 +1593,9 @@ function openAdminCalendarSimpleForm(options) {
 
     syncAdminCalendarSimpleAllDayInputs();
     renderAdminCalendarFormParticipants();
+    // 상세등록으로 넘어갈 때도 같은 날짜 셀 옆에 뜨도록 기준 요소를 보관한다.
+    adminCalendarFormAnchorEl = options?.dayEl || null;
+
     positionAdminCalendarPopup(popup, options?.dayEl, 390, 520);
     syncAdminCalendarDraftEvent(options?.calendar);
     popup.hidden = false;
@@ -1378,7 +1687,9 @@ function openAdminCalendarDetailForm(options) {
     renderAdminCalendarFormParticipants();
 
     layer.hidden = false;
-    positionAdminCalendarDetailFormPopup(popup);
+
+    // 선택한 날짜 셀 또는 일정 요소 옆에 상세등록/수정 팝업을 배치한다.
+    positionAdminCalendarDetailFormPopup(popup, options?.dayEl || options?.eventEl || adminCalendarFormAnchorEl);
 }
 
 // 관리자 등록/수정 팝업을 모두 닫는다.
@@ -1456,7 +1767,17 @@ async function loadAdminMemberScheduleMembers(calendar) {
         listEl.innerHTML = '<div class="admin-calendar-member-empty">구성원 목록을 불러오는 중입니다.</div>';
         const employees = await fetchAdminEmployeesWithFallback();
 
-        adminCalendarMemberScheduleMembers = normalizeAdminEmployees(employees);
+        // 구성원 일정 목록에는 로그인한 본인은 표시하지 않는다.
+        // 본인 일정은 별도 "내 일정" 필터에서 제어한다.
+        const loginEmpNo = getAdminLoginEmpNo();
+
+        adminCalendarSelectedMemberScheduleNos.delete(String(loginEmpNo));
+
+        adminCalendarMemberScheduleMembers = normalizeAdminEmployees(employees)
+            .filter(function (employee) {
+                return String(getAdminMemberEmpNo(employee)) !== String(loginEmpNo);
+            });
+
         renderAdminMemberScheduleList(calendar);
     } catch (error) {
         console.error(error);
@@ -1579,7 +1900,16 @@ async function loadAdminMemberOrgMembers(deptId, calendar) {
             throw new Error('조직도 구성원 조회 실패');
         }
 
-        adminCalendarMemberOrgMembers = normalizeAdminEmployees(await response.json());
+        // 조직도에서 선택한 구성원 목록에도 로그인한 본인은 표시하지 않는다.
+        const loginEmpNo = getAdminLoginEmpNo();
+
+        adminCalendarSelectedMemberScheduleNos.delete(String(loginEmpNo));
+
+        adminCalendarMemberOrgMembers = normalizeAdminEmployees(await response.json())
+            .filter(function (employee) {
+                return String(getAdminMemberEmpNo(employee)) !== String(loginEmpNo);
+            });
+
         renderAdminMemberOrgList(calendar);
     } catch (error) {
         console.error(error);
@@ -2367,12 +2697,29 @@ function positionAdminCalendarPopup(popup, anchorEl, popupWidth, popupHeight) {
 }
 
 // 상세 등록/수정 팝업은 사용자 상세등록처럼 화면 상단 기준으로 안정적으로 배치한다.
-function positionAdminCalendarDetailFormPopup(popup) {
-    const popupWidth = Math.min(540, window.innerWidth - 40);
-    const top = window.innerWidth <= 720 ? 16 : 56;
-    const sidePadding = window.innerWidth <= 720 ? 12 : 20;
-    const bottomPadding = window.innerWidth <= 720 ? 16 : 16;
-    const left = Math.max(sidePadding, Math.round((window.innerWidth - popupWidth) / 2));
+function positionAdminCalendarDetailFormPopup(popup, anchorEl) {
+    const popupWidth = Math.min(520, window.innerWidth - 40);
+    const gap = 16;
+    const topPadding = window.innerWidth <= 720 ? 12 : 56;
+    const bottomPadding = 24;
+    const rect = anchorEl?.getBoundingClientRect();
+
+    let left = rect ? rect.right + 14 : Math.round((window.innerWidth - popupWidth) / 2);
+
+    // 상세등록/수정은 내용이 길어서 사용자 캘린더처럼 화면 상단 쪽으로 끌어올린다.
+    let top = topPadding;
+
+    if (rect && left + popupWidth > window.innerWidth - gap) {
+        left = rect.left - popupWidth - 14;
+    }
+
+    if (left < gap) {
+        left = gap;
+    }
+
+    if (left + popupWidth > window.innerWidth - gap) {
+        left = window.innerWidth - popupWidth - gap;
+    }
 
     popup.style.top = top + 'px';
     popup.style.left = left + 'px';
@@ -2410,14 +2757,20 @@ function syncAdminCalendarDraftEvent(calendar) {
     adminCalendarDraftEvent = calendar.addEvent({
         id: 'admin-calendar-draft-event',
         title: title,
-        start: date + 'T' + (isAllDay ? '00:00' : startTime) + ':00',
-        end: date + 'T' + (isAllDay ? '23:59' : endTime) + ':00',
+
+        // 종일 미리보기는 등록된 종일 일정과 같은 바 라벨 스타일로 보여준다.
+        start: isAllDay ? date : date + 'T' + startTime + ':00',
+        end: isAllDay ? toAdminAllDayExclusiveEnd(date) : date + 'T' + endTime + ':00',
         allDay: isAllDay,
-        classNames: ['admin-calendar-draft-event'],
+        classNames: [
+            'admin-calendar-draft-event',
+            isAllDay ? 'admin-calendar-event-all-day-personal' : ''
+        ].filter(Boolean),
         extendedProps: {
             type: 'PERSONAL',
             category: getFormValue('adminCalendarSimpleCategory'),
-            isDraft: true
+            isDraft: true,
+            isAllDay: isAllDay
         }
     });
 }

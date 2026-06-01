@@ -4,6 +4,7 @@ import com.ict06.team1_fin_pj.domain.attendance.entity.HolidayEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.time.LocalDate;
+import java.util.List;
 
 /*
  * 공휴일 Repository
@@ -21,4 +22,10 @@ public interface HolidayRepository extends JpaRepository<HolidayEntity, Integer>
      * - 연차 계산 시 기간 안의 공휴일 제외
      */
     boolean existsByHolidayDateAndIsActiveTrue(LocalDate holidayDate);
+
+    // 캘린더 표시 범위 안의 활성 공휴일을 조회한다.
+    List<HolidayEntity> findByHolidayDateBetweenAndIsActiveTrueOrderByHolidayDateAsc(
+            LocalDate startDate,
+            LocalDate endDate
+    );
 }

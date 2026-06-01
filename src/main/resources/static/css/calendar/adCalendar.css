@@ -2613,22 +2613,21 @@
 }
 
 .admin-calendar-detail-form-popup {
-    top: 56px !important;
-    max-height: calc(100vh - 72px) !important;
     overflow-y: auto;
 }
 
 .admin-calendar-detail-form {
-    padding-bottom: 28px;
+    padding-bottom: 84px;
 }
 
 .admin-calendar-detail-form-footer {
     position: sticky;
-    bottom: -28px;
-    margin: 18px -20px -28px;
+    bottom: 0;
+    margin: 18px -20px -20px;
     padding: 12px 20px 14px;
     border-top: 1px solid #e5e7eb;
     background: #ffffff;
+    z-index: 2;
 }
 
 .admin-calendar-detail-form .admin-calendar-form-control:disabled,
@@ -2648,7 +2647,6 @@
     }
 
     .admin-calendar-detail-form-popup {
-        top: 16px !important;
         max-height: calc(100vh - 32px) !important;
     }
 }
@@ -3144,6 +3142,7 @@
     font-size: 14px;
     font-weight: 800;
     text-align: center;
+    white-space: pre-line;
     box-shadow: 0 12px 28px rgba(34, 197, 94, 0.24);
     opacity: 0;
     pointer-events: none;
@@ -3255,4 +3254,138 @@
     background: #f9fafb !important;
     color: #374151 !important;
     box-shadow: none !important;
+}
+
+/* 개인 종일 일정도 내 일정/다른 멤버/선택 멤버 색상 정책을 따른다. */
+.admin-calendar-main .fc-event.admin-calendar-event-all-day-personal,
+.admin-calendar-main .fc-daygrid-event.admin-calendar-event-all-day-personal {
+    border: 1px solid var(--admin-calendar-event-color, #bfdbfe) !important;
+    border-radius: 5px !important;
+    background: var(--admin-calendar-all-day-bg, #dbeafe) !important;
+    overflow: hidden;
+}
+
+.admin-calendar-main .fc-event.admin-calendar-event-all-day-personal:hover,
+.admin-calendar-main .fc-daygrid-event.admin-calendar-event-all-day-personal:hover {
+    background: var(--admin-calendar-all-day-bg, #dbeafe) !important;
+}
+
+.admin-calendar-main .admin-calendar-event-all-day-personal .admin-calendar-event-line {
+    width: 100%;
+    padding: 1px 7px;
+    color: var(--admin-calendar-event-color, #2563eb);
+}
+
+.admin-calendar-main .admin-calendar-event-all-day-personal .admin-calendar-event-dot {
+    display: none;
+}
+
+/* 간단등록 팝업 제목과 입력 영역을 사용자 캘린더처럼 왼쪽 흐름에 맞춘다. */
+.admin-calendar-simple-header {
+    align-items: center;
+    text-align: left;
+}
+
+.admin-calendar-simple-header strong {
+    display: block;
+    flex: 1;
+    text-align: left;
+    padding-left: 0;
+}
+
+.admin-calendar-simple-title {
+    display: block;
+    text-align: left !important;
+    margin-top: 0;
+}
+
+/* 사용자 캘린더 간단등록 팝업처럼 내부 여백을 한 번만 적용한다. */
+.admin-calendar-simple-popup {
+    width: min(390px, calc(100vw - 32px)) !important;
+    padding: 22px 18px !important;
+    border-radius: 14px !important;
+    text-align: left !important;
+}
+
+/* 기존 header/form padding이 중복돼 제목이 오른쪽으로 밀리는 문제를 막는다. */
+.admin-calendar-simple-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    margin: 0 0 10px !important;
+    padding: 0 !important;
+    text-align: left !important;
+}
+
+.admin-calendar-simple-form {
+    padding: 0 !important;
+}
+
+.admin-calendar-simple-header strong {
+    flex: 1 1 auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    text-align: left !important;
+    color: #111827 !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    line-height: 1.4 !important;
+}
+
+.admin-calendar-simple-title {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 0 2px !important;
+    padding: 10px 0 12px !important;
+    text-align: left !important;
+    font-size: 16px !important;
+    font-weight: 700 !important;
+    line-height: 1.4 !important;
+    border-bottom: 1px solid #d1d5db !important;
+}
+
+/* 내 일정 필터는 캘린더의 본인 일정 기본색과 맞춘다. */
+.admin-calendar-my-schedule-dot {
+    background: #3b82f6;
+}
+
+/* 연차/반차/조퇴/병가/경조사 부재 라벨 */
+.admin-calendar-absence-event {
+    cursor: default;
+}
+
+.admin-calendar-absence-label {
+    width: 100%;
+    min-height: 18px;
+    padding: 1px 6px;
+    border: 1px solid;
+    border-radius: 4px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* 공휴일은 현충일처럼 붉은 라벨로 일정과 구분한다. */
+.admin-calendar-holiday-event {
+    cursor: default;
+}
+
+.admin-calendar-holiday-label {
+    width: 100%;
+    min-height: 18px;
+    padding: 1px 8px;
+    border: 1px solid #e45248;
+    border-radius: 4px;
+    background: #ef665b;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 16px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
