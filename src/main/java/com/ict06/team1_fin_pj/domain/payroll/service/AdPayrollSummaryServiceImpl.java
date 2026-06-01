@@ -307,7 +307,18 @@ public class AdPayrollSummaryServiceImpl implements AdPayrollSummaryService {
                             ? BigDecimal.ZERO
                             : item.getAppliedAmount();
 
-            if (appliedAmount.compareTo(BigDecimal.ZERO) == 0) {
+            boolean attendanceLinkedItem =
+                    item.getItemName() != null
+                            && (
+                            item.getItemName().startsWith("연장수당")
+                                    || item.getItemName().startsWith("조정수당")
+                                    || item.getItemName().startsWith("결근공제")
+                                    || item.getItemName().startsWith("조정공제")
+                    );
+
+            if (!attendanceLinkedItem
+                    && appliedAmount.compareTo(BigDecimal.ZERO) == 0) {
+
                 appliedAmount = unitAmount;
                 item.setAppliedAmount(appliedAmount);
             }
