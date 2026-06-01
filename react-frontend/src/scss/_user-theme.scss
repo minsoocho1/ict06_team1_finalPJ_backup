@@ -1,0 +1,89 @@
+/*
+ * COREWORK user page theme
+ * --------------------------------------------------------------------------
+ * Change the variables in this file first when updating the user-facing UI.
+ * CoreUI component variables are mapped here so common components follow the
+ * same font, color, sidebar, and content-width rules.
+ */
+:root {
+  --cw-user-font-sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --cw-user-primary: #0165ff;
+  --cw-user-primary-hover: #0056d9;
+  --cw-user-sidebar-bg: #0042a7;
+  --cw-user-sidebar-menu-bg-hover: #0165ff;
+  --cw-user-sidebar-menu-text: #cedcfc;
+  --cw-user-sidebar-menu-text-hover: #ffffff;
+
+  --cw-user-base: #f8f9fa;
+  --cw-user-surface: #ffffff;
+  --cw-user-text: #172033;
+  --cw-user-text-muted: #667085;
+  --cw-user-border: #d9e0e8;
+
+  --cw-user-content-max-width: 1180px;
+
+  --cui-body-font-family: var(--cw-user-font-sans);
+  --cui-primary: var(--cw-user-primary);
+  --cui-primary-rgb: 1, 101, 255;
+}
+
+html,
+body,
+button,
+input,
+select,
+textarea {
+  font-family: var(--cw-user-font-sans);
+}
+
+.user-main-content {
+  width: 100%;
+  max-width: var(--cw-user-content-max-width);
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.user-main-content-secondary-sidebar {
+  max-width: none;
+  margin-right: 0;
+  margin-left: 0;
+}
+
+.user-page-title {
+  color: var(--cw-user-text);
+  font-family: var(--cw-user-font-sans) !important;
+  font-size: 1.75rem !important;
+  font-weight: 700 !important;
+  line-height: 1.3 !important;
+}
+
+.sidebar {
+  --cui-sidebar-bg: var(--cw-user-sidebar-bg);
+  --cui-sidebar-color: var(--cw-user-sidebar-menu-text);
+  --cui-sidebar-brand-color: #ffffff;
+  --cui-sidebar-brand-bg: transparent;
+}
+
+/*
+ * CoreUI declares the navigation variables again on `.sidebar-nav`.
+ * Keep menu colors on that element so they are not shadowed by defaults.
+ */
+.sidebar .sidebar-nav {
+  --cui-sidebar-nav-title-color: var(--cw-user-sidebar-menu-text);
+  --cui-sidebar-nav-link-color: var(--cw-user-sidebar-menu-text);
+  --cui-sidebar-nav-link-icon-color: var(--cw-user-sidebar-menu-text);
+  --cui-sidebar-nav-link-hover-color: var(--cw-user-sidebar-menu-text-hover);
+  --cui-sidebar-nav-link-hover-bg: var(--cw-user-sidebar-menu-bg-hover);
+  --cui-sidebar-nav-link-hover-icon-color: var(--cw-user-sidebar-menu-text-hover);
+  --cui-sidebar-nav-link-active-color: var(--cw-user-sidebar-menu-text-hover);
+  --cui-sidebar-nav-link-active-bg: var(--cw-user-sidebar-menu-bg-hover);
+  --cui-sidebar-nav-link-active-icon-color: var(--cw-user-sidebar-menu-text-hover);
+}
+
+.sidebar-profile-card {
+  padding: 14px;
+  border: 1px solid var(--cw-user-border);
+  border-radius: 16px;
+  background: var(--cw-user-surface);
+}

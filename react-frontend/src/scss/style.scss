@@ -3,6 +3,7 @@
 );
 @use "@coreui/chartjs/scss/coreui-chartjs";
 @use "vendors/simplebar";
+@use "user-theme";
 
 body {
   background-color: var(--cui-tertiary-bg);
@@ -77,13 +78,13 @@ body {
 }
 
 .sidebar-logo-main {
-  color: #321fdb !important;
+  color: var(--cw-user-primary) !important;
   font-weight: 700;
   font-size: 16px;
 }
 
 .sidebar-logo-main:hover {
-  color: #2a1ac0 !important;
+  color: var(--cw-user-primary-hover) !important;
 }
 
 .sidebar-logo-sub {
@@ -108,12 +109,12 @@ body {
    Primary
    ========================= */
 .btn-primary-custom {
-  background: #321fdb;
+  background: var(--cw-user-primary);
   color: #ffffff;
 }
 
 .btn-primary-custom:hover {
-  background: #2a1ac0;
+  background: var(--cw-user-primary-hover);
 }
 
 .btn-primary-custom:active {
@@ -187,4 +188,3 @@ body {
   border-radius: 999px;
   line-height: 1.1;
 }
-

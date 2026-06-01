@@ -21,7 +21,7 @@ export const checklistContainer = {
     margin: '0 auto',
     background: '#F4F7FB',
     color: '#111827',
-    fontFamily: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif'
+    fontFamily: 'var(--cw-user-font-sans)'
 };
 
 export const checklistPageHeader = {

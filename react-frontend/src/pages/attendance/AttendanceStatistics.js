@@ -16,7 +16,7 @@ const AttendanceStatistics = () => {
         <div style={containerStyle}>
 
             <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>{userInfo?.name}님의 근태 통계</h2>
+                <h2 className="user-page-title">{userInfo?.name}님의 근태 통계</h2>
             </header>
 
             <hr style={{ border: '0', height: '1px', background: '#eee', margin: '40px 0' }} />

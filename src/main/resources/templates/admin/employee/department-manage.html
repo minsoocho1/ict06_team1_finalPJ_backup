@@ -49,10 +49,23 @@
     .department-form-control {
         height: 38px;
         padding: 0 10px;
-        border: 1px solid #ced4da;
+        color: var(--cw-text);
+        background-color: var(--cw-surface);
+        border: 1px solid var(--cw-border);
         border-radius: 6px;
         min-width: 180px;
         box-sizing: border-box;
+    }
+
+    .department-form-control:focus {
+        border-color: var(--cw-primary);
+        outline: 0;
+        box-shadow: 0 0 0 0.2rem var(--cw-focus-ring);
+    }
+
+    .department-form-control::placeholder {
+        color: var(--cw-text-muted);
+        opacity: 1;
     }
 
     .department-notice-box {
@@ -243,7 +256,7 @@
 
                 <div class="row mb-3">
                     <div class="col-12">
-                        <h3 class="mb-1">부서 관리</h3>
+                        <h3 class="fw-bold mb-2">부서 관리</h3>
 
                         <p class="department-page-desc">
                             본부와 팀을 등록/수정/삭제하는 관리자 화면입니다.<br>

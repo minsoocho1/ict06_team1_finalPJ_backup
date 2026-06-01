@@ -1,6 +1,6 @@
 .admin-calendar-page {
     width: calc(100% + 32px);
-    margin: -32px -16px 0 -16px;
+    margin: 0 -16px;
     padding: 0;
     height: calc(100vh - 115px);
     min-height: 620px;

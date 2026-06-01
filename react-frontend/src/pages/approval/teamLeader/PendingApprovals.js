@@ -124,7 +124,7 @@ const PendingApprovals = () => {
     <div style={containerStyle}>
       <header className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">결재 대기 문서함</h2>
+          <h2 className="user-page-title mb-1">결재 대기 문서함</h2>
           <div className="text-body-secondary">
             {userInfo?.name ? `${userInfo.name}님의 결재 대기 및 처리 완료 문서입니다.` : '결재 대기 및 처리 완료 문서입니다.'}
           </div>

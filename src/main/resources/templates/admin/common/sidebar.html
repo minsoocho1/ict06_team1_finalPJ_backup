@@ -1,26 +1,54 @@
 <!-- 관리자 페이지 공통 sidebar 파일 (임의 수정 금지) -->
+<!--
+ * @FileName : sidebar.html
+ * @Description : 관리자 페이지 공통 사이드바
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.29    김다솜        관리자 사이드바 로고를 사용자 화면 로고 톤에 맞게 개선
+ -->
 <!--begin::Sidebar-->
 <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
     <!--begin::Sidebar Brand-->
-    <div class="sidebar-brand">
-        <a th:href="@{/admin/home}" class="brand-link d-flex align-items-center px-3 py-2 text-decoration-none">
+    <div class="sidebar-brand d-flex justify-content-center">
+        <a th:href="@{/admin/home}"
+           class="brand-link d-flex align-items-center text-decoration-none"
+           style="width: fit-content; gap: 10px; padding: 11px 14px; border-bottom: 0; border-radius: 16px; background: linear-gradient(135deg, rgba(142, 166, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%); box-shadow: none;">
             <svg
                     width="34"
                     height="34"
-                    viewBox="0 0 40 40"
+                    viewBox="0 0 44 44"
                     fill="none"
                     xmlns="http://www.w3.org/2000/svg"
-                    class="me-2"
             >
-                <path d="M20 3L35.5 11.5V28.5L20 37L4.5 28.5V11.5L20 3Z" fill="#321fdb" />
-                <path d="M20 12V28M13 16L27 24M13 24L27 16" stroke="white" stroke-width="2" stroke-linecap="round" opacity="0.8" />
-                <circle cx="20" cy="20" r="3" fill="white" />
+                <defs>
+                    <linearGradient id="adminCoreworkLogoGradient" x1="6" y1="5" x2="39" y2="40" gradientUnits="userSpaceOnUse">
+                        <stop stop-color="#8ea6ff" />
+                        <stop offset="0.56" stop-color="#5b6ee1" />
+                        <stop offset="1" stop-color="#111827" />
+                    </linearGradient>
+                </defs>
+                <rect x="4" y="4" width="36" height="36" rx="12" fill="url(#adminCoreworkLogoGradient)" />
+                <path
+                        d="M28.6 15.7C27.25 14.08 25.16 13 22.54 13C17.84 13 14.2 16.63 14.2 22C14.2 27.36 17.84 31 22.54 31C25.22 31 27.34 29.88 28.7 28.18"
+                        stroke="#FFFFFF"
+                        stroke-linecap="round"
+                        stroke-width="3"
+                />
+                <path
+                        d="M21.5 14.2L25.15 29.8L29.7 17.2L34.15 29.8L37.8 14.2"
+                        stroke="#c7d2fe"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2.4"
+                />
             </svg>
-            <span class="d-flex flex-column" style="user-select: none; line-height: 1;">
-                <span style="font-size: 1.15rem; font-weight: 800; color: #f8f9fa;">
-                    CORE<span style="color: #8ea6ff;">WORK</span>
+            <span class="brand-copy d-flex flex-column">
+                <span class="brand-title">
+                    CORE<span class="brand-title-accent">WORK</span>
                 </span>
-                <small style="font-size: 0.6rem; font-weight: 700; letter-spacing: 0.5px; color: #adb5bd; margin-top: 2px;">
+                <small class="brand-subtitle">
                     AI-BASED GROUPWARE
                 </small>
             </span>
@@ -40,11 +68,10 @@
                     data-accordion="false"
                     id="navigation"
             >
-                <li class="nav-item"><hr></li>
-
                 <li class="nav-item">
                     <a th:href="@{/admin/home}" class="nav-link">
-                        <i class="nav-icon fa-regular fa-house"></i>
+<!--                        <i class="nav-icon fa-regular fa-house"></i>-->
+                        <i class="fa-solid fa-chart-column"></i>
                         <p>대시보드</p>
                     </a>
                 </li>
@@ -69,22 +96,25 @@
                 </li>
                 <li class="nav-item">
                     <a href="/admin/AiSecretary/dashboard" class="nav-link">
-                        <i class="nav-icon fa-regular fa-comments"></i>
+<!--                        <i class="nav-icon fa-regular fa-comments"></i>-->
+                        <i class="fa-solid fa-chart-column"></i>
                         <p>AI 데이터 운영 대시보드</p>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a href="/admin/AiSecretary/rag" class="nav-link">
-                        <i class="nav-icon fa-regular fa-comments"></i>
+<!--                        <i class="nav-icon fa-regular fa-comments"></i>-->
+                        <i class="fa-solid fa-file"></i>
                         <p>지식베이스 및 RAG 관리</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a href="/admin/AiSecretary/security" class="nav-link">
-                        <i class="nav-icon fa-regular fa-comments"></i>
+<!--                        <i class="nav-icon fa-regular fa-comments"></i>-->
+                        <i class="fa-solid fa-lock"></i>
                         <p>보안 및 권한 제어</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
 
@@ -100,7 +130,8 @@
                 </li>
                 <li class="nav-item">
                     <a th:href="@{/admin/departments}" class="nav-link">
-                        <i class="nav-icon fa-regular fa-user"></i>
+<!--                        <i class="nav-icon fa-regular fa-user"></i>-->
+                        <i class="fa-solid fa-folder-tree"></i>
                         <p>조직도 관리</p>
                     </a>
                 </li>
@@ -113,14 +144,15 @@
                     <a th:href="@{/admin/onboarding/main}" class="nav-link">
                         <i class="nav-icon fa-solid fa-user-group"></i>
                         <p>AI 온보딩 관리</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a th:href="@{/admin/evaluation/main}" class="nav-link">
-                        <i class="nav-icon fa-solid fa-user-group"></i>
+<!--                        <i class="nav-icon fa-solid fa-user-group"></i>-->
+                        <i class="fa-solid fa-list-check"></i>
                         <p>AI 온보딩 평가</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
 
@@ -151,7 +183,8 @@
                             <a th:href="@{/admin/attendance/main}"
                                class="nav-link"
                                th:classappend="${activeAttendanceMenu == 'main'} ? ' active'">
-                                <i class="nav-icon fa-solid fa-angle-right"></i>
+<!--                                <i class="nav-icon fa-solid fa-angle-right"></i>-->
+                                <i class="fa-solid fa-bars-progress"></i>
                                 <p>근태 현황</p>
                             </a>
                         </li>
@@ -161,7 +194,8 @@
                             <a th:href="@{/admin/attendance/statistics}"
                                class="nav-link"
                                th:classappend="${activeAttendanceMenu == 'statistics'} ? ' active'">
-                                <i class="nav-icon fa-solid fa-angle-right"></i>
+<!--                                <i class="nav-icon fa-solid fa-angle-right"></i>-->
+                                <i class="fa-solid fa-chart-pie"></i>
                                 <p>근태 통계</p>
                             </a>
                         </li>
@@ -171,7 +205,8 @@
                             <a th:href="@{/admin/attendance/leave}"
                                class="nav-link"
                                th:classappend="${activeAttendanceMenu == 'leave'} ? ' active'">
-                                <i class="nav-icon fa-solid fa-angle-right"></i>
+<!--                                <i class="nav-icon fa-solid fa-angle-right"></i>-->
+                                <i class="fa-solid fa-umbrella-beach"></i>
                                 <p>연차/휴가 현황</p>
                             </a>
                         </li>

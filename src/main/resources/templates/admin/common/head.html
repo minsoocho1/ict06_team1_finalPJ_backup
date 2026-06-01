@@ -4,9 +4,7 @@
     <th:block th:replace="~{:: #page_title}"></th:block>  <!-- 페이지별 title 내용 주입 -->
 
     <!-- 시작: 사용자 폰트 적용 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@100..900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css" />
     <!-- 끝: 사용자 폰트 적용 -->
 
     <!-- 시작: fontawesome 적용 -->
@@ -16,7 +14,7 @@
     <!--begin::Accessibility Meta Tags-->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
     <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" content="#007bff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0042A7" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1a1a1a" media="(prefers-color-scheme: dark)" />
     <!--end::Accessibility Meta Tags-->
 
@@ -37,18 +35,8 @@
     <!-- Skip links will be dynamically added by accessibility.js -->
     <meta name="supported-color-schemes" content="light dark" />
     <link rel="preload" href="/css/adminlte.css" as="style" />
+    <link rel="preload" href="/css/admin-theme.css" as="style" />
     <!--end::Accessibility Features-->
-
-    <!--begin::Fonts-->
-    <link
-            rel="stylesheet"
-            href="https://cdn.jsdelivr.net/npm/@fontsource/source-sans-3@5.0.12/index.css"
-            integrity="sha256-tXJfXfp6Ewt1ilPzLDtQnJV4hclT9XuaZUKyUvmyr+Q="
-            crossorigin="anonymous"
-            media="print"
-            onload="this.media = 'all'"
-    />
-    <!--end::Fonts-->
 
     <!--begin::Third Party Plugin(OverlayScrollbars)-->
     <link
@@ -85,4 +73,8 @@
             integrity="sha256-+uGLJmmTKOqBr+2E6KDYs/NRsHxSkONXFHUL0fy2O/4="
             crossorigin="anonymous"
     />
+
+    <!--begin::COREWORK Admin Theme-->
+    <link rel="stylesheet" href="/css/admin-theme.css" />
+    <!--end::COREWORK Admin Theme-->
 </head>

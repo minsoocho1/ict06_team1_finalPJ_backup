@@ -11,6 +11,7 @@
  * @ 2026.05.06    김다솜        최초 생성 및 온보딩 요약 카드 구현
  * @ 2026.05.08    김다솜        체크리스트 완료 현황 표시 추가
  * @ 2026.05.15    김다솜        UI 조정(AI 사내 포털 기준으로 톤 맞춤)
+ * @ 2026.05.29    김다솜        진행률 표시값 보정 및 체크리스트 집계 응답 표시 안정화
  */
 
 import React, { useEffect, useState } from 'react';
@@ -19,12 +20,13 @@ import axiosInstance from 'src/api/axiosInstance';
 import { useUser } from 'src/api/UserContext';
 import { PATH } from 'src/constants/path';
 import { summaryTitle } from 'src/styles/js/evaluation/QuizStyle';
-import { progressFill, progressTrack, summaryCard, summaryDesc, summaryGrid, summaryHeader, summaryItemLabel, summaryPercent } from 'src/styles/js/onboarding/DashboardStyle';
+import { normalizePercent, progressFill, progressTrack, summaryCard, summaryDesc, summaryGrid, summaryHeader, summaryItemLabel, summaryPercent } from 'src/styles/js/onboarding/DashboardStyle';
 
 const OnboardingSummaryCard = () => {
     const navigate = useNavigate();
     const { userInfo } = useUser();
     const [summary, setSummary] = useState(null);
+    const learningProgressPercent = normalizePercent(summary?.learningProgressPercent ?? 0);
 
     useEffect(() => {
         if(!userInfo?.empNo)
@@ -58,12 +60,12 @@ const OnboardingSummaryCard = () => {
                 </div>
 
                 <div style={summaryPercent}>
-                    {summary?.learningProgressPercent ?? 0}%
+                    {learningProgressPercent}%
                 </div>
             </div>
 
             <div style={progressTrack}>
-                <div style={progressFill(summary?.learningProgressPercent ?? 0)} />
+                <div style={progressFill(learningProgressPercent)} />
             </div>
 
             <div style={summaryGrid}>

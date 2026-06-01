@@ -250,7 +250,7 @@ const PendingApprovalDetail = () => {
     <div style={containerStyle}>
       <header className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">결재 대기 문서 상세</h2>
+          <h2 className="user-page-title mb-1">결재 대기 문서 상세</h2>
           <div className="text-body-secondary">
             {detail?.title || '결재 문서'}
           </div>

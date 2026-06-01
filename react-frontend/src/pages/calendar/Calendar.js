@@ -1355,7 +1355,7 @@ const Calendar = () => {
 
     const pageStyle = {
         width: 'calc(100% + 32px)',
-        margin: '-32px -16px 0 -16px',
+        margin: '0 -16px',
         padding: '0',
     };
 
@@ -1619,11 +1619,15 @@ const Calendar = () => {
                 </div>
             )}
 
+            <div style={{ padding: '24px 16px 0' }}>
+                <h2 className="user-page-title mb-3">일정 관리</h2>
+            </div>
+
             <CCard
                 className="mb-0"
                 style={{
                     width: '100%',
-                    height: 'calc(100vh - 115px)',
+                    height: 'calc(100vh - 215px)',
                     overflow: 'hidden',
                     display: 'flex',
                     flexDirection: 'column',

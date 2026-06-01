@@ -15,14 +15,14 @@
 
 /* ===== 기본 ===== */
 body {
-    font-family: Arial, sans-serif;
-    background-color: #f8f9fa;
+    font-family: var(--cw-font-sans);
+    background-color: var(--cw-base);
     margin: 0;
 }
 
 /* ===== 헤더 ===== */
 header {
-    background-color: #343a40;
+    background-color: var(--cw-sidebar-bg);
     color: white;
     padding: 12px 20px;
     display: flex;
@@ -48,13 +48,13 @@ header {
     background: white;
     border-radius: 10px;
     padding: 16px;
-    border: 1px solid #dee2e6;
+    border: 1px solid var(--cw-border);
     cursor: pointer;
     transition: 0.2s;
 }
 
 .card:hover {
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    box-shadow: var(--cw-shadow-sm);
 }
 
 /* ===== 텍스트 ===== */
@@ -65,7 +65,7 @@ header {
 
 /* ===== 버튼 ===== */
 .logout-btn {
-    background: #dc3545;
+    background: var(--cw-danger);
     border: none;
     padding: 6px 12px;
     color: white;

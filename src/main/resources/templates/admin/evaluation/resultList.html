@@ -29,7 +29,7 @@
             <div class="container-fluid p-4" style="max-width: 1260px; margin: 0 auto;">
                 <div class="row mb-3">
                     <div class="col">
-                        <h3>평가 결과 통계</h3>
+                        <h3 class="fw-bold mb-2">평가 결과 통계</h3>
                         <p class="text-muted mb-0">
                             평가 제출 현황, 평균 이해도, 기준 대비 차이, 취약 문항을 한 화면에서 확인합니다.
                         </p>
@@ -428,6 +428,17 @@
 <script th:inline="javascript">
     let criteriaModal;
 
+    const adminTheme = getComputedStyle(document.documentElement);
+    const themeColor = (name) => adminTheme.getPropertyValue(name).trim();
+    const hexToRgba = (hex, alpha) => {
+        const normalized = hex.replace('#', '');
+        const bigint = parseInt(normalized, 16);
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };
+
     document.addEventListener('DOMContentLoaded', function () {
         const modalEl = document.getElementById('criteriaModal');
         if (modalEl && typeof bootstrap !== 'undefined') {
@@ -472,10 +483,10 @@
                     {
                         label: '평균 점수(%)',
                         data: averageScores,
-                        backgroundColor: 'rgba(50, 31, 219, 0.15)',
-                        borderColor: 'rgba(50, 31, 219, 0.8)',
-                        pointBackgroundColor: 'rgba(50, 31, 219, 1)',
-                        pointBorderColor: '#fff',
+                        backgroundColor: hexToRgba(themeColor('--cw-primary'), 0.15),
+                        borderColor: hexToRgba(themeColor('--cw-primary'), 0.8),
+                        pointBackgroundColor: themeColor('--cw-primary'),
+                        pointBorderColor: themeColor('--cw-surface'),
                         borderWidth: 3,
                         fill: true,
                         tension: 0.1,
@@ -485,7 +496,7 @@
                         label: '합격 기준(%)',
                         data: passScores,
                         backgroundColor: 'transparent',
-                        borderColor: '#ced2d8',
+                        borderColor: themeColor('--cw-border'),
                         borderWidth: 1,
                         borderDash: [5, 5],
                         pointRadius: 0,
@@ -528,7 +539,7 @@
                 labels: ['통과', '미통과'],
                 datasets: [{
                     data: [passCount, failCount],
-                    backgroundColor: ['#2eb85c', '#e55353'],
+                    backgroundColor: [themeColor('--cw-success'), themeColor('--cw-danger')],
                     hoverOffset: 4
                 }]
             },
@@ -571,7 +582,7 @@
                 datasets: [{
                     label: '평균 점수(%)',
                     data: averageScores,
-                    backgroundColor: '#f59e0b',
+                    backgroundColor: themeColor('--cw-warning'),
                     borderRadius: 6
                 }]
             },

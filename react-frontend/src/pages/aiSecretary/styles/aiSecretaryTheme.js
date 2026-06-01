@@ -32,7 +32,7 @@ export const styles = {
     display: "flex",
     minHeight: "100vh",
     background: C.bg,
-    fontFamily: "Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif",
+    fontFamily: "var(--cw-user-font-sans)",
     color: C.text,
   },
 
@@ -47,6 +47,10 @@ export const styles = {
 
   main: {
     flex: 1,
+    width: "100%",
+    maxWidth: "var(--cw-user-content-max-width)",
+    marginRight: "auto",
+    marginLeft: "auto",
     minWidth: 0,
     display: "flex",
     flexDirection: "column",

@@ -9,6 +9,7 @@
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.18    김다솜        로그아웃 모달을 홈/웰컴/사내 AI 포털 톤으로 개선하고 스타일 파일 분리
  * @ 2026.05.19    김다솜        헤더 기본 프로필 이미지 제거 및 로그아웃 확인창을 포털 기반 커스텀 모달로 전환
+ * @ 2026.05.29    김다솜        마이페이지 프로필 사진-헤더 프로필 영역에 연동
  */
 
 import React, { useState } from 'react'
@@ -56,9 +57,14 @@ import {
 
 const AppHeaderDropdown = () => {
   const navigate = useNavigate()
-  const { logout } = useUser()
+  const { logout, userInfo } = useUser()
   const [logoutModal, setLogoutModal] = useState(false)
   const [toast, addToast] = useState(null)
+  const profileImage = userInfo?.profileImg || userInfo?.profile_img
+  const backendOrigin = PATH.API.BASE.replace(/\/api$/, '')
+  const profileImageUrl = profileImage?.startsWith('/employee/uploads/')
+    ? `${backendOrigin}${profileImage}`
+    : profileImage
 
   const openLogoutModal = (event) => {
     event.preventDefault()
@@ -139,8 +145,8 @@ const AppHeaderDropdown = () => {
     <>
       <CDropdown variant="nav-item">
         <CDropdownToggle placement="bottom-end" className="py-0 pe-0" caret={false}>
-          <CAvatar color="secondary" textColor="white" size="md">
-            <CIcon icon={cilUser} />
+          <CAvatar color="secondary" textColor="white" size="md" src={profileImageUrl || undefined}>
+            {!profileImageUrl && <CIcon icon={cilUser} />}
           </CAvatar>
         </CDropdownToggle>
         <CDropdownMenu className="pt-0" placement="bottom-end">

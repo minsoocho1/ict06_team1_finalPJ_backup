@@ -363,12 +363,24 @@ public class PayrollRepositoryCustomImpl implements PayrollRepositoryCustom {
                         payrollItemEntity.itemSetting.itemSettingId.as("itemSettingId"),
                         payrollItemEntity.itemNameSnapshot.as("itemNameSnapshot"),
                         payrollItemEntity.itemType.as("itemType"),
+                        payrollItemEntity.taxableAmount.as("taxableAmount"),
+                        payrollItemEntity.nonTaxableAmount.as("nonTaxableAmount"),
                         payrollItemEntity.amount.as("amount"),
                         payrollItemEntity.taxType.as("taxType"),
                         payrollItemEntity.nonTaxCode.as("nonTaxCode"),
 
                         // 엔티티 수정 없이 현재 설정 기준 근태연동 유형을 참고한다.
-                        payrollItemEntity.itemSetting.linkedAttendanceType.as("linkedAttendanceType")
+                        new com.querydsl.core.types.dsl.CaseBuilder()
+                                .when(payrollItemEntity.itemNameSnapshot.startsWith("조정수당"))
+                                .then("OVERTIME")
+                                .when(payrollItemEntity.itemNameSnapshot.startsWith("조정공제"))
+                                .then("ABSENCE")
+                                .when(payrollItemEntity.itemNameSnapshot.eq("연장수당"))
+                                .then("OVERTIME")
+                                .when(payrollItemEntity.itemNameSnapshot.eq("결근공제"))
+                                .then("ABSENCE")
+                                .otherwise(payrollItemEntity.itemSetting.linkedAttendanceType)
+                                .as("linkedAttendanceType")
                 ))
                 .from(payrollItemEntity)
                 .join(payrollItemEntity.payroll, payrollEntity)
@@ -382,7 +394,7 @@ public class PayrollRepositoryCustomImpl implements PayrollRepositoryCustom {
     }
 
     // 현재 활성 지급/공제항목 설정의 최신 수정일 조회
-// - DRAFT의 PAYROLL.updatedAt과 비교하여 항목 설정 변경 여부를 판단한다.
+    // - DRAFT의 PAYROLL.updatedAt과 비교하여 항목 설정 변경 여부를 판단한다.
     @Override
     public java.time.LocalDateTime selectLatestPayItemSettingUpdatedAt() {
 
@@ -427,6 +439,89 @@ public class PayrollRepositoryCustomImpl implements PayrollRepositoryCustom {
                 .workingDays(0)
                 .build();
     }
+    @Override
+    public List<PayrollClosedMonthDTO> selectClosedPayrollMonthsBefore(
+            String empNo,
+            String currentPayMonth
+    ) {
+        return queryFactory
+                .select(Projections.fields(
+                        PayrollClosedMonthDTO.class,
+                        payrollEntity.payMonth.as("payMonth"),
+                        payrollEntity.updatedAt.as("payrollUpdatedAt")
+                ))
+                .from(payrollEntity)
+                .where(
+                        payrollEntity.employee.empNo.eq(empNo),
+                        payrollEntity.payMonth.lt(currentPayMonth),
+                        payrollEntity.status.in(PayrollStatus.CONFIRMED, PayrollStatus.PAID)
+                )
+                .orderBy(payrollEntity.payMonth.asc())
+                .fetch();
+    }
+
+    // 특정 급여월의 PAYROLL_ITEM snapshot 조회
+    // - 조정수당/조정공제 역산 계산용
+    @Override
+    public List<PayrollItemLoadResponseDTO.Item> selectPayrollItemSnapshots(
+            String empNo,
+            String payMonth
+    ) {
+        return queryFactory
+                .select(Projections.fields(
+                        PayrollItemLoadResponseDTO.Item.class,
+
+                        payrollItemEntity.itemSetting.itemSettingId.as("itemSettingId"),
+                        payrollItemEntity.itemNameSnapshot.as("itemNameSnapshot"),
+                        payrollItemEntity.itemType.as("itemType"),
+                        payrollItemEntity.amount.as("amount"),
+                        payrollItemEntity.taxType.as("taxType"),
+                        payrollItemEntity.nonTaxCode.as("nonTaxCode"),
+                        payrollItemEntity.taxableAmount.as("taxableAmount"),
+                        payrollItemEntity.nonTaxableAmount.as("nonTaxableAmount"),
+
+                        // itemSetting이 살아있으면 이 값 사용
+                        // itemSetting이 없는 조정항목도 근태연동 항목으로 다시 인식시킨다.
+                        new com.querydsl.core.types.dsl.CaseBuilder()
+                                .when(payrollItemEntity.itemNameSnapshot.startsWith("조정수당"))
+                                .then("OVERTIME")
+                                .when(payrollItemEntity.itemNameSnapshot.startsWith("조정공제"))
+                                .then("ABSENCE")
+                                .when(payrollItemEntity.itemNameSnapshot.eq("연장수당"))
+                                .then("OVERTIME")
+                                .when(payrollItemEntity.itemNameSnapshot.eq("결근공제"))
+                                .then("ABSENCE")
+                                .otherwise(payrollItemEntity.itemSetting.linkedAttendanceType)
+                                .as("linkedAttendanceType")
+                ))
+                .from(payrollItemEntity)
+                .join(payrollItemEntity.payroll, payrollEntity)
+                .leftJoin(payrollItemEntity.itemSetting, payItemSettingEntity)
+                .where(
+                        payrollEntity.employee.empNo.eq(empNo),
+                        payrollEntity.payMonth.eq(payMonth)
+                )
+                .orderBy(payrollItemEntity.payrollItemId.asc())
+                .fetch();
+    }
+
+    @Override
+    public boolean existsAdjustmentItem(String empNo, String itemNameSnapshot) {
+
+        Integer count = queryFactory
+                .selectOne()
+                .from(payrollItemEntity)
+                .join(payrollItemEntity.payroll, payrollEntity)
+                .where(
+                        payrollEntity.employee.empNo.eq(empNo),
+                        payrollItemEntity.itemNameSnapshot.eq(itemNameSnapshot)
+                )
+                .fetchFirst();
+
+        return count != null;
+    }
+
+
 
     // 상태명과 버튼 상태 세팅
     private void setStatusInfo(PayrollStatusResponseDTO result) {

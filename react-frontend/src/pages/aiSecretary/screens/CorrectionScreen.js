@@ -248,6 +248,7 @@ export default function CorrectionScreen() {
         </div>
 
         <h1
+          className="user-page-title"
           style={{
             margin: "6px 0 0",
             fontSize: 38,

@@ -85,7 +85,7 @@ const EvaluationStatus = () => {
   return (
     <div style={quizContainer}>
       <div style={quizHeader}>
-        <h2>AI 퀴즈 및 평가</h2>
+        <h2 className="user-page-title">AI 퀴즈 및 평가</h2>
         <p style={categoryText}>
           로드맵에서 학습을 완료한 카테고리만 평가를 응시할 수 있습니다.
         </p>

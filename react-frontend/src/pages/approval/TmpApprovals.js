@@ -92,7 +92,7 @@ const TmpApprovals = () => {
     <div style={containerStyle}>
       <header className="mb-4">
         <div>
-          <h2 className="mb-1">임시저장함</h2>
+          <h2 className="user-page-title mb-1">임시저장함</h2>
           <div className="text-body-secondary">
             {userInfo?.name ? `${userInfo.name}님이 아직 상신하지 않은 문서입니다.` : '아직 상신하지 않은 결재 문서입니다.'}
           </div>

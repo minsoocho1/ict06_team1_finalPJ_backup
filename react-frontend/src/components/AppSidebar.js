@@ -1,3 +1,12 @@
+/**
+ * @FileName : AppSidebar.js
+ * @Description : 사용자 페이지 사이드바 컴포넌트
+ * @Modification_History
+ * @
+ * @ 수정일자        수정자       수정내용
+ * @ ----------    ---------    -------------------------------
+ * @ 2026.05.29    김다솜        서비스 로고 수정
+ */
 import React from 'react';
 import { useSelector, useDispatch } from 'react-redux';
 
@@ -33,7 +42,7 @@ const AppSidebar = () => {
         dispatch(setSidebarState({ sidebarShow: visible }));
       }}
     >
-      <div className="sidebar-header border-bottom">
+      <div className="sidebar-header border-bottom-0">
         <CSidebarBrand as="div" className="d-none d-md-flex">
           {/* AppLogo 컴포넌트를 사용하여 로고를 표시합니다. */}
           {/* 사이드바가 접히거나(sidebarShow가 false) unfoldable 상태일 때 collapsed prop을 true로 전달하여 텍스트를 숨깁니다. */}

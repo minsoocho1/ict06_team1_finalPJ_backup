@@ -26,7 +26,7 @@ export const quizContainer = {
     margin: '0 auto',
     background: '#F4F7FB',
     color: '#111827',
-    fontFamily: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif'
+    fontFamily: 'var(--cw-user-font-sans)'
 };
 
 export const quizHeader = {
@@ -172,7 +172,7 @@ export const evalResultStyles = {
         margin: '0 auto',
         background: '#F4F7FB',
         color: '#111827',
-        fontFamily: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif'
+        fontFamily: 'var(--cw-user-font-sans)'
     },
     summaryHeader: {
         background: '#FFFFFF',
@@ -197,7 +197,7 @@ export const evalResultStyles = {
         margin: '0 auto',
         background: '#F4F7FB',
         color: '#111827',
-        fontFamily: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif'
+        fontFamily: 'var(--cw-user-font-sans)'
     },
     detailHeader: {
         background: '#FFFFFF',

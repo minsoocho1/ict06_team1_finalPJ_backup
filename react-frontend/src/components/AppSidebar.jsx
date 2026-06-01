@@ -8,6 +8,7 @@
  * @ 수정일자        수정자        수정내용
  * @ ----------    ---------    -------------------------------
  * @ 2026.05.19    김다솜        사이드바 기본 프로필 이미지 제거
+ * @ 2026.05.29    김다솜        서비스 로고 수정, 마이페이지 프로필 사진 등록 기능 추가
  */
 
 import React from 'react'
@@ -29,6 +30,7 @@ import { AppSidebarNav } from './AppSidebarNav'
 import AppLogo from './AppLogo'
 import navigation from '../_nav'
 import { setSidebarState } from 'src/store/store'
+import { PATH } from 'src/constants/path'
 
 const normalizeRole = (roleValue) => {
   if (typeof roleValue === 'string') return roleValue.toUpperCase()
@@ -60,6 +62,11 @@ const AppSidebar = ({ userInfo }) => {
     userInfo?.positionName ||
     userInfo?.position_name ||
     '직급 정보 없음'
+  const profileImage = userInfo?.profileImg || userInfo?.profile_img
+  const backendOrigin = PATH.API.BASE.replace(/\/api$/, '')
+  const profileImageUrl = profileImage?.startsWith('/employee/uploads/')
+    ? `${backendOrigin}${profileImage}`
+    : profileImage
 
   const filteredNav = navigation.filter((item) => {
     if (!item.roles) return true
@@ -74,23 +81,20 @@ const AppSidebar = ({ userInfo }) => {
         dispatch(setSidebarState({ sidebarShow: visible }))
       }}
     >
-      <CSidebarBrand className="d-flex align-items-center border-bottom">
+      <CSidebarBrand className="d-flex align-items-center border-bottom-0">
         <AppLogo />
       </CSidebarBrand>
 
       <div className="p-3 border-bottom sidebar-profile-area">
-        <div
-          className="mb-3"
-          style={{
-            background: '#f4f6fb',
-            border: '1px solid #e4e8f3',
-            borderRadius: '16px',
-            padding: '14px',
-          }}
-        >
+        <div className="mb-3 sidebar-profile-card">
           <div className="d-flex align-items-center gap-3">
-            <CAvatar color="secondary" textColor="white" size="lg">
-              <CIcon icon={cilUser} />
+            <CAvatar
+              color="secondary"
+              textColor="white"
+              size="lg"
+              src={profileImageUrl || undefined}
+            >
+              {!profileImageUrl && <CIcon icon={cilUser} />}
             </CAvatar>
             <div style={{ minWidth: 0 }}>
               <div className="fw-semibold text-dark text-truncate">{employeeName}</div>

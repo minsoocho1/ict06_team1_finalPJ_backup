@@ -38,7 +38,7 @@
         <!-- ===================================================== -->
         <div class="row mb-3">
           <div class="col">
-            <h3 class="fw-bold mb-1">급여대장 관리</h3>
+            <h3 class="fw-bold mb-2">급여대장 관리</h3>
             <p class="text-muted mb-0">
               사원별 급여대장을 작성하고 계산 미리보기, 저장, 확정, 지급처리를 관리합니다.
             </p>
@@ -191,9 +191,11 @@
               <div class="col-md-2">
                 <button type="button"
                         id="periodSearchBtn"
-                        class="btn btn-outline-primary w-100"
+                        class="btn btn-primary w-100"
+                        aria-label="조회"
+                        title="조회"
                         disabled>
-                  조회
+                  <i class="fa-solid fa-magnifying-glass"></i>
                 </button>
               </div>
 
@@ -298,6 +300,7 @@
                       <tr>
                         <th style="width: 25%;">항목명</th>
                         <th style="width: 15%;">과세유형</th>
+                        <th style="width: 18%;">계산유형</th>
                         <th style="width: 40%;">금액(원)</th>
                       </tr>
                       </thead>
@@ -305,6 +308,7 @@
                       <tr class="payroll-base-salary-row">
                         <td class="fw-semibold">기본급</td>
                         <td><span class="badge text-bg-primary">과세</span></td>
+                        <td><span class="badge text-bg-secondary">수동계산</span></td>
                         <td>
                           <input type="text"
                                  id="baseSalaryInput"
@@ -470,8 +474,8 @@
               <div class="modal-body">
 
                 <div class="alert alert-info small">
-                  지급 또는 공제를 선택한 뒤 항목명과 과세/비과세 여부를 설정합니다.
-                  지급항목에서 비과세를 선택한 경우에만 비과세 항목을 선택합니다.
+                  지급/공제 구분에 따라 과세 여부, 비과세 항목, 근태연동 여부를 설정합니다.
+                  비과세 지급항목은 근태연동으로 설정할 수 없습니다.
                 </div>
 
                 <div class="d-flex justify-content-end mb-3">
@@ -487,6 +491,7 @@
                       <th style="width: 15%;">지급/공제</th>
                       <th style="width: 18%;">과세/비과세</th>
                       <th style="width: 18%;">비과세 항목</th>
+                      <th style="width: 16%;">근태연동</th>
                       <th style="width: 23%;">항목명</th>
                       <th style="width: 8%;">삭제</th>
                     </tr>

@@ -175,7 +175,7 @@ const Approval = () => {
   return (
     <div style={containerStyle}>
       <header className="mb-4">
-        <h2 className="mb-1">전자결재 메인</h2>
+        <h2 className="user-page-title mb-1">전자결재 메인</h2>
         <div className="text-body-secondary">
           {contextUserInfo?.name
             ? `${contextUserInfo.name}님의 최근 결재 문서를 문서함별로 확인합니다.`

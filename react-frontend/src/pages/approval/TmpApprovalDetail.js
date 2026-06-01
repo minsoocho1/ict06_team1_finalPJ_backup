@@ -155,7 +155,7 @@ const TmpApprovalDetail = () => {
     <div style={containerStyle}>
       <header className="mb-4 d-flex justify-content-between align-items-start gap-3">
         <div>
-          <h2 className="mb-1">임시저장 문서 상세</h2>
+          <h2 className="user-page-title mb-1">임시저장 문서 상세</h2>
           <div className="text-body-secondary">
             아직 상신하지 않은 문서의 내용을 확인한 뒤 수정하거나 삭제할 수 있습니다.
           </div>

@@ -38,7 +38,7 @@ const EmployeeDetail = () => {
     return (
         <div style={containerStyle}>
             <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>인사관리 상세</h2>
+                <h2 className="user-page-title">인사관리 상세</h2>
             </header>
 
             <hr style={{ border: '0', height: '1px', background: '#eee', margin: '40px 0' }} />

@@ -13,12 +13,14 @@
  * @ 2026.05.06    김다솜        최초 생성 및 온보딩 대시보드 집계 로직 구현
  * @ 2026.05.08    김다솜        체크리스트 진행률 집계 추가
  * @ 2026.05.14    김다솜        학습 진행률 계산 방식 변경 (카테고리 단위 -> 전체 항목 완료 수 기준)
+ * @ 2026.05.29    김다솜        온보딩 데이터 영역 버그 수정
  */
 
 package com.ict06.team1_fin_pj.domain.onboarding.service;
 
 import com.ict06.team1_fin_pj.common.dto.onboarding.OnboardingDashboardResponse;
 import com.ict06.team1_fin_pj.common.dto.onboarding.CategoryProgressResponse;
+import com.ict06.team1_fin_pj.domain.onboarding.entity.ChecklistEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.ProgressStatus;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadItemEntity;
 import com.ict06.team1_fin_pj.domain.onboarding.entity.RoadProgressEntity;
@@ -113,9 +115,27 @@ public class OnboardingDashboardServiceImpl {
                 ? 0
                 : (int) Math.round((completedLearningCount * 100.0) / totalLearningCount);
 
-        int totalChecklistCount = (int) checklistRepository.count();
-        int completedChecklistCount = (int) checklistProgressRepository
-                .countByEmployee_EmpNoAndStatus(empNo, ProgressStatus.COMPLETED);
+        List<Integer> roadmapContentIds = roadmapItems.stream()
+                .filter(item -> item.getContent() != null)
+                .map(item -> item.getContent().getContentId())
+                .toList();
+
+        List<ChecklistEntity> visibleChecklists = checklistRepository.findAllByOrderByOrderNoAsc().stream()
+                .filter(item -> "USER".equals(item.getChecklistType()) ||
+                        (item.getRelatedContent() != null
+                                && roadmapContentIds.contains(item.getRelatedContent().getContentId())))
+                .toList();
+
+        List<Integer> visibleChecklistIds = visibleChecklists.stream()
+                .map(ChecklistEntity::getChecklistId)
+                .toList();
+
+        int totalChecklistCount = visibleChecklists.size();
+        int completedChecklistCount = (int) checklistProgressRepository.findByEmployee_EmpNo(empNo).stream()
+                .filter(progress -> progress.getChecklist() != null)
+                .filter(progress -> visibleChecklistIds.contains(progress.getChecklist().getChecklistId()))
+                .filter(progress -> progress.getStatus() == ProgressStatus.COMPLETED)
+                .count();
         int checklistProgressPercent = totalChecklistCount == 0
                 ? 0
                 : (int) Math.round((completedChecklistCount * 100.0) / totalChecklistCount);

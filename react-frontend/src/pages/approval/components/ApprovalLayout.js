@@ -86,6 +86,10 @@ const styles = {
   },
   main: {
     flex: 1,
+    width: '100%',
+    maxWidth: 'var(--cw-user-content-max-width)',
+    marginRight: 'auto',
+    marginLeft: 'auto',
     minWidth: 0,
   },
   menuList: {

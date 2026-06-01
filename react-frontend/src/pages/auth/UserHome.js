@@ -18,6 +18,7 @@
  * @ 2026.05.15    김다솜        UI 조정 및 위치 기반 상세 날씨 위젯 적용
  * @ 2026.05.18    김다솜        날씨 위젯 현재 위치 구/동 단위 표시 반영
  * @ 2026.05.19    김다솜        사내 공지사항 및 커뮤니티 소식 영역 제거
+ * @ 2026.05.29    김다솜        IT NEWS FLASH 표시 개수/여백 조정 및 빠른 업무 이동 영역 추가
  */
 
 import React, { useEffect, useState } from 'react';
@@ -205,6 +206,12 @@ const UserHome = () => {
   }, [userInfo?.empNo, userInfo?.emp_no]);
 
   const data = buildHomeFeedData(dashboardData, roadmapGroups);
+  const newsQuickActions = [
+    { label: '일정 확인', desc: '오늘 일정 보기', path: PATH.CALENDAR.ROOT },
+    { label: '근태 관리', desc: '출퇴근/휴가 확인', path: PATH.ATTENDANCE.ROOT },
+    { label: '전자결재', desc: '문서함 바로가기', path: PATH.APPROVAL.ROOT },
+    { label: 'AI 포털', desc: '업무 AI 도구', path: PATH.AI.ROOT },
+  ];
 
   // 기온에 따른 날씨 위젯 배경색 동적 처리 함수
   const getWeatherCardStyle = (temp) => {
@@ -356,9 +363,9 @@ const UserHome = () => {
               <strong className="text-dark" style={{ fontSize: '1rem' }}>IT NEWS FLASH</strong>
             </CCardHeader>
             <CCardBody className="pt-0">
-              <div className="row">
-                {(homeData.newsList || []).slice(0, 4).map((item, index) => (
-                  <div key={`${item.title}-${index}`} className="col-md-6 py-2 border-bottom">
+              <div className="row g-0">
+                {(homeData.newsList || []).slice(0, 6).map((item, index) => (
+                  <div key={`${item.title}-${index}`} className="col-md-6 py-2 pe-md-3 border-bottom">
                     <a
                       href={item.link}
                       target="_blank"
@@ -372,6 +379,31 @@ const UserHome = () => {
               </div>
               <div className="mt-2 text-end">
                 <small className="text-muted" style={{ fontSize: '0.7rem' }}>출처: 네이버 뉴스</small>
+              </div>
+              <div className="mt-3 pt-3 border-top">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <strong className="text-dark small">빠른 업무 이동</strong>
+                  <small className="text-muted" style={{ fontSize: '0.7rem' }}>자주 쓰는 메뉴</small>
+                </div>
+                <div className="row g-2">
+                  {newsQuickActions.map((action) => (
+                    <div className="col-6 col-xl-3" key={action.path}>
+                      <button
+                        type="button"
+                        className="w-100 text-start border-0 rounded-3 px-3 py-2"
+                        style={{
+                          backgroundColor: '#F4F7FB',
+                          color: '#1F2937',
+                          minHeight: '64px',
+                        }}
+                        onClick={() => navigate(action.path)}
+                      >
+                        <span className="d-block fw-bold small">{action.label}</span>
+                        <span className="d-block text-muted" style={{ fontSize: '0.72rem' }}>{action.desc}</span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CCardBody>
           </CCard>
