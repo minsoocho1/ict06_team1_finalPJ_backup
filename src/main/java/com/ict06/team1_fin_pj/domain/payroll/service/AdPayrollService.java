@@ -48,4 +48,6 @@ public interface AdPayrollService {
 
     // DB snapshot 변경 없이 최신 항목 미리보기 조회
     List<PayrollItemLoadResponseDTO.Item> getLatestPreviewPayrollItems(String empNo, Integer payYear, Integer payMonth);
+
+    String resetAttendanceCalculation(PayrollMainRequestDTO requestDTO);
 }

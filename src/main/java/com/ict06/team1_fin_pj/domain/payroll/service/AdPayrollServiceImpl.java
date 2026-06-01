@@ -398,6 +398,19 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
             grade = entityManager.getReference(GradeCodeEntity.class, employeeInfo.getGradeId());
         }
 
+        /*
+         * 저장 snapshot 계산
+         *
+         * 저장 직후 근태연동 변경 경고가 다시 뜨지 않게
+         * 저장 시점 계산값 snapshot 생성
+         */
+        PayrollPreviewResponseDTO previewForSnapshot =
+                calculatePayrollPreview(
+                        requestDTO,
+                        employeeInfo,
+                        payMonth
+                );
+
         // NEW 저장
         if (payroll == null) {
 
@@ -416,12 +429,12 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
 
                     .bonus(BigDecimal.ZERO)
 
-                    .totalAllowance(BigDecimal.ZERO)
-                    .totalGross(requestDTO.getTotalGross())
-                    .taxableIncome(requestDTO.getBaseSalary())
+                    .totalAllowance(previewForSnapshot.getTotalAllowance())
+                    .totalGross(previewForSnapshot.getTotalGross())
+                    .taxableIncome(previewForSnapshot.getTaxableIncome())
 
-                    .incomeTax(requestDTO.getIncomeTax())
-                    .localIncomeTax(requestDTO.getLocalIncomeTax())
+                    .incomeTax(previewForSnapshot.getIncomeTax())
+                    .localIncomeTax(previewForSnapshot.getLocalIncomeTax())
 
                     .nationalPensionAmount(requestDTO.getNationalPensionAmount())
                     .healthInsuranceAmount(requestDTO.getHealthInsuranceAmount())
@@ -429,8 +442,8 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                     .employmentInsuranceAmount(requestDTO.getEmploymentInsuranceAmount())
                     .totalInsurance(requestDTO.getTotalInsurance())
 
-                    .totalDeduction(requestDTO.getTotalDeduction())
-                    .netSalary(requestDTO.getNetSalary())
+                    .totalDeduction(previewForSnapshot.getTotalDeduction())
+                    .netSalary(previewForSnapshot.getNetSalary())
 
                     .status(PayrollStatus.DRAFT)
                     .payDate(null)
@@ -485,14 +498,17 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                     .setParameter("status", PayrollStatus.DRAFT)
                     .setParameter("payrollId", payroll.getPayrollId())
                     .setParameter("zero", zero)
-                    .setParameter("totalAllowance", BigDecimal.ZERO)
-                    .setParameter("taxableIncome", requestDTO.getBaseSalary())
+                    .setParameter("totalAllowance", previewForSnapshot.getTotalAllowance())
+                    .setParameter("taxableIncome", previewForSnapshot.getTaxableIncome())
                     .setParameter("now", now)
                     .executeUpdate();
         }
 
-        // 기존 지급/공제항목 삭제 후 현재 화면 기준으로 다시 저장
-        savePayrollItems(payroll, requestDTO.getItems(), null);
+        PayrollEntity savedPayroll = payrollRepository
+                .findByEmployee_EmpNoAndPayMonth(requestDTO.getEmpNo(), payMonth)
+                .orElseThrow(() -> new IllegalStateException("급여대장 저장 중 오류가 발생했습니다."));
+
+        savePayrollItems(savedPayroll, requestDTO.getItems(), previewForSnapshot);
 
         return "급여대장이 저장되었습니다.";
     }
@@ -512,11 +528,18 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
 
         /*
          * NEW 상태
-         * - 저장된 급여대장이 없으므로 현재 활성 지급/공제항목 설정을 기본값으로 내려준다.
+         * - 저장된 PAYROLL_ITEM snapshot 없음
+         * - 현재 활성 PAY_ITEM_SETTING 기준으로 항목 표시
+         * - 현재 근태값/조정항목은 화면 표시용으로 붙인다.
+         * - 저장된 계산값이 없으므로 무효화 알림은 필요 없다.
          */
         if ("NEW".equals(statusDTO.getPayrollStatus())) {
+
             response.setItemSettingChanged(false);
             response.setWarningMessage(null);
+            response.setAttendanceInvalidationRequired(false);
+            response.setAttendanceInvalidationMessage(null);
+
             List<PayrollItemLoadResponseDTO.Item> items =
                     payrollRepository.selectCurrentPayItemSettings();
 
@@ -539,29 +562,32 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
 
         /*
          * CONFIRMED / PAID 상태
-         * - 최신 항목 설정 변경 영향을 받으면 안 된다.
-         * - 저장 당시 PAYROLL_ITEM snapshot만 보여준다.
+         * - 확정/지급완료는 저장 당시 snapshot만 보여준다.
+         * - 현재 ATTENDANCE 기준으로 다시 계산하면 안 된다.
+         * - 조정수당/조정공제도 다시 붙이면 안 된다.
          */
         if ("CONFIRMED".equals(statusDTO.getPayrollStatus())
                 || "PAID".equals(statusDTO.getPayrollStatus())) {
 
             response.setItemSettingChanged(false);
             response.setWarningMessage(null);
+            response.setAttendanceInvalidationRequired(false);
+            response.setAttendanceInvalidationMessage(null);
+
             List<PayrollItemLoadResponseDTO.Item> items =
-                    payrollRepository.selectSavedPayrollItems(requestDTO.getEmpNo(), payMonth);
+                    payrollRepository.selectSavedPayrollItems(
+                            requestDTO.getEmpNo(),
+                            payMonth
+                    );
 
-            applyCurrentAttendanceSummaryToItems(
-                    items,
-                    requestDTO.getEmpNo(),
-                    requestDTO.getPayYear(),
-                    requestDTO.getPayMonth()
-            );
+            restoreAdjustmentMetaFromSnapshotName(items);
 
-            appendDerivedAdjustmentItems(
-                    items,
-                    requestDTO.getEmpNo(),
-                    payMonth
-            );
+            /*
+             * CONFIRMED / PAID는 현재 근태를 다시 조회하면 안 된다.
+             * 대신 저장된 PAYROLL_ITEM snapshot에서
+             * 확정 당시 연장분/결근일수/조정항목 표시값을 복원한다.
+             */
+            restoreAttendanceCountFromSavedSnapshot(items);
 
             response.setItems(items);
             return response;
@@ -569,12 +595,51 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
 
         /*
          * DRAFT 상태
-         * - 저장된 PAYROLL_ITEM을 우선 보여준다.
-         * - PAY_ITEM_SETTING이 수정/삭제되었으면 변경 알림을 내려준다.
+         * - 저장된 PAYROLL_ITEM snapshot을 먼저 조회한다.
+         * - 이 snapshot과 현재 ATTENDANCE 기준 근태값을 비교해서
+         *   계산결과 무효화 여부를 판단한다.
          */
         List<PayrollItemLoadResponseDTO.Item> items =
-                payrollRepository.selectSavedPayrollItems(requestDTO.getEmpNo(), payMonth);
+                payrollRepository.selectSavedPayrollItems(
+                        requestDTO.getEmpNo(),
+                        payMonth
+                );
 
+        /*
+         * 조정수당[yyyy-MM], 조정공제[yyyy-MM]
+         * snapshot 이름 기준으로 근태연동 유형 복원
+         */
+        restoreAdjustmentMetaFromSnapshotName(items);
+
+        /*
+         * 저장 당시 snapshot 기준 분/일수 복원
+         */
+        restoreAttendanceCountFromSavedSnapshot(items);
+
+        boolean attendanceInvalidationRequired =
+                hasSavedCalculationValue(statusDTO)
+                        && isAttendanceInvalidationRequired(
+                        requestDTO.getEmpNo(),
+                        payMonth,
+                        items
+                );
+
+        response.setAttendanceInvalidationRequired(attendanceInvalidationRequired);
+
+        if (attendanceInvalidationRequired) {
+            response.setAttendanceInvalidationMessage(
+                    "저장 이후 근태연동 값이 변경되어 계산 미리보기가 다시 필요합니다."
+            );
+        } else {
+            response.setAttendanceInvalidationMessage(null);
+        }
+
+        /*
+         * 무효화 판단 이후에만 화면 표시용 현재 근태값을 다시 세팅한다.
+         * 순서 중요:
+         * - 먼저 snapshot 비교
+         * - 그 다음 화면 표시값 갱신
+         */
         applyCurrentAttendanceSummaryToItems(
                 items,
                 requestDTO.getEmpNo(),
@@ -590,9 +655,15 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
 
         response.setItems(items);
 
+        /*
+         * DRAFT 지급/공제항목 설정 변경 경고
+         * - PAY_ITEM_SETTING 최신 수정일이 저장된 DRAFT 이후면 경고
+         */
         PayrollBaseSalaryResponseDTO savedPayroll =
-                payrollRepository.selectSavedPayrollBaseSalary(requestDTO.getEmpNo(), payMonth)
-                        .orElse(null);
+                payrollRepository.selectSavedPayrollBaseSalary(
+                        requestDTO.getEmpNo(),
+                        payMonth
+                ).orElse(null);
 
         java.time.LocalDateTime latestItemSettingUpdatedAt =
                 payrollRepository.selectLatestPayItemSettingUpdatedAt();
@@ -603,7 +674,17 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                 && savedPayroll.getPayrollUpdatedAt() != null
                 && latestItemSettingUpdatedAt != null
                 && latestItemSettingUpdatedAt.isAfter(savedPayroll.getPayrollUpdatedAt())) {
-            itemSettingChanged = true;
+
+            List<PayrollItemLoadResponseDTO.Item> latestSettingItems =
+                    payrollRepository.selectCurrentPayItemSettings();
+
+            /*
+             * updatedAt은 바뀌었더라도
+             * 저장된 DRAFT snapshot과 현재 항목설정의 실제 구성이 같으면
+             * 항목변경권고를 띄우지 않는다.
+             */
+            itemSettingChanged =
+                    !isSamePayItemSettingStructure(items, latestSettingItems);
         }
 
         response.setItemSettingChanged(itemSettingChanged);
@@ -956,22 +1037,52 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
     @Transactional
     public String confirmPayroll(PayrollSaveRequestDTO requestDTO) {
 
-        validatePayrollSaveRequest(requestDTO);
+        validateEmpNo(requestDTO.getEmpNo());
 
-        String payMonth = makePayMonth(requestDTO.getPayYear(), requestDTO.getPayMonth());
+        if (requestDTO.getPayYear() == null
+                || requestDTO.getPayMonth() == null) {
+            throw new IllegalArgumentException("급여년월 정보가 없습니다.");
+        }
+
+        String payMonth = makePayMonth(
+                requestDTO.getPayYear(),
+                requestDTO.getPayMonth()
+        );
 
         PayrollEntity payroll = payrollRepository
                 .findByEmployee_EmpNoAndPayMonth(requestDTO.getEmpNo(), payMonth)
-                .orElse(null);
+                .orElseThrow(() -> new IllegalArgumentException("작성중 급여대장이 없습니다. 먼저 저장해 주세요."));
 
-        if (payroll != null && PayrollStatus.PAID.equals(payroll.getStatus())) {
+        if (PayrollStatus.PAID.equals(payroll.getStatus())) {
             throw new IllegalStateException("지급완료 상태의 급여대장은 확정할 수 없습니다.");
         }
 
-        PayrollEmployeeInfoResponseDTO employeeInfo = getEmployeeInfo(requestDTO.getEmpNo());
-        PayrollPreviewResponseDTO preview = calculatePayrollPreview(requestDTO, employeeInfo, payMonth);
+        if (PayrollStatus.CONFIRMED.equals(payroll.getStatus())) {
+            return "이미 확정된 급여대장입니다.";
+        }
 
-        savePayrollWithCalculation(requestDTO, preview, PayrollStatus.CONFIRMED, null);
+        if (!PayrollStatus.DRAFT.equals(payroll.getStatus())) {
+            throw new IllegalStateException("작성중 상태의 급여대장만 확정할 수 있습니다.");
+        }
+
+        /**
+         * 확정은 DRAFT에 저장된 PAYROLL / PAYROLL_ITEM snapshot을 보존한 채
+         * 상태만 CONFIRMED로 변경한다.
+         *
+         * 중요:
+         * - 확정 시 프론트 request.items 기준으로 PAYROLL_ITEM을 재저장하지 않는다.
+         * - 기존 항목 삭제 후 재생성하면 화면 수집 누락 시 항목이 사라진다.
+         */
+        entityManager.createQuery("""
+        update PayrollEntity p
+           set p.status = :status,
+               p.updatedAt = :now
+         where p.payrollId = :payrollId
+    """)
+                .setParameter("status", PayrollStatus.CONFIRMED)
+                .setParameter("now", java.time.LocalDateTime.now())
+                .setParameter("payrollId", payroll.getPayrollId())
+                .executeUpdate();
 
         return "급여대장이 확정되었습니다.";
     }
@@ -981,28 +1092,52 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
     @Transactional
     public String payConfirmPayroll(PayrollSaveRequestDTO requestDTO) {
 
-        validatePayrollSaveRequest(requestDTO);
+        validateEmpNo(requestDTO.getEmpNo());
+
+        if (requestDTO.getPayYear() == null
+                || requestDTO.getPayMonth() == null) {
+            throw new IllegalArgumentException("급여년월 정보가 없습니다.");
+        }
 
         if (requestDTO.getPayDate() == null) {
             throw new IllegalArgumentException("지급일을 선택해 주세요.");
         }
 
-        String payMonth = makePayMonth(requestDTO.getPayYear(), requestDTO.getPayMonth());
+        String payMonth = makePayMonth(
+                requestDTO.getPayYear(),
+                requestDTO.getPayMonth()
+        );
 
         PayrollEntity payroll = payrollRepository
                 .findByEmployee_EmpNoAndPayMonth(requestDTO.getEmpNo(), payMonth)
-                .orElse(null);
+                .orElseThrow(() -> new IllegalArgumentException("확정된 급여대장이 없습니다. 먼저 저장/확정을 진행해 주세요."));
 
-        if (payroll != null && PayrollStatus.PAID.equals(payroll.getStatus())) {
-            throw new IllegalStateException("이미 지급완료된 급여대장입니다.");
+        if (PayrollStatus.PAID.equals(payroll.getStatus())) {
+            return "이미 지급완료된 급여대장입니다.";
         }
 
-        PayrollEmployeeInfoResponseDTO employeeInfo = getEmployeeInfo(requestDTO.getEmpNo());
-        PayrollPreviewResponseDTO preview = calculatePayrollPreview(requestDTO, employeeInfo, payMonth);
+        if (!PayrollStatus.CONFIRMED.equals(payroll.getStatus())) {
+            throw new IllegalStateException("확정 상태의 급여대장만 지급확정할 수 있습니다.");
+        }
 
-        savePayrollWithCalculation(requestDTO, preview, PayrollStatus.PAID, requestDTO.getPayDate());
+        /**
+         * 지급확정도 저장된 snapshot을 보존하고
+         * 상태와 지급일만 변경한다.
+         */
+        entityManager.createQuery("""
+        update PayrollEntity p
+           set p.status = :status,
+               p.payDate = :payDate,
+               p.updatedAt = :now
+         where p.payrollId = :payrollId
+    """)
+                .setParameter("status", PayrollStatus.PAID)
+                .setParameter("payDate", requestDTO.getPayDate())
+                .setParameter("now", java.time.LocalDateTime.now())
+                .setParameter("payrollId", payroll.getPayrollId())
+                .executeUpdate();
 
-        return "급여대장이 지급완료 처리되었습니다.";
+        return "급여대장이 지급확정되었습니다.";
     }
 
     // 급여대장 삭제
@@ -1086,6 +1221,64 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
         );
 
         return items;
+    }
+
+    /**
+     * 연장/결근/조정 누적분 변경 시
+     * 저장된 계산값만 초기화한다.
+     *
+     * 중요:
+     * - PayrollEntity는 수정하지 않는다.
+     * - PAYROLL_ITEM은 건드리지 않는다.
+     * - 조정수당/조정공제 생성·이월·소멸 규칙도 건드리지 않는다.
+     * - DRAFT 상태만 초기화한다.
+     */
+    @Override
+    @Transactional
+    public String resetAttendanceCalculation(PayrollMainRequestDTO requestDTO) {
+
+        validateMainRequest(requestDTO);
+
+        String payMonth = makePayMonth(
+                requestDTO.getPayYear(),
+                requestDTO.getPayMonth()
+        );
+
+        PayrollEntity payroll = payrollRepository
+                .findByEmployee_EmpNoAndPayMonth(
+                        requestDTO.getEmpNo(),
+                        payMonth
+                )
+                .orElse(null);
+
+        if (payroll == null) {
+            return "급여대장 없음";
+        }
+
+        if (!PayrollStatus.DRAFT.equals(payroll.getStatus())) {
+            return "작성중 상태가 아니므로 초기화하지 않습니다.";
+        }
+
+        entityManager.createQuery("""
+        update PayrollEntity p
+           set p.incomeTax = 0,
+               p.localIncomeTax = 0,
+               p.nationalPensionAmount = 0,
+               p.healthInsuranceAmount = 0,
+               p.longTermCareAmount = 0,
+               p.employmentInsuranceAmount = 0,
+               p.totalInsurance = 0,
+               p.totalGross = 0,
+               p.totalDeduction = 0,
+               p.netSalary = 0
+         where p.payrollId = :payrollId
+           and p.status = :status
+    """)
+                .setParameter("payrollId", payroll.getPayrollId())
+                .setParameter("status", PayrollStatus.DRAFT)
+                .executeUpdate();
+
+        return "연장/결근/조정 변경으로 계산값을 초기화했습니다.";
     }
 
     // 작성년월 select 옵션 조회
@@ -1394,7 +1587,7 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
          * - 3차 초기 구현에서는 기본급 기준으로 계산한다.
          * - 추후 과세 지급항목까지 포함하려면 insuranceBase = taxableIncome 으로 교체하면 된다.
          */
-        BigDecimal insuranceBase = baseSalary;
+        BigDecimal insuranceBase = taxableIncome;
 
 
         BigDecimal nationalPension = calc(insuranceBase, PayrollRateConstants.NATIONAL_PENSION);
@@ -1576,12 +1769,29 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
             BigDecimal rate,
             BigDecimal amount
     ) {
+
+        /*
+         * 계산식 표시용 기준금액 콤마 처리
+         * 예)
+         * 4800000 → 4,800,000
+         */
+        String formattedBaseAmount =
+                java.text.NumberFormat
+                        .getNumberInstance()
+                        .format(nvl(baseAmount));
+
         return PayrollPreviewResponseDTO.InsuranceRow.builder()
                 .name(name)
                 .baseAmount(baseAmount)
                 .rate(rate)
                 .amount(amount)
-                .formula(formatMoney(baseAmount) + " × " + rate)
+
+                /*
+                 * 계산식 표시
+                 * 예)
+                 * 4,800,000 × 0.045
+                 */
+                .formula(formattedBaseAmount + " × " + rate)
                 .build();
     }
 
@@ -1629,6 +1839,106 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
         }
 
         validatePayrollItems(requestDTO.getItems());
+        validateAttendanceLinkedUnitAmount(requestDTO.getItems());
+    }
+
+    /**
+     * 근태연동 항목 단가 검증
+     *
+     * 기존 규칙을 건드리지 않고,
+     * 실제 반영 수량이 있는 근태연동 항목의 단가 0원 저장만 막는다.
+     *
+     * 규칙:
+     * 1. 조정수당/조정공제는 생성됐다는 것 자체가 반영 대상이 있다는 뜻이므로 단가 필수
+     * 2. 일반 연장수당은 연장분이 0분이면 단가 0 허용
+     * 3. 일반 결근공제는 결근일수가 0일이면 단가 0 허용
+     * 4. 실제 연장분/결근일수가 있으면 단가 0 불가
+     */
+    private void validateAttendanceLinkedUnitAmount(List<PayrollSaveRequestDTO.Item> items) {
+
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+
+        for (PayrollSaveRequestDTO.Item item : items) {
+
+            if (item == null) {
+                continue;
+            }
+
+            String itemName =
+                    item.getItemNameSnapshot() == null
+                            ? ""
+                            : item.getItemNameSnapshot().trim();
+
+            BigDecimal amount =
+                    item.getAmount() == null
+                            ? BigDecimal.ZERO
+                            : item.getAmount();
+
+            boolean adjustmentAllowance =
+                    itemName.startsWith("조정수당");
+
+            boolean adjustmentDeduction =
+                    itemName.startsWith("조정공제");
+
+            /**
+             * 조정항목은 생성 자체가 반영 대상 존재를 의미하므로
+             * 단가 0원 허용 금지
+             */
+            if ((adjustmentAllowance || adjustmentDeduction)
+                    && amount.compareTo(BigDecimal.ZERO) <= 0) {
+
+                throw new IllegalArgumentException(
+                        "반영 대상 근태 또는 조정항목이 존재합니다.\n"
+                                + "단가 입력 후 계산 미리보기를 진행해 주세요."
+                );
+            }
+
+            /**
+             * 일반 연장수당:
+             * 연장분이 있을 때만 단가 필수
+             */
+            if ("OVERTIME".equals(item.getLinkedAttendanceType())
+                    && !adjustmentAllowance) {
+
+                int overtimeMinutes =
+                        item.getOvertimeMinutes() == null
+                                ? 0
+                                : item.getOvertimeMinutes();
+
+                if (overtimeMinutes > 0
+                        && amount.compareTo(BigDecimal.ZERO) <= 0) {
+
+                    throw new IllegalArgumentException(
+                            "반영 대상 근태 또는 조정항목이 존재합니다.\n"
+                                    + "단가 입력 후 계산 미리보기를 진행해 주세요."
+                    );
+                }
+            }
+
+            /**
+             * 일반 결근공제:
+             * 결근일수가 있을 때만 단가 필수
+             */
+            if ("ABSENCE".equals(item.getLinkedAttendanceType())
+                    && !adjustmentDeduction) {
+
+                int absenceDays =
+                        item.getAbsenceDays() == null
+                                ? 0
+                                : item.getAbsenceDays();
+
+                if (absenceDays > 0
+                        && amount.compareTo(BigDecimal.ZERO) <= 0) {
+
+                    throw new IllegalArgumentException(
+                            "반영 대상 근태 또는 조정항목이 존재합니다.\n"
+                                    + "단가 입력 후 계산 미리보기를 진행해 주세요."
+                    );
+                }
+            }
+        }
     }
 
     // 지급/공제항목 검증
@@ -1651,6 +1961,21 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
             }
 
             String itemName = item.getItemNameSnapshot().trim();
+
+            /**
+             * 조정항목은 PAY_ITEM_SETTING에 없는 자동 생성 항목이다.
+             * 따라서 itemSettingId가 null이고 linkedAttendanceType도 null일 수 있다.
+             *
+             * 하지만 저장/검증/계산에서는 근태연동 유형이 필요하므로
+             * 이름 기준으로 내부값만 복원한다.
+             */
+            if (itemName.startsWith("조정수당")) {
+                item.setLinkedAttendanceType("OVERTIME");
+            }
+
+            if (itemName.startsWith("조정공제")) {
+                item.setLinkedAttendanceType("ABSENCE");
+            }
 
             // 기본급은 고정 항목
             if ("기본급".equals(itemName)) {
@@ -1998,10 +2323,58 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
             PayrollPreviewResponseDTO.ItemRow previewRow = null;
 
             if (preview != null && preview.getItemRows() != null) {
+
                 for (PayrollPreviewResponseDTO.ItemRow row : preview.getItemRows()) {
 
-                    if (row.getItemNameSnapshot() != null
-                            && row.getItemNameSnapshot().equals(itemDTO.getItemNameSnapshot())) {
+                    if (row == null) {
+                        continue;
+                    }
+
+                    String rowName =
+                            row.getItemNameSnapshot() == null
+                                    ? ""
+                                    : row.getItemNameSnapshot().trim();
+
+                    String dtoName =
+                            itemDTO.getItemNameSnapshot() == null
+                                    ? ""
+                                    : itemDTO.getItemNameSnapshot().trim();
+
+                    String rowType =
+                            row.getItemType() == null
+                                    ? ""
+                                    : row.getItemType();
+
+                    String dtoType =
+                            itemDTO.getItemType() == null
+                                    ? ""
+                                    : itemDTO.getItemType();
+
+                    String rowLinked =
+                            row.getLinkedAttendanceType() == null
+                                    ? ""
+                                    : row.getLinkedAttendanceType();
+
+                    String dtoLinked =
+                            itemDTO.getLinkedAttendanceType() == null
+                                    ? ""
+                                    : itemDTO.getLinkedAttendanceType();
+
+                    /**
+                     * previewRow 매칭 기준
+                     *
+                     * 기존에는 itemNameSnapshot만 비교해서
+                     * 공백/중복/조정항목/근태연동 항목에서 매칭 실패 가능성이 있었다.
+                     *
+                     * 저장 당시 계산 snapshot이 payroll_item.taxableAmount에 들어가야
+                     * DRAFT 재진입 시 근태 누적분을 감지할 수 있다.
+                     */
+                    boolean sameNormalItem =
+                            rowName.equals(dtoName)
+                                    && rowType.equals(dtoType)
+                                    && rowLinked.equals(dtoLinked);
+
+                    if (sameNormalItem) {
                         previewRow = row;
                         break;
                     }
@@ -2085,6 +2458,19 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
 
         for (PayrollItemLoadResponseDTO.Item item : items) {
 
+            if (item == null) {
+                continue;
+            }
+
+            /*
+             * 조정수당/조정공제는 현재월 근태값을 넣으면 안 된다.
+             * 조정항목은 appendDerivedAdjustmentItems()에서
+             * 직전월 누락분 기준으로 따로 계산한다.
+             */
+            if (isAdjustmentSnapshotName(item.getItemNameSnapshot())) {
+                continue;
+            }
+
             if ("OVERTIME".equals(item.getLinkedAttendanceType())) {
                 item.setOvertimeMinutes(overtimeMinutes);
                 item.setDisplayItemName(item.getItemNameSnapshot());
@@ -2093,6 +2479,125 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
             if ("ABSENCE".equals(item.getLinkedAttendanceType())) {
                 item.setAbsenceDays(absenceDays);
                 item.setDisplayItemName(item.getItemNameSnapshot());
+            }
+        }
+    }
+
+    private void restoreAdjustmentMetaFromSnapshotName(
+            List<PayrollItemLoadResponseDTO.Item> items
+    ) {
+
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+
+        for (PayrollItemLoadResponseDTO.Item item : items) {
+
+            if (item == null || !StringUtils.hasText(item.getItemNameSnapshot())) {
+                continue;
+            }
+
+            String itemName = item.getItemNameSnapshot();
+
+            if (itemName.startsWith("조정수당[")) {
+                item.setLinkedAttendanceType("OVERTIME");
+                item.setDerivedAdjustment(true);
+                item.setDisplayItemName("조정수당");
+                item.setSourcePayMonth(
+                        itemName.replace("조정수당[", "").replace("]", "")
+                );
+            }
+
+            if (itemName.startsWith("조정공제[")) {
+                item.setLinkedAttendanceType("ABSENCE");
+                item.setDerivedAdjustment(true);
+                item.setDisplayItemName("조정공제");
+                item.setSourcePayMonth(
+                        itemName.replace("조정공제[", "").replace("]", "")
+                );
+            }
+        }
+    }
+
+    /**
+     * CONFIRMED / PAID 조회 시
+     * 저장된 PAYROLL_ITEM snapshot 기준으로
+     * 연장분/결근일수 표시값을 복원한다.
+     *
+     * CONFIRMED / PAID에서는 현재 ATTENDANCE를 다시 조회하면 안 된다.
+     */
+    private void restoreAttendanceCountFromSavedSnapshot(
+            List<PayrollItemLoadResponseDTO.Item> items
+    ) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+
+        System.out.println("===== snapshot 복원 시작 =====");
+
+        for (PayrollItemLoadResponseDTO.Item item : items) {
+
+            if (item == null) {
+                continue;
+            }
+
+            System.out.println(
+                    "item = "
+                            + item.getItemNameSnapshot()
+                            + " / linked="
+                            + item.getLinkedAttendanceType()
+                            + " / amount="
+                            + item.getAmount()
+                            + " / taxable="
+                            + item.getTaxableAmount()
+            );
+
+            String linkedAttendanceType = item.getLinkedAttendanceType();
+
+            if (!"OVERTIME".equals(linkedAttendanceType)
+                    && !"ABSENCE".equals(linkedAttendanceType)) {
+                continue;
+            }
+
+            BigDecimal unitAmount =
+                    item.getAmount() == null
+                            ? BigDecimal.ZERO
+                            : item.getAmount();
+
+            BigDecimal calculatedAmount =
+                    item.getTaxableAmount() == null
+                            ? BigDecimal.ZERO
+                            : item.getTaxableAmount();
+
+            int restoredCount = 0;
+
+            if (unitAmount.compareTo(BigDecimal.ZERO) > 0
+                    && calculatedAmount.compareTo(BigDecimal.ZERO) > 0) {
+
+                BigDecimal count =
+                        calculatedAmount.divide(
+                                unitAmount,
+                                10,
+                                RoundingMode.HALF_UP
+                        );
+
+                if ("OVERTIME".equals(linkedAttendanceType)) {
+                    count = count.multiply(BigDecimal.valueOf(60));
+                }
+
+                restoredCount =
+                        count.setScale(0, RoundingMode.HALF_UP)
+                                .intValue();
+            }
+
+            if ("OVERTIME".equals(linkedAttendanceType)) {
+                item.setOvertimeMinutes(restoredCount);
+                item.setAbsenceDays(0);
+            }
+
+            if ("ABSENCE".equals(linkedAttendanceType)) {
+                item.setAbsenceDays(restoredCount);
+                item.setOvertimeMinutes(0);
             }
         }
     }
@@ -2126,6 +2631,10 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
         for (PayrollItemLoadResponseDTO.Item item : currentItems) {
 
             if (item == null) {
+                continue;
+            }
+
+            if (isAdjustmentSnapshotName(item.getItemNameSnapshot())) {
                 continue;
             }
 
@@ -2204,6 +2713,15 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
         int adjustmentAbsenceDays =
                 Math.max(0, latestAbsenceDays - reflectedAbsenceDays);
 
+        // 조정수당 대상 분이 0이면 기존 조정수당 row가 남아있지 않도록 제거한다.
+        if (adjustmentOvertimeMinutes <= 0) {
+            currentItems.removeIf(item ->
+                    item != null
+                            && ("조정수당[" + sourcePayMonth + "]")
+                            .equals(item.getItemNameSnapshot())
+            );
+        }
+
         // 조정수당 생성
         if (currentOvertimeItem != null
                 && adjustmentOvertimeMinutes > 0) {
@@ -2222,11 +2740,26 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
             if (existingAdjustment != null) {
 
                 existingAdjustment.setDisplayItemName("조정수당");
+                existingAdjustment.setItemType("ALLOWANCE");
+                existingAdjustment.setTaxType("TAXABLE");
+                existingAdjustment.setNonTaxCode(null);
                 existingAdjustment.setLinkedAttendanceType("OVERTIME");
                 existingAdjustment.setOvertimeMinutes(adjustmentOvertimeMinutes);
                 existingAdjustment.setAbsenceDays(0);
                 existingAdjustment.setDerivedAdjustment(true);
                 existingAdjustment.setSourcePayMonth(sourcePayMonth);
+                existingAdjustment.setItemType("ALLOWANCE");
+                existingAdjustment.setTaxType("TAXABLE");
+                existingAdjustment.setNonTaxCode(null);
+
+                if (existingAdjustment.getAmount() == null) {
+
+                    existingAdjustment.setAmount(
+                            currentOvertimeItem.getAmount() == null
+                                    ? BigDecimal.ZERO
+                                    : currentOvertimeItem.getAmount()
+                    );
+                }
 
             } else {
 
@@ -2242,12 +2775,25 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                 adjustment.setLinkedAttendanceType("OVERTIME");
                 adjustment.setOvertimeMinutes(adjustmentOvertimeMinutes);
                 adjustment.setAbsenceDays(0);
-                adjustment.setAmount(BigDecimal.ZERO);
+                adjustment.setAmount(
+                        currentOvertimeItem.getAmount() == null
+                                ? BigDecimal.ZERO
+                                : currentOvertimeItem.getAmount()
+                );
                 adjustment.setDerivedAdjustment(true);
                 adjustment.setSourcePayMonth(sourcePayMonth);
 
                 currentItems.add(adjustment);
             }
+        }
+
+        // 조정공제 대상 일수가 0이면 기존 조정공제 row가 남아있지 않도록 제거한다.
+        if (adjustmentAbsenceDays <= 0) {
+            currentItems.removeIf(item ->
+                    item != null
+                            && ("조정공제[" + sourcePayMonth + "]")
+                            .equals(item.getItemNameSnapshot())
+            );
         }
 
         // 조정공제 생성
@@ -2268,11 +2814,26 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
             if (existingAdjustment != null) {
 
                 existingAdjustment.setDisplayItemName("조정공제");
+                existingAdjustment.setItemType("DEDUCTION");
+                existingAdjustment.setTaxType(null);
+                existingAdjustment.setNonTaxCode(null);
                 existingAdjustment.setLinkedAttendanceType("ABSENCE");
                 existingAdjustment.setOvertimeMinutes(0);
                 existingAdjustment.setAbsenceDays(adjustmentAbsenceDays);
                 existingAdjustment.setDerivedAdjustment(true);
                 existingAdjustment.setSourcePayMonth(sourcePayMonth);
+                existingAdjustment.setItemType("DEDUCTION");
+                existingAdjustment.setTaxType(null);
+                existingAdjustment.setNonTaxCode(null);
+
+                if (existingAdjustment.getAmount() == null) {
+
+                    existingAdjustment.setAmount(
+                            currentAbsenceItem.getAmount() == null
+                                    ? BigDecimal.ZERO
+                                    : currentAbsenceItem.getAmount()
+                    );
+                }
 
             } else {
 
@@ -2288,7 +2849,11 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                 adjustment.setLinkedAttendanceType("ABSENCE");
                 adjustment.setOvertimeMinutes(0);
                 adjustment.setAbsenceDays(adjustmentAbsenceDays);
-                adjustment.setAmount(BigDecimal.ZERO);
+                adjustment.setAmount(
+                        currentAbsenceItem.getAmount() == null
+                                ? BigDecimal.ZERO
+                                : currentAbsenceItem.getAmount()
+                );
                 adjustment.setDerivedAdjustment(true);
                 adjustment.setSourcePayMonth(sourcePayMonth);
 
@@ -2426,6 +2991,438 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                     item.getTaxableAmount() == null
                             ? BigDecimal.ZERO
                             : item.getTaxableAmount();
+
+            if (unitAmount.compareTo(BigDecimal.ZERO) <= 0
+                    || calculatedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                continue;
+            }
+
+            BigDecimal count =
+                    calculatedAmount.divide(
+                            unitAmount,
+                            10,
+                            RoundingMode.HALF_UP
+                    );
+
+            if ("OVERTIME".equals(linkedAttendanceType)) {
+                count = count.multiply(BigDecimal.valueOf(60));
+            }
+
+            totalCount = totalCount.add(count);
+        }
+
+        return totalCount
+                .setScale(0, RoundingMode.HALF_UP)
+                .intValue();
+    }
+
+    /**
+     * DRAFT 저장 이후 근태연동 계산값이 바뀌었는지 판단한다.
+     *
+     * 판단 방식:
+     * 1. 저장 당시 반영된 값
+     *    - PAYROLL_ITEM snapshot의 amount / taxableAmount로 역산
+     *
+     * 2. 현재 반영되어야 하는 값
+     *    - ATTENDANCE 기준으로 다시 계산
+     *
+     * 3. 둘이 다르면
+     *    - 4대보험 / 세금 / 합계 / 실수령액은 더 이상 신뢰할 수 없으므로
+     *      계산 미리보기를 다시 요구한다.
+     *
+     * 이 방식은 sessionStorage를 사용하지 않으므로
+     * 다른 PC / 브라우저 종료 / 재로그인 상황에서도 동일하게 동작한다.
+     */
+    private boolean isAttendanceInvalidationRequired(
+            String empNo,
+            String currentPayMonth,
+            List<PayrollItemLoadResponseDTO.Item> savedSnapshotItems
+    ) {
+
+        if (savedSnapshotItems == null || savedSnapshotItems.isEmpty()) {
+            return false;
+        }
+
+        YearMonth currentYm = YearMonth.parse(currentPayMonth);
+
+        PayrollEmployeeInfoResponseDTO employeeInfo = getEmployeeInfo(empNo);
+
+        LocalDate currentStartDate = getPayMonthStartDate(
+                currentYm.getYear(),
+                currentYm.getMonthValue(),
+                employeeInfo.getHireDate()
+        );
+
+        LocalDate currentEndDate = getPayMonthEndDate(
+                currentYm.getYear(),
+                currentYm.getMonthValue()
+        );
+
+        /*
+         * 현재월 ATTENDANCE 기준 최신 근태값
+         * - 연장: 승인 완료 후 ATTENDANCE.overtimeMins에 반영된 값
+         * - 결근: ATTENDANCE.status = ABSENT 기준
+         */
+        PayrollAttendanceSummaryDTO currentSummary =
+                payrollRepository.selectAttendanceSummary(
+                        empNo,
+                        currentStartDate,
+                        currentEndDate
+                );
+
+        int latestCurrentOvertimeMinutes =
+                currentSummary == null || currentSummary.getOvertimeMinutes() == null
+                        ? 0
+                        : currentSummary.getOvertimeMinutes();
+
+        int latestCurrentAbsenceDays =
+                currentSummary == null || currentSummary.getAbsenceDays() == null
+                        ? 0
+                        : currentSummary.getAbsenceDays();
+
+        /*
+         * DRAFT 저장 당시 PAYROLL_ITEM snapshot에 반영된 현재월 근태값
+         */
+        int savedCurrentOvertimeMinutes =
+                calculateSavedAttendanceCountFromSnapshot(
+                        savedSnapshotItems,
+                        "OVERTIME",
+                        false,
+                        currentPayMonth
+                );
+
+        int savedCurrentAbsenceDays =
+                calculateSavedAttendanceCountFromSnapshot(
+                        savedSnapshotItems,
+                        "ABSENCE",
+                        false,
+                        currentPayMonth
+                );
+
+        /*
+         * 조정항목은 직전월만 본다.
+         * 예)
+         * - 2026-05 급여에서는 2026-04 누락분만 조정
+         * - 2026-06 급여에서 2026-04 누락분을 다시 끌고 오면 안 됨
+         */
+        String sourcePayMonth = getPreviousPayMonth(currentPayMonth);
+
+        int latestAdjustmentOvertimeMinutes = 0;
+        int latestAdjustmentAbsenceDays = 0;
+        int savedAdjustmentOvertimeMinutes = 0;
+        int savedAdjustmentAbsenceDays = 0;
+
+        /**
+         * 조정항목은 직전월 확정/지급완료가 있을 때만 비교한다.
+         * 단, 직전월 확정이 없다고 해서 현재월 연장/결근 누적 감지를 죽이면 안 된다.
+         */
+        if (StringUtils.hasText(sourcePayMonth)) {
+
+            PayrollClosedMonthDTO closedPreviousMonth =
+                    findClosedPreviousMonth(empNo, currentPayMonth, sourcePayMonth);
+
+            if (closedPreviousMonth != null) {
+
+                AdjustmentCount latestAdjustmentCount =
+                        calculateLatestAdjustmentCount(
+                                empNo,
+                                sourcePayMonth
+                        );
+
+                savedAdjustmentOvertimeMinutes =
+                        calculateSavedAttendanceCountFromSnapshot(
+                                savedSnapshotItems,
+                                "OVERTIME",
+                                true,
+                                sourcePayMonth
+                        );
+
+                savedAdjustmentAbsenceDays =
+                        calculateSavedAttendanceCountFromSnapshot(
+                                savedSnapshotItems,
+                                "ABSENCE",
+                                true,
+                                sourcePayMonth
+                        );
+
+                latestAdjustmentOvertimeMinutes =
+                        latestAdjustmentCount == null
+                                ? 0
+                                : latestAdjustmentCount.getOvertimeMinutes();
+
+                latestAdjustmentAbsenceDays =
+                        latestAdjustmentCount == null
+                                ? 0
+                                : latestAdjustmentCount.getAbsenceDays();
+            }
+        }
+        /*
+         * 현재 기준으로 다시 계산한 직전월 조정 대상 개수
+         */
+        AdjustmentCount latestAdjustmentCount =
+                calculateLatestAdjustmentCount(
+                        empNo,
+                        sourcePayMonth
+                );
+
+        boolean hasOvertimeItem =
+                savedSnapshotItems.stream()
+                        .anyMatch(item ->
+                                item != null
+                                        && "OVERTIME".equals(item.getLinkedAttendanceType())
+                        );
+
+        boolean hasAbsenceItem =
+                savedSnapshotItems.stream()
+                        .anyMatch(item ->
+                                item != null
+                                        && "ABSENCE".equals(item.getLinkedAttendanceType())
+                        );
+
+        if (!hasOvertimeItem) {
+            latestCurrentOvertimeMinutes = 0;
+            savedCurrentOvertimeMinutes = 0;
+            latestAdjustmentOvertimeMinutes = 0;
+            savedAdjustmentOvertimeMinutes = 0;
+        }
+
+        if (!hasAbsenceItem) {
+            latestCurrentAbsenceDays = 0;
+            savedCurrentAbsenceDays = 0;
+            latestAdjustmentAbsenceDays = 0;
+            savedAdjustmentAbsenceDays = 0;
+        }
+
+        System.out.println("===== 근태 무효화 비교 =====");
+        System.out.println("현재월 최신 연장분 = " + latestCurrentOvertimeMinutes);
+        System.out.println("현재월 저장 연장분 = " + savedCurrentOvertimeMinutes);
+        System.out.println("현재월 최신 결근일수 = " + latestCurrentAbsenceDays);
+        System.out.println("현재월 저장 결근일수 = " + savedCurrentAbsenceDays);
+        System.out.println("조정 최신 연장분 = " + latestAdjustmentOvertimeMinutes);
+        System.out.println("조정 저장 연장분 = " + savedAdjustmentOvertimeMinutes);
+        System.out.println("조정 최신 결근일수 = " + latestAdjustmentAbsenceDays);
+        System.out.println("조정 저장 결근일수 = " + savedAdjustmentAbsenceDays);
+
+        boolean invalidationResult =
+                latestCurrentOvertimeMinutes != savedCurrentOvertimeMinutes
+                        || latestCurrentAbsenceDays != savedCurrentAbsenceDays
+                        || latestAdjustmentOvertimeMinutes != savedAdjustmentOvertimeMinutes
+                        || latestAdjustmentAbsenceDays != savedAdjustmentAbsenceDays;
+
+        System.out.println("근태 무효화 최종 결과 = " + invalidationResult);
+
+        return invalidationResult;
+    }
+
+    /**
+     * 저장된 계산 결과가 있는 DRAFT인지 판단한다.
+     *
+     * 계산값이 없는 DRAFT는 초기화할 4대보험/세금 값이 없으므로
+     * 근태값이 달라도 무효화 알림을 띄우지 않는다.
+     */
+    private boolean hasSavedCalculationValue(PayrollStatusResponseDTO statusDTO) {
+
+        if (statusDTO == null) {
+            return false;
+        }
+
+        return statusDTO.getNationalPensionAmount() != null
+                || statusDTO.getHealthInsuranceAmount() != null
+                || statusDTO.getLongTermCareAmount() != null
+                || statusDTO.getEmploymentInsuranceAmount() != null
+                || statusDTO.getTotalInsurance() != null
+                || statusDTO.getIncomeTax() != null
+                || statusDTO.getLocalIncomeTax() != null
+                || statusDTO.getTotalGross() != null
+                || statusDTO.getNetSalary() != null;
+    }
+
+    /**
+     * 현재 기준으로 직전월 조정 대상 근태값을 계산한다.
+     *
+     * 조정항목 규칙:
+     * 1. 현재월 기준 직전월만 본다.
+     * 2. 직전월 급여가 CONFIRMED / PAID 상태여야 한다.
+     * 3. 직전월 확정 당시 이미 반영된 값은 제외한다.
+     * 4. 남은 차이분만 현재월 조정수당/조정공제로 본다.
+     * 5. 다음다음월로 재이월하지 않는다.
+     */
+    private AdjustmentCount calculateLatestAdjustmentCount(
+            String empNo,
+            String sourcePayMonth
+    ) {
+
+        LocalDate sourceStartDate = LocalDate.parse(sourcePayMonth + "-01");
+        LocalDate sourceEndDate =
+                sourceStartDate.withDayOfMonth(sourceStartDate.lengthOfMonth());
+
+        /*
+         * 현재 ATTENDANCE 기준 직전월 전체 근태값
+         */
+        PayrollAttendanceSummaryDTO latestSummary =
+                payrollRepository.selectAttendanceSummary(
+                        empNo,
+                        sourceStartDate,
+                        sourceEndDate
+                );
+
+        int latestOvertimeMinutes =
+                latestSummary == null || latestSummary.getOvertimeMinutes() == null
+                        ? 0
+                        : latestSummary.getOvertimeMinutes();
+
+        int latestAbsenceDays =
+                latestSummary == null || latestSummary.getAbsenceDays() == null
+                        ? 0
+                        : latestSummary.getAbsenceDays();
+
+        /*
+         * 직전월 확정/지급완료 당시 이미 반영된 PAYROLL_ITEM snapshot
+         */
+        List<PayrollItemLoadResponseDTO.Item> sourceSnapshotItems =
+                payrollRepository.selectPayrollItemSnapshots(
+                        empNo,
+                        sourcePayMonth
+                );
+
+        int reflectedOvertimeMinutes =
+                calculateSavedAttendanceCountFromSnapshot(
+                        sourceSnapshotItems,
+                        "OVERTIME",
+                        false,
+                        sourcePayMonth
+                );
+
+        int reflectedAbsenceDays =
+                calculateSavedAttendanceCountFromSnapshot(
+                        sourceSnapshotItems,
+                        "ABSENCE",
+                        false,
+                        sourcePayMonth
+                );
+
+        int adjustmentOvertimeMinutes =
+                Math.max(0, latestOvertimeMinutes - reflectedOvertimeMinutes);
+
+        int adjustmentAbsenceDays =
+                Math.max(0, latestAbsenceDays - reflectedAbsenceDays);
+
+        return new AdjustmentCount(
+                adjustmentOvertimeMinutes,
+                adjustmentAbsenceDays
+        );
+    }
+
+    /**
+     * PAYROLL_ITEM snapshot에서 저장 당시 반영된 근태 개수를 역산한다.
+     *
+     * amount 의미:
+     * - OVERTIME: 60분당 단가
+     * - ABSENCE: 1일당 공제단가
+     *
+     * taxableAmount 의미:
+     * - 실제 계산에 반영된 금액
+     *
+     * 역산:
+     * - OVERTIME 분 = taxableAmount / amount * 60
+     * - ABSENCE 일 = taxableAmount / amount
+     *
+     * adjustmentOnly:
+     * - false: 일반 연장수당/결근공제만 계산
+     * - true : 조정수당[sourcePayMonth] / 조정공제[sourcePayMonth]만 계산
+     */
+    private int calculateSavedAttendanceCountFromSnapshot(
+            List<PayrollItemLoadResponseDTO.Item> snapshotItems,
+            String linkedAttendanceType,
+            boolean adjustmentOnly,
+            String sourcePayMonth
+    ) {
+
+        if (snapshotItems == null || snapshotItems.isEmpty()) {
+            return 0;
+        }
+
+        BigDecimal totalCount = BigDecimal.ZERO;
+
+        for (PayrollItemLoadResponseDTO.Item item : snapshotItems) {
+
+            if (item == null) {
+                continue;
+            }
+
+            if (!linkedAttendanceType.equals(item.getLinkedAttendanceType())) {
+                continue;
+            }
+
+            String itemName =
+                    item.getItemNameSnapshot() == null
+                            ? ""
+                            : item.getItemNameSnapshot();
+
+            boolean adjustmentItem =
+                    itemName.startsWith("조정수당[")
+                            || itemName.startsWith("조정공제[");
+
+            /*
+             * 일반 근태연동 항목 계산
+             * - 조정항목은 제외한다.
+             */
+            if (!adjustmentOnly && adjustmentItem) {
+                continue;
+            }
+
+            /*
+             * 조정항목 계산
+             * - 현재월 기준 직전월 sourcePayMonth에 해당하는 조정항목만 본다.
+             * - 예) 조정수당[2026-04]
+             */
+            if (adjustmentOnly) {
+
+                String expectedName =
+                        "OVERTIME".equals(linkedAttendanceType)
+                                ? "조정수당[" + sourcePayMonth + "]"
+                                : "조정공제[" + sourcePayMonth + "]";
+
+                if (!expectedName.equals(itemName)) {
+                    continue;
+                }
+            }
+
+            BigDecimal unitAmount =
+                    item.getAmount() == null
+                            ? BigDecimal.ZERO
+                            : item.getAmount();
+
+            BigDecimal calculatedAmount =
+                    item.getTaxableAmount() == null
+                            ? BigDecimal.ZERO
+                            : item.getTaxableAmount();
+
+/**
+ * 조정항목은 저장 직후 taxableAmount가 0으로 저장되는 경우가 있다.
+ *
+ * 이 경우 기존 역산 방식:
+ *   taxableAmount / amount
+ * 로는 조정수당 120분을 0분으로 판단해서
+ * 저장 후 재진입 시 근태변경 알림이 반복된다.
+ *
+ * 따라서 조정항목이고 taxableAmount가 0이면
+ * 화면/DTO에 복원되어 있는 overtimeMinutes / absenceDays 값을 우선 사용한다.
+ */
+            if (adjustmentOnly && calculatedAmount.compareTo(BigDecimal.ZERO) <= 0) {
+
+                if ("OVERTIME".equals(linkedAttendanceType)
+                        && item.getOvertimeMinutes() != null) {
+                    totalCount = totalCount.add(BigDecimal.valueOf(item.getOvertimeMinutes()));
+                    continue;
+                }
+
+                if ("ABSENCE".equals(linkedAttendanceType)
+                        && item.getAbsenceDays() != null) {
+                    totalCount = totalCount.add(BigDecimal.valueOf(item.getAbsenceDays()));
+                    continue;
+                }
+            }
 
             if (unitAmount.compareTo(BigDecimal.ZERO) <= 0
                     || calculatedAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -2616,6 +3613,60 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
                 || itemName.startsWith("조정공제[");
     }
 
+    /**
+     * DRAFT 저장 snapshot과 현재 PAY_ITEM_SETTING 구성이
+     * 실제 항목 내용 기준으로 같은지 비교한다.
+     *
+     * updatedAt만 비교하면
+     * 다른 사원/다른 월에서 항목설정을 저장했지만
+     * 내용은 같은 경우에도 항목변경권고가 뜰 수 있다.
+     */
+    private boolean isSamePayItemSettingStructure(
+            List<PayrollItemLoadResponseDTO.Item> savedItems,
+            List<PayrollItemLoadResponseDTO.Item> latestItems
+    ) {
+        List<String> savedKeys = makePayItemStructureKeys(savedItems);
+        List<String> latestKeys = makePayItemStructureKeys(latestItems);
+
+        return savedKeys.equals(latestKeys);
+    }
+
+    /**
+     * 항목 비교용 key 생성.
+     *
+     * 비교 기준:
+     * - 항목명
+     * - 지급/공제
+     * - 과세/비과세
+     * - 비과세 코드
+     * - 근태연동 유형
+     *
+     * 조정수당/조정공제는 시스템 자동항목이므로 비교 제외한다.
+     */
+    private List<String> makePayItemStructureKeys(List<PayrollItemLoadResponseDTO.Item> items) {
+
+        if (items == null || items.isEmpty()) {
+            return new java.util.ArrayList<>();
+        }
+
+        return items.stream()
+                .filter(item -> item != null)
+                .filter(item -> !isAdjustmentSnapshotName(item.getItemNameSnapshot()))
+                .map(item ->
+                        nvlText(item.getItemNameSnapshot()) + "|"
+                                + nvlText(item.getItemType()) + "|"
+                                + nvlText(item.getTaxType()) + "|"
+                                + nvlText(item.getNonTaxCode()) + "|"
+                                + nvlText(item.getLinkedAttendanceType())
+                )
+                .sorted()
+                .toList();
+    }
+
+    private String nvlText(String value) {
+        return value == null ? "" : value.trim();
+    }
+
     private String getAttendanceAmountGroup(String linkedAttendanceType) {
 
         if ("OVERTIME".equals(linkedAttendanceType)) {
@@ -2627,6 +3678,32 @@ public class AdPayrollServiceImpl implements AdPayrollService  {
         }
 
         return "NONE";
+    }
+
+    /**
+     * 조정항목 계산 결과를 담는 내부 전용 클래스
+     *
+     * 별도 DTO 파일을 만들 수도 있지만,
+     * 현재는 AdPayrollServiceImpl 내부 계산에서만 쓰므로
+     * 내부 클래스로 둔다.
+     */
+    private static class AdjustmentCount {
+
+        private final int overtimeMinutes;
+        private final int absenceDays;
+
+        private AdjustmentCount(int overtimeMinutes, int absenceDays) {
+            this.overtimeMinutes = overtimeMinutes;
+            this.absenceDays = absenceDays;
+        }
+
+        public int getOvertimeMinutes() {
+            return overtimeMinutes;
+        }
+
+        public int getAbsenceDays() {
+            return absenceDays;
+        }
     }
 }
 

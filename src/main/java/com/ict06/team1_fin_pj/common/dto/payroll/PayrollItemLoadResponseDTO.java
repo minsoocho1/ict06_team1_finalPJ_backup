@@ -20,6 +20,12 @@ public class PayrollItemLoadResponseDTO {
     // 지급/공제항목 목록
     private List<Item> items;
 
+    // 근태연동 값 변경으로 계산 미리보기 재실행 필요 여부
+    private boolean attendanceInvalidationRequired;
+
+    // 근태연동 계산값 변경 안내 메시지
+    private String attendanceInvalidationMessage;
+
     @Data
     @NoArgsConstructor
     public static class Item {

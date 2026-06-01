@@ -3,6 +3,7 @@ package com.ict06.team1_fin_pj.domain.payroll.controller;
 import com.ict06.team1_fin_pj.common.dto.payroll.*;
 import com.ict06.team1_fin_pj.domain.payroll.service.AdPayrollService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.web.bind.annotation.*;
 
@@ -137,5 +138,37 @@ public class AdPayrollController {
     @ResponseBody
     public String deletePayroll(@RequestBody PayrollMainRequestDTO requestDTO) {
         return adPayrollService.deletePayroll(requestDTO);
+    }
+
+    /**
+     * 급여관리 업무 검증 예외 처리
+     *
+     * 예:
+     * - 반영 대상 근태/조정항목이 있으나 단가가 입력되지 않은 경우
+     * - 확정/지급완료 상태의 급여대장 수정 시도
+     *
+     * Spring 기본 500 JSON 전체가 alert에 뜨지 않도록
+     * 검증 메시지만 응답한다.
+     */
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(IllegalArgumentException.class)
+    public String handleIllegalArgumentException(IllegalArgumentException e) {
+        return e.getMessage();
+    }
+
+    @ResponseBody
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ExceptionHandler(IllegalStateException.class)
+    public String handleIllegalStateException(IllegalStateException e) {
+        return e.getMessage();
+    }
+
+    @PostMapping("/main/reset-attendance-calculation")
+    @ResponseBody
+    public String resetAttendanceCalculation(
+            @RequestBody PayrollMainRequestDTO requestDTO
+    ) {
+        return adPayrollService.resetAttendanceCalculation(requestDTO);
     }
 }
