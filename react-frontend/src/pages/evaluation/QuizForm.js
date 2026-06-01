@@ -151,7 +151,7 @@ const QuizForm = ({ categoryName }) => {
     return (
         <div style={quizContainer}>
             <div style={quizHeader}>
-                <h2>📝 AI 온보딩 평가</h2>
+                <h2 className="user-page-title">📝 AI 온보딩 평가</h2>
                 <div style={categoryText}>카테고리: {categoryName}</div>
             </div>
 

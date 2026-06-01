@@ -389,7 +389,7 @@ const PayrollIssue = () => {
     <body style="
       margin:0;
       background:#ffffff;
-      font-family:'Malgun Gothic', sans-serif;
+      font-family:'Pretendard', 'Apple SD Gothic Neo', 'Noto Sans KR', sans-serif;
     ">
       <div style="
         width:190mm;
@@ -558,7 +558,7 @@ const PayrollIssue = () => {
                     {/* 상단 제목 */}
                     <div className="d-flex justify-content-between align-items-center mb-4">
                         <div>
-                            <h2 className="mb-1">
+                            <h2 className="user-page-title mb-1">
                                 {userInfo?.name || '사용자'}님의 급여명세서 조회
                             </h2>
 

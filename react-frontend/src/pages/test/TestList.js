@@ -64,7 +64,7 @@ const TestList = () => {
     return (
         <div style={containerStyle}>
             <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>{userInfo?.name}님 안녕하세요. 여기에 페이지 제목을 써주세요</h2>
+                <h2 className="user-page-title">{userInfo?.name}님 안녕하세요. 여기에 페이지 제목을 써주세요</h2>
             </header>
 
             {/* ✅ 리스트 출력 */}

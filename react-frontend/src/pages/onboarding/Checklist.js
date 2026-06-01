@@ -296,7 +296,7 @@ const Checklist = () => {
             <div style={checklistPageHeader}>
                 <div>
                     <p style={checklistEyebrow}>AI ONBOARDING</p>
-                    <h2 style={checklistPageTitle}>온보딩 체크리스트</h2>
+                    <h2 className="user-page-title" style={checklistPageTitle}>온보딩 체크리스트</h2>
                     <p style={checklistPageDesc}>
                         입사 초기에 확인해야 할 항목을 한곳에서 관리합니다. 관련 학습이 있는 항목은 학습 상세 화면으로 바로 이동할 수 있습니다.
                     </p>

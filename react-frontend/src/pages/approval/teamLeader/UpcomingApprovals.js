@@ -104,7 +104,7 @@ const UpcomingApprovals = () => {
     <div style={containerStyle}>
       <header className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">결재 예정 문서함</h2>
+          <h2 className="user-page-title mb-1">결재 예정 문서함</h2>
           <div className="text-body-secondary">
             {userInfo?.name
               ? `${userInfo.name}님이 이후 단계에서 결재할 문서입니다.`

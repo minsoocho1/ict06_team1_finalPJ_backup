@@ -710,6 +710,7 @@ export default function TemplateScreen({ empNo, onStartTemplate, onOpenForm }) {
       <div style={{ marginBottom: 18 }}>
         <div style={{ fontSize: 16, color: C.sub, fontWeight: 700 }}>AI 비서</div>
         <h1
+          className="user-page-title"
           style={{
             margin: "6px 0 0",
             fontSize: 38,
@@ -1395,4 +1396,3 @@ export default function TemplateScreen({ empNo, onStartTemplate, onOpenForm }) {
     </div>
   );
 }
-

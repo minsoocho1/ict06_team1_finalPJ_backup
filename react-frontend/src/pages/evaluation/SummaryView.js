@@ -98,7 +98,7 @@ const SummaryView = ({
     <div>
       <div style={styles.summaryHeader}>
         <div>
-          <h4 style={{ margin: 0, fontWeight: 700 }}>{headerTitle}</h4>
+          <h4 className="user-page-title" style={{ margin: 0, fontWeight: 700 }}>{headerTitle}</h4>
           <p style={{ margin: '6px 0 0', color: '#6c757d' }}>
             {headerDescription || `${userName}님의 카테고리별 평가 진행 현황입니다.`}
           </p>

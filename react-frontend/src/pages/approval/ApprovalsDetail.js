@@ -217,7 +217,7 @@ const createPrintHtml = (detail, content, signMap) => {
         <title>${escapeHtml(detail.title || '결재 문서')}</title>
         <style>
           @page { size: A4; margin: 18mm; }
-          body { font-family: "Malgun Gothic", Arial, sans-serif; color: #212529; }
+          body { font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif; color: #212529; }
           h1 { text-align: center; font-size: 24px; margin: 0 0 24px; }
           h2 { font-size: 16px; margin: 28px 0 10px; }
           table { width: 100%; border-collapse: collapse; margin-bottom: 14px; }
@@ -438,7 +438,7 @@ const ApprovalsDetail = ({
     <div style={containerStyle}>
       <header className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">{pageTitle}</h2>
+          <h2 className="user-page-title mb-1">{pageTitle}</h2>
           <div className="text-body-secondary">
             {detail?.title || '결재 문서'}
           </div>

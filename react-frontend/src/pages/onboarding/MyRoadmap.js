@@ -162,7 +162,7 @@ function MyRoadmap({ userInfo: propUserInfo }) {
         <CCol lg={8} className="mb-4">
           <CCard className="h-100" style={cardCore}>
             <CCardHeader className="bg-white border-0 py-3">
-              <h4 className="mb-1 fw-bold text-dark">{`${userInfo?.name || '사용자'}님의 AI 온보딩 로드맵`}</h4>
+              <h4 className="user-page-title mb-1 fw-bold text-dark">{`${userInfo?.name || '사용자'}님의 AI 온보딩 로드맵`}</h4>
               <div className="small text-muted">카테고리별 학습을 진행하고, 완료 후 평가에 응시할 수 있습니다.</div>
             </CCardHeader>
             <CCardBody className="py-4">

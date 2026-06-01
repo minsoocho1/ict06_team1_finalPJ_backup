@@ -872,7 +872,7 @@ export default function WriterScreen({
       }
 
       body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans KR", sans-serif;
+        font-family: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
         -webkit-print-color-adjust: exact;
         print-color-adjust: exact;
       }
@@ -986,6 +986,7 @@ export default function WriterScreen({
       <div className="ai-no-print" style={{ marginBottom: 18 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <h1
+            className="user-page-title"
             style={{
               margin: 0,
               fontSize: 38,

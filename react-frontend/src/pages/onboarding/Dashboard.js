@@ -58,7 +58,7 @@ const Dashboard = () => {
 
   return (
     <div style={dashboardPageStyle}>
-      <h3 style={{ marginBottom: '8px' }}>온보딩 대시보드</h3>
+      <h3 className="user-page-title" style={{ marginBottom: '8px' }}>온보딩 대시보드</h3>
       <p style={summaryDesc}>
         학습 진행률과 평가 결과를 종합적으로 확인할 수 있습니다.
       </p>

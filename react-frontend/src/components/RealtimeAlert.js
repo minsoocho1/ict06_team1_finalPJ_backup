@@ -46,7 +46,7 @@ const RealtimeAlert = () => {
     return (
         <div style={containerStyle}>
             <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>알림</h2>
+                <h2 className="user-page-title">알림</h2>
             </header>
 
             {/* 1차 시연용 영역 */}

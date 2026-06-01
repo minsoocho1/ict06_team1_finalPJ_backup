@@ -20,7 +20,7 @@ export const dashboardPageStyle = {
   padding: '24px',
   background: '#F4F7FB',
   color: '#111827',
-  fontFamily: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif',
+  fontFamily: 'var(--cw-user-font-sans)',
 };
 
 export const summaryCard = {

@@ -770,7 +770,7 @@ const Attendance = () => {
 
   return (
     <div style={{ padding: '24px' }}>
-      <h2 className="mb-4">
+      <h2 className="user-page-title mb-4">
         {userInfo?.name ? `${userInfo.name}님의 근태 현황` : '근태 현황'}
       </h2>
       

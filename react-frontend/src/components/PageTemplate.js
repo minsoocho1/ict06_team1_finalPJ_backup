@@ -57,7 +57,7 @@ const PageTemplate = () => {
     return (
         <div style={containerStyle}>
             <header style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between' }}>
-                <h2>🚀 {userInfo?.name}님의 성장 로드맵</h2>
+                <h2 className="user-page-title">🚀 {userInfo?.name}님의 성장 로드맵</h2>
 
                 <button onClick={() => navigate('/welcome')} style={{ border: 'none', background: 'none', color: '#666', cursor: 'pointer' }}>뒤로가기</button>
             </header>
