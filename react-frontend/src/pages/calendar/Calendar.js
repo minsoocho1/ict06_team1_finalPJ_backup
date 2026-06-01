@@ -100,7 +100,9 @@ const Calendar = () => {
 
     // 일정 범위 필터
     // 개인/부서/전사 일정 표시 여부를 관리한다.
+    // 내 일정은 개인일정/구성원 일정과 분리해서 제어한다.
     const [scopeFilters, setScopeFilters] = useState({
+        mine: true,
         personal: true,
         department: true,
         company: true,
@@ -189,6 +191,12 @@ const Calendar = () => {
     // DB 에서 받은 일정은 원본으로 보관, 화면 푯기용 일정은 별도로 만듬.
     const [scheduleList, setScheduleList] = useState([]);
 
+    // 연차/반차/조퇴/병가/경조사 부재 라벨 목록
+    const [absenceList, setAbsenceList] = useState([]);
+
+    // 공휴일 라벨 목록
+    const [holidayList, setHolidayList] = useState([]);
+
     // 현재 캘린더 표시 범위
     // 월/주/일 화면이 바뀔 때마다 FullCalendar가 보고있는 시작일과 종료일 저장.
     const [calendarRange, setCalendarRange] = useState({
@@ -196,8 +204,26 @@ const Calendar = () => {
         end: null,
     });
 
-    // 등록 완료 알림
-    const [successMessage, setSuccessMessage] = useState('');
+    // 일정 등록/수정/삭제/차단 메시지를 관리자 캘린더처럼 상단 toast로 표시한다.
+    const [calendarToast, setCalendarToast] = useState({
+        message: '',
+        type: 'success',
+    });
+
+    const showCalendarToast = (message, type = 'success') => {
+        setCalendarToast({
+            message,
+            type,
+        });
+
+        window.clearTimeout(showCalendarToast.timer);
+        showCalendarToast.timer = window.setTimeout(() => {
+            setCalendarToast({
+                message: '',
+                type: 'success',
+            });
+        }, 2200);
+    };
 
     // 일정 입력 실시간 반영 노출
     // 등록 전 입력 중인 제목/시간을 캘린더에 임시로 보여줌
@@ -235,6 +261,14 @@ const Calendar = () => {
 
         // 저장 전 미리보기 일정은 실제 DB 일정이 아니므로 상세 팝업을 열지 않는다.
         if (eventId === 'calendar-draft-event') {
+            return;
+        }
+
+        // 부재 라벨은 조회용 표시라서 일정 상세 팝업을 열지 않는다.
+        if (
+            info.event.extendedProps?.source === 'ABSENCE' ||
+            info.event.extendedProps?.source === 'HOLIDAY'
+        ) {
             return;
         }
 
@@ -321,6 +355,15 @@ const Calendar = () => {
         return `${year}-${month}-${day}T${hour}:${minute}:${second}`;
     };
 
+    // 공휴일 종일 이벤트 end 계산용 yyyy-MM-dd 문자열을 만든다.
+    const formatCalendarDate = (date) => {
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+
+        return `${year}-${month}-${day}`;
+    };
+
     // 캘린더 표시용 일정 생성
     // DB 일정 데이터를 FullCalendar event 형식으로 바꾼다.
     const createCalendarEvent = (schedule, startTime, endTime, repeatIndex = 0) => ({
@@ -365,6 +408,71 @@ const Calendar = () => {
             isRepeatGenerated: repeatIndex > 0,
         },
     });
+
+    // 부재 사유별 라벨 색상
+    const getAbsenceEventColor = (reasonType) => {
+        const colors = {
+            LEAVE: { bg: '#ccfbf1', border: '#5eead4', text: '#0f766e' },
+            HALF_LEAVE: { bg: '#fef3c7', border: '#fbbf24', text: '#92400e' },
+            EARLY: { bg: '#ffedd5', border: '#fb923c', text: '#9a3412' },
+            SICK: { bg: '#fee2e2', border: '#f87171', text: '#991b1b' },
+            FAMILY_EVENT: { bg: '#f1f5f9', border: '#94a3b8', text: '#334155' },
+        };
+
+        return colors[reasonType] || colors.LEAVE;
+    };
+
+    // 부재 DTO를 FullCalendar 이벤트로 변환한다.
+    const createAbsenceCalendarEvent = (absence) => {
+        const color = getAbsenceEventColor(absence.reasonType);
+        const isAllDay = absence.isAllDay === true || absence.allDay === true;
+
+        return {
+            id: `absence-${absence.empNo}-${absence.reasonType}-${absence.unavailableStartTime}`,
+            title: `[${absence.reasonName}] ${absence.name}`,
+            start: absence.unavailableStartTime,
+            end: absence.unavailableEndTime,
+            allDay: isAllDay,
+            backgroundColor: color.bg,
+            borderColor: color.border,
+            textColor: color.text,
+            editable: false,
+            // 관리자 캘린더처럼 부재 라벨 전용 스타일을 적용한다.
+            classNames: ['calendar-absence-event'],
+            extendedProps: {
+                source: 'ABSENCE',
+                absence,
+            },
+        };
+    };
+
+    // 공휴일 DTO를 FullCalendar 이벤트로 변환한다.
+    const createHolidayCalendarEvent = (holiday) => {
+        const holidayDate = holiday.holidayDate;
+
+        return {
+            id: `holiday-${holidayDate}`,
+            title: holiday.holidayName || '공휴일',
+            start: holidayDate,
+            end: getNextDateString(holidayDate),
+            allDay: true,
+            editable: false,
+            classNames: ['calendar-holiday-event'],
+            extendedProps: {
+                source: 'HOLIDAY',
+                holiday,
+            },
+        };
+    };
+
+    // yyyy-MM-dd 기준 다음 날짜 문자열을 만든다.
+    const getNextDateString = (dateString) => {
+        const [year, month, day] = dateString.split('-').map(Number);
+        const date = new Date(year, month - 1, day);
+        date.setDate(date.getDate() + 1);
+
+        return formatCalendarDate(date);
+    };
 
     // 캘린더 표시 범위 포함 여부
     // 일정 시간이 현재 월/주/일 화면 범위와 겹치는지 확인한다.
@@ -461,10 +569,10 @@ const Calendar = () => {
             && creatorNo !== loginEmpNo
             && !isParticipantSchedule;
 
+        // 본인 일정/초대받은 일정은 "내 일정"으로 따로 제어한다.
         const scopeVisible =
-            (isOwnPersonalSchedule && scopeFilters.personal) ||
-            (isParticipantSchedule && scopeFilters.personal) ||
-            (isMemberPersonalSchedule && selectedMemberScheduleNos.includes(creatorNo)) ||
+            ((isOwnPersonalSchedule || isParticipantSchedule) && scopeFilters.mine) ||
+            (isMemberPersonalSchedule && scopeFilters.personal && selectedMemberScheduleNos.includes(creatorNo)) ||
             (type === 'DEPARTMENT' && scopeFilters.department) ||
             (type === 'COMPANY' && scopeFilters.company);
 
@@ -506,11 +614,77 @@ const Calendar = () => {
         }
     };
 
+    // 현재 캘린더 범위에 해당하는 부재 라벨을 조회한다.
+    const fetchAbsenceList = async () => {
+        if (!userInfo?.empNo || !calendarRange.start || !calendarRange.end) {
+            return;
+        }
+
+        const empNos = [
+            ...(scopeFilters.mine ? [userInfo.empNo] : []),
+            ...selectedMemberScheduleNos,
+        ];
+
+        if (empNos.length === 0) {
+            setAbsenceList([]);
+            return;
+        }
+
+        try {
+            const response = await request('GET', '/calendar/availability/unavailable-employees', {
+                start: formatCalendarDateTime(calendarRange.start),
+                end: formatCalendarDateTime(calendarRange.end),
+                empNos: empNos.join(','),
+            });
+
+            setAbsenceList(response.data || []);
+        } catch (error) {
+            console.error('부재 라벨 조회 실패:', error);
+            setAbsenceList([]);
+        }
+    };
+
+    // 현재 캘린더 범위의 공휴일을 조회한다.
+    const fetchHolidayList = async () => {
+        if (!calendarRange.start || !calendarRange.end) {
+            return;
+        }
+
+        try {
+            const response = await request('GET', '/calendar/holidays', {
+                start: formatCalendarDateTime(calendarRange.start),
+                end: formatCalendarDateTime(calendarRange.end),
+            });
+
+            setHolidayList(response.data || []);
+        } catch (error) {
+            console.error('공휴일 조회 실패:', error);
+            setHolidayList([]);
+        }
+    };
+
     // 첫 화면 조회
     // 페이지가 열릴 때 일정 목록을 한 번 불러온다.
     useEffect(() => {
         fetchScheduleList();
     }, [userInfo?.empNo, selectedMemberScheduleNos]);
+
+    useEffect(() => {
+        fetchAbsenceList();
+    }, [
+        userInfo?.empNo,
+        calendarRange.start,
+        calendarRange.end,
+        scopeFilters.mine,
+        selectedMemberScheduleNos,
+    ]);
+
+    useEffect(() => {
+        fetchHolidayList();
+    }, [
+        calendarRange.start,
+        calendarRange.end,
+    ]);
 
     // 일정 범위 필터를 열었을 때 같은 부서 구성원 목록을 불러온다.
     useEffect(() => {
@@ -634,8 +808,13 @@ const Calendar = () => {
             expandRepeatedScheduleEvents(schedule, calendarRange.start, calendarRange.end)
         );
 
-        setCalendarEvents(events);
-    }, [scheduleList, calendarRange, scopeFilters, categoryFilters, selectedMemberScheduleNos, userInfo?.empNo]);
+        // 부재 라벨은 일정 이벤트와 합쳐서 캘린더에 표시한다.
+        const absenceEvents = absenceList.map(createAbsenceCalendarEvent);
+        const holidayEvents = holidayList.map(createHolidayCalendarEvent);
+
+        // 공휴일은 일정/부재와 함께 캘린더에 표시한다.
+        setCalendarEvents([...holidayEvents, ...events, ...absenceEvents]);
+    }, [scheduleList, absenceList, holidayList, calendarRange, scopeFilters, categoryFilters, selectedMemberScheduleNos, userInfo?.empNo]);
 
     // 등록 성공 처리
     // 목록을 다시 불러오고 성공 문구 띄움
@@ -644,11 +823,7 @@ const Calendar = () => {
         setDraftEvent(null);
         setSimpleAddVisible(false);
         setDetailAddVisible(false);
-        setSuccessMessage('일정이 등록되었습니다.');
-
-        setTimeout(() => {
-            setSuccessMessage('');
-        }, 2000);
+        showCalendarToast('일정이 등록되었습니다.');
     };
 
     // 일정 삭제 처리
@@ -676,14 +851,38 @@ const Calendar = () => {
             await fetchScheduleList();
             setSelectedSchedule(null);
             setDetailVisible(false);
-            setSuccessMessage('일정이 삭제되었습니다.');
-
-            setTimeout(() => {
-                setSuccessMessage('');
-            }, 2000);
+            showCalendarToast('일정이 삭제되었습니다.');
         } catch (error) {
             console.error('일정 삭제 실패:', error);
+
+            // 삭제 실패도 팝업 내부가 아니라 상단 toast로 통일한다.
+            const message = error.response?.data;
+            showCalendarToast(
+                typeof message === 'string' ? message : '일정 삭제 중 오류가 발생했습니다.',
+                'error'
+            );
         }
+    };
+
+    // FullCalendar 종일 일정 end는 exclusive라서 다음 날짜로 넘긴다.
+    const getAllDayExclusiveEnd = (value) => {
+        if (!value) {
+            return '';
+        }
+
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return '';
+        }
+
+        date.setDate(date.getDate() + 1);
+
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+
+        return `${year}-${month}-${day}`;
     };
 
     // 일정 입력 미리보기 반영
@@ -698,10 +897,15 @@ const Calendar = () => {
         setDraftEvent({
             id: 'calendar-draft-event',
             title: draft.title?.trim() ? draft.title.trim() : '(제목 없음)',
-            start: draft.start,
-            end: draft.end,
+            start: draft.allDay ? draft.start?.slice(0, 10) : draft.start,
+            end: draft.allDay ? getAllDayExclusiveEnd(draft.end || draft.start) : draft.end,
             allDay: draft.allDay,
-            className: 'calendar-draft-event',
+
+            // 종일 미리보기는 등록된 개인 종일 일정과 같은 라벨 색상으로 맞춘다.
+            classNames: [
+                'calendar-draft-event',
+                draft.allDay ? 'calendar-event-all-day-personal' : ''
+            ].filter(Boolean),
         });
     }, []);
 
@@ -882,6 +1086,34 @@ const Calendar = () => {
     // 캘린더 일정 렌더링
     // 시간 일정은 "dot + 시작시간 + 제목"으로 보여주고, 종일/부서/전사 일정은 바 형태로 구분한다.
     const renderCalendarEventContent = (eventInfo) => {
+
+        if (eventInfo.event.extendedProps?.source === 'HOLIDAY') {
+            return (
+                <div className="calendar-holiday-label">
+                    {eventInfo.event.title}
+                </div>
+            );
+        }
+
+        // 부재 라벨은 일정과 다른 표시 규칙을 사용한다.
+        if (eventInfo.event.extendedProps?.source === 'ABSENCE') {
+            const absence = eventInfo.event.extendedProps.absence || {};
+            const color = getAbsenceEventColor(absence.reasonType);
+
+            return (
+                <div
+                    className="calendar-absence-label"
+                    style={{
+                        backgroundColor: color.bg,
+                        borderColor: color.border,
+                        color: color.text,
+                    }}
+                >
+                    {eventInfo.event.title}
+                </div>
+            );
+        }
+
         const type = eventInfo.event.extendedProps.type || 'PERSONAL';
         const title = eventInfo.event.title || '(제목 없음)';
         const timeText = eventInfo.timeText;
@@ -1188,8 +1420,36 @@ const Calendar = () => {
                     padding: 0 6px 6px;
                 }
 
+                /* FullCalendar 기본 이벤트 껍데기를 관리자 캘린더처럼 가볍게 정리한다. */
+                .calendar-main-area .fc-event,
+                .calendar-main-area .fc-daygrid-event {
+                    margin: 1px 0;
+                    border: 0;
+                    background: transparent;
+                    box-shadow: none;
+                    cursor: pointer;
+                }
+
+                .calendar-main-area .fc-event:hover,
+                .calendar-main-area .fc-daygrid-event:hover {
+                    background: #e5e7eb !important;
+                    border-radius: 4px;
+                }
+
+                .calendar-main-area .calendar-absence-event:hover,
+                .calendar-main-area .calendar-holiday-event:hover {
+                    background: transparent !important;
+                }
+
+                /* 부재/공휴일 라벨은 조회용이라 포인터 느낌을 제거한다. */
+                .calendar-main-area .calendar-absence-event,
+                .calendar-main-area .calendar-holiday-event {
+                    cursor: default;
+                }
+
                 /* 일정 표시: 개인/팀원 시간 일정은 dot + 시작시간 + 제목으로 보여준다. */
                 .calendar-main-area .calendar-event-line {
+                    display: flex;
                     display: flex;
                     align-items: center;
                     min-width: 0;
@@ -1285,6 +1545,37 @@ const Calendar = () => {
                     white-space: nowrap;
                 }
 
+                /* 연차/반차/조퇴/병가/경조사 부재 라벨 */
+                .calendar-main-area .calendar-absence-label {
+                    width: 100%;
+                    min-height: 18px;
+                    padding: 1px 6px;
+                    border: 1px solid;
+                    border-radius: 4px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    line-height: 16px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .calendar-main-area .calendar-holiday-label {
+                    width: 100%;
+                    min-height: 18px;
+                    padding: 1px 8px;
+                    border: 1px solid #e45248;
+                    border-radius: 4px;
+                    background: #ef665b;
+                    color: #ffffff;
+                    font-size: 12px;
+                    font-weight: 700;
+                    line-height: 16px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
                 /* 더보기 링크 스타일 */
                 .calendar-main-area .fc-daygrid-more-link {
                     display: block;
@@ -1300,24 +1591,31 @@ const Calendar = () => {
             `}
             </style>
 
-            {successMessage && (
+            {calendarToast.message && (
                 <div
                     style={{
                         position: 'fixed',
-                        top: '90px',
+                        top: '78px',
                         left: '50%',
                         transform: 'translateX(-50%)',
-                        backgroundColor: '#22c55e',
+                        minWidth: '148px',
+                        maxWidth: 'min(360px, calc(100vw - 32px))',
+                        padding: '13px 18px',
+                        borderRadius: '8px',
+                        backgroundColor: calendarToast.type === 'error' ? '#ef4444' : '#22c55e',
                         color: '#ffffff',
-                        padding: '12px 18px',
-                        borderRadius: '10px',
                         fontSize: '14px',
-                        fontWeight: '700',
-                        boxShadow: '0 10px 24px rgba(34, 197, 94, 0.28)',
-                        zIndex: 2000,
+                        fontWeight: '800',
+                        textAlign: 'center',
+                        whiteSpace: 'pre-line',
+                        boxShadow: calendarToast.type === 'error'
+                            ? '0 12px 28px rgba(239, 68, 68, 0.22)'
+                            : '0 12px 28px rgba(34, 197, 94, 0.24)',
+                        zIndex: 3000,
+                        pointerEvents: 'none',
                     }}
                 >
-                    {successMessage}
+                    {calendarToast.message}
                 </div>
             )}
 
@@ -1406,6 +1704,24 @@ const Calendar = () => {
                                                 <strong style={{ display: 'block', marginBottom: '10px' }}>
                                                     일정 범위
                                                 </strong>
+
+                                                <label style={filterOptionStyle}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={scopeFilters.mine}
+                                                        onChange={() => handleScopeFilterChange('mine')}
+                                                    />
+                                                    <span
+                                                        style={{
+                                                            width: '8px',
+                                                            height: '8px',
+                                                            borderRadius: '999px',
+                                                            backgroundColor: '#3b82f6',
+                                                            flexShrink: 0,
+                                                        }}
+                                                    />
+                                                    내 일정
+                                                </label>
 
                                                 <label style={filterOptionStyle}>
                                                     <input
@@ -1740,13 +2056,10 @@ const Calendar = () => {
                 }}
                 onUpdateSuccess={async () => {
                     await fetchScheduleList();
-                    setSuccessMessage('일정이 수정되었습니다.');
-
-                    setTimeout(() => {
-                        setSuccessMessage('');
-                    }, 2000);
+                    showCalendarToast('일정이 수정되었습니다.');
                 }}
                 onDelete={handleDeleteSchedule}
+                onError={(message) => showCalendarToast(message, 'error')}
             />
 
             {/* 간편등록 퀵 팝업 */}
@@ -1763,6 +2076,7 @@ const Calendar = () => {
                 onCreateSuccess={handleCreateSuccess}
                 onOpenDetailAdd={handleOpenDetailAdd}
                 onDraftChange={handleDraftChange}
+                onError={(message) => showCalendarToast(message, 'error')}
             />
 
             {/* 상세등록 팝업 */}
@@ -1778,6 +2092,7 @@ const Calendar = () => {
                 onCreateSuccess={handleCreateSuccess}
                 onDraftChange={handleDraftChange}
                 popupMode={true}
+                onError={(message) => showCalendarToast(message, 'error')}
             />
         </div>
     );

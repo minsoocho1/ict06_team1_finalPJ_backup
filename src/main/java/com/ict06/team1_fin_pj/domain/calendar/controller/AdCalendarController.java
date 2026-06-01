@@ -11,13 +11,22 @@ package com.ict06.team1_fin_pj.domain.calendar.controller;
 import com.ict06.team1_fin_pj.common.dto.calendar.ScheduleCreateRequestDto;
 import com.ict06.team1_fin_pj.common.dto.calendar.ScheduleListResponseDto;
 import com.ict06.team1_fin_pj.common.dto.calendar.ScheduleUpdateRequestDto;
+import com.ict06.team1_fin_pj.common.dto.calendar.CalendarHolidayDto;
+import com.ict06.team1_fin_pj.common.dto.calendar.CalendarUnavailableEmployeeDto;
 import com.ict06.team1_fin_pj.domain.calendar.service.AdCalendarService;
+import com.ict06.team1_fin_pj.domain.calendar.service.CalendarAvailabilityService;
+import com.ict06.team1_fin_pj.domain.calendar.service.CalendarHolidayService;
+import org.springframework.format.annotation.DateTimeFormat;
+
+import java.time.LocalDateTime;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import com.ict06.team1_fin_pj.common.security.PrincipalDetails;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 
@@ -37,9 +47,17 @@ import java.util.List;
 public class AdCalendarController {
 
     private final AdCalendarService service;
+    private final CalendarAvailabilityService calendarAvailabilityService;
+    private final CalendarHolidayService calendarHolidayService;
 
-    public AdCalendarController(AdCalendarService service) {
+    public AdCalendarController(
+            AdCalendarService service,
+            CalendarAvailabilityService calendarAvailabilityService,
+            CalendarHolidayService calendarHolidayService
+    ) {
         this.service = service;
+        this.calendarAvailabilityService = calendarAvailabilityService;
+        this.calendarHolidayService = calendarHolidayService;
     }
 
     // 관리자 일정 관리 메인 화면
@@ -127,5 +145,34 @@ public class AdCalendarController {
         }
 
         service.deleteAdminSchedule(scheduleId, principal.getEmpNo());
+    }
+
+    // 관리자 캘린더에서 연차/반차/조퇴/병가/경조사 부재 라벨을 표시하기 위한 조회 API
+    @GetMapping("/availability/unavailable-employees")
+    @ResponseBody
+    public List<CalendarUnavailableEmployeeDto> getAdminUnavailableEmployees(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end,
+            @RequestParam(required = false) List<String> empNos
+    ) {
+        return calendarAvailabilityService.findUnavailableEmployees(start, end, empNos);
+    }
+
+    // 관리자 캘린더 검증 실패는 서버 오류가 아니라 사용자 입력 차단으로 응답한다.
+    @ExceptionHandler(IllegalArgumentException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    @ResponseBody
+    public String handleIllegalArgumentException(IllegalArgumentException e) {
+        return e.getMessage();
+    }
+
+    // 관리자 캘린더에 표시할 공휴일 라벨을 조회한다.
+    @GetMapping("/holidays")
+    @ResponseBody
+    public List<CalendarHolidayDto> getAdminCalendarHolidays(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime start,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime end
+    ) {
+        return calendarHolidayService.findHolidays(start, end);
     }
 }

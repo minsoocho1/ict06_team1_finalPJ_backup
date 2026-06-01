@@ -25,12 +25,20 @@ import java.util.Objects;
 public class AdCalendarServiceImpl implements AdCalendarService {
 
     private final CalendarRepository repository;
+    private final CalendarAvailabilityService calendarAvailabilityService;
+    private final CalendarHolidayService calendarHolidayService;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public AdCalendarServiceImpl(CalendarRepository repository) {
+    public AdCalendarServiceImpl(
+            CalendarRepository repository,
+            CalendarAvailabilityService calendarAvailabilityService,
+            CalendarHolidayService calendarHolidayService
+    ) {
         this.repository = repository;
+        this.calendarAvailabilityService = calendarAvailabilityService;
+        this.calendarHolidayService = calendarHolidayService;
     }
 
     // 관리자 캘린더 목록 조회
@@ -90,6 +98,23 @@ public class AdCalendarServiceImpl implements AdCalendarService {
             throw new IllegalArgumentException("작성자 사번은 필수입니다.");
         }
 
+        // 공휴일에는 관리자도 일정을 등록할 수 없다.
+        calendarHolidayService.validateNotHoliday(
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        // 휴가/병결 기간에는 해당 작성자의 일정 등록과 참석자 초대를 막는다.
+        calendarAvailabilityService.validateCreatorAvailable(
+                creatorNo.trim(),
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        calendarAvailabilityService.validateParticipantsAvailable(
+                dto.getParticipantNos(),
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+
         EmpEntity creator = entityManager.getReference(EmpEntity.class, creatorNo.trim());
         ScheduleType scheduleType = resolveScheduleType(dto.getType());
         DepartmentEntity department = resolveDepartment(dto.getDeptId(), scheduleType, creator);
@@ -125,6 +150,27 @@ public class AdCalendarServiceImpl implements AdCalendarService {
 
         validateAdminManageableSchedule(schedule, adminEmpNo);
         validateScheduleRequiredFields(dto.getTitle(), dto.getStartTime(), dto.getEndTime());
+
+        String creatorNo = schedule.getCreator() != null
+                ? schedule.getCreator().getEmpNo()
+                : adminEmpNo;
+
+        // 휴가/병결 기간에는 해당 작성자의 일정 수정과 참석자 초대를 막는다.
+        calendarHolidayService.validateNotHoliday(
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        // 공휴일에는 관리자도 일정을 수정할 수 없다.
+        calendarAvailabilityService.validateCreatorAvailable(
+                creatorNo,
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
+        calendarAvailabilityService.validateParticipantsAvailable(
+                dto.getParticipantNos(),
+                dto.getStartTime(),
+                dto.getEndTime()
+        );
 
         ScheduleType scheduleType = resolveScheduleType(dto.getType());
         DepartmentEntity department = resolveDepartment(dto.getDeptId(), scheduleType, schedule.getCreator());

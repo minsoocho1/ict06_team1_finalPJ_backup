@@ -30,6 +30,7 @@ const CalendarDetail = ({
     onDelete,
     onUpdateSuccess,
     getMemberScheduleColor,
+    onError,
 }) => {
 
     // 팝업 영역 참조
@@ -737,6 +738,7 @@ const CalendarDetail = ({
     // 수정 팝업의 입력값을 백엔드 PUT API로 보낸다.
     const handleUpdateSubmit = async () => {
         if (!formData.title.trim()) {
+            onError?.('제목을 입력해 주세요.');
             return;
         }
 
@@ -766,6 +768,11 @@ const CalendarDetail = ({
             onClose?.();
         } catch (error) {
             console.error('일정 수정 실패:', error);
+
+            const message = error.response?.data;
+            onError?.(
+                typeof message === 'string' ? message : '일정 수정 중 오류가 발생했습니다.'
+            );
         }
     };
 
@@ -817,6 +824,20 @@ const CalendarDetail = ({
         zIndex: participantModalVisible ? 1040 : 1060,
         animation: 'calendarDetailPopupIn 0.18s ease-out',
         pointerEvents: 'auto',
+    };
+
+    // 수정 팝업 하단 버튼을 관리자 캘린더처럼 팝업 하단에 고정한다.
+    const editFooterStyle = {
+        position: 'sticky',
+        bottom: 0,
+        margin: '18px -20px 0',
+        padding: '12px 20px 14px',
+        display: 'flex',
+        justifyContent: 'flex-end',
+        gap: '8px',
+        borderTop: '1px solid #e5e7eb',
+        backgroundColor: '#ffffff',
+        zIndex: 2,
     };
 
     const iconButtonStyle = {
@@ -1504,7 +1525,8 @@ const CalendarDetail = ({
                                 )}
                             </CFormSelect>
 
-                            <div style={{ marginTop: '18px', display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                            {/* 관리자 캘린더와 동일하게 수정 버튼 영역을 팝업 하단에 고정한다. */}
+                            <div style={editFooterStyle}>
                                 <CButton
                                     color="secondary"
                                     variant="outline"
