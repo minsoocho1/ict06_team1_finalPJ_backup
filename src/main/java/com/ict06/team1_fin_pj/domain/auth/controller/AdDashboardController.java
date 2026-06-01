@@ -10,6 +10,8 @@
  * @ 2026.05.11    김다솜        최초 생성
  * @ 2026.05.12    김다솜        관리자 대시보드 실제 데이터 연동 및 최근 활동 바인딩
  * @ 2026.05.18    김다솜        AI 통계 서버 장애 시 DB 기반 통계 대체 조회 추가
+ * @ 2026.05.29    김다솜        온보딩 학습 완료 최근 활동을 사원별 일정 상세 화면으로 연결
+ * @ 2026.05.29    김다솜        최근 시스템 활동의 평가/학습 완료 중복 표시 보정
  */
 package com.ict06.team1_fin_pj.domain.auth.controller;
 
@@ -210,13 +212,14 @@ public class AdDashboardController {
     private List<Map<String, Object>> fetchRecentActivities() {
         List<Map<String, Object>> activities = new ArrayList<>();
         List<Object[]> rows = entityManager.createNativeQuery("""
-                select title, message, activity_time, border_class, text_class
+                select title, message, activity_time, border_class, text_class, activity_url
                 from (
                     select '평가 제출 완료' as title,
                            e.name || ' · ' || q.category_name as message,
                            max(qr.submitted_at) as activity_time,
                            'border-success' as border_class,
-                           'text-success' as text_class
+                           'text-success' as text_class,
+                           '/admin/evaluation/main' as activity_url
                     from quiz_result qr
                     join quiz_question q on q.question_id = qr.question_id
                     join employee e on e.emp_no = qr.emp_no
@@ -226,13 +229,20 @@ public class AdDashboardController {
 
                     select '온보딩 학습 완료' as title,
                            e.name || ' · ' || ri.item_title as message,
-                           now() as activity_time,
+                           max(cp.completed_at) as activity_time,
                            'border-primary' as border_class,
-                           'text-primary' as text_class
+                           'text-primary' as text_class,
+                           '/admin/onboarding/schedules/' || rp.emp_no as activity_url
                     from road_progress rp
                     join road_item ri on ri.item_id = rp.item_id
                     join employee e on e.emp_no = rp.emp_no
+                    left join checklist c on c.related_content_id = ri.content_id
+                    left join checklist_progress cp
+                           on cp.checklist_id = c.checklist_id
+                          and cp.emp_no = rp.emp_no
+                          and cp.status = 'COMPLETED'
                     where rp.status = 'COMPLETED'
+                    group by e.name, ri.item_title, rp.emp_no
 
                     union all
 
@@ -240,7 +250,8 @@ public class AdDashboardController {
                            coalesce(e.name, '알 수 없음') || ' · ' || al.type as message,
                            al.created_at as activity_time,
                            'border-info' as border_class,
-                           'text-info' as text_class
+                           'text-info' as text_class,
+                           '/admin/AiSecretary/dashboard' as activity_url
                     from ai_log al
                     left join employee e on e.emp_no = al.emp_no
                 ) activities
@@ -256,6 +267,7 @@ public class AdDashboardController {
             activity.put("time_label", toTimeLabel(row[2]));
             activity.put("borderClass", row[3]);
             activity.put("textClass", row[4]);
+            activity.put("url", row[5]);
             activities.add(activity);
         }
         return activities;
@@ -329,7 +341,12 @@ public class AdDashboardController {
      */
     private List<Map<String, Object>> normalizeRecentActivities(List<Map<String, Object>> activities) {
         return activities.stream()
-                .peek(activity -> activity.put("url", resolveActivityUrl(String.valueOf(activity.getOrDefault("title", "")))))
+                .peek(activity -> {
+                    Object url = activity.get("url");
+                    if (url == null || String.valueOf(url).isBlank()) {
+                        activity.put("url", resolveActivityUrl(String.valueOf(activity.getOrDefault("title", ""))));
+                    }
+                })
                 .collect(Collectors.toList());
     }
 

@@ -116,6 +116,22 @@
 			<version>5.2.5</version>
 		</dependency>
 
+		<!-- Apache Tika Core: 파일 타입 감지 및 텍스트 추출 기본 API 제공 -->
+		<!-- 첨부 참고 자료 파일을 referenceText로 변환할 때 사용 -->
+		<dependency>
+			<groupId>org.apache.tika</groupId>
+			<artifactId>tika-core</artifactId>
+			<version>2.9.2</version>
+		</dependency>
+
+		<!-- Apache Tika Parsers: PDF/DOCX 등 문서 포맷 본문 추출용 파서 패키지 -->
+		<!-- 텍스트 기반 PDF, DOCX, TXT 파일의 본문 자동 분석에 사용 -->
+		<dependency>
+			<groupId>org.apache.tika</groupId>
+			<artifactId>tika-parsers-standard-package</artifactId>
+			<version>2.9.2</version>
+		</dependency>
+
 		<!--QueryDSL-->
 		<dependency>
 			<groupId>com.querydsl</groupId>

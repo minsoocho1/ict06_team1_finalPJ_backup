@@ -27,6 +27,8 @@ import CalendarDetailAdd from './CalendarDetailAdd';
 import CalendarDetail from './CalendarDetail';
 
 import { request } from 'src/helpers/axios_helper';
+import { useOutletContext } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 
 // 온보딩 일정 전용 스타일 임포트
 import { onboardingCalendarStyle } from 'src/styles/js/onboarding/onboardingCalendarStyle';
@@ -38,10 +40,23 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import koLocale from '@fullcalendar/core/locales/ko';
 
+// 로그인 사용자 정보 구조가 화면마다 조금씩 달라서 부서 id를 안전하게 꺼낸다.
+const getUserDeptId = (user) => {
+    return user?.department?.deptId || user?.dept?.deptId || user?.deptId || user?.dept_id || null;
+}
+
 const Calendar = () => {
 
     // FullCalendar를 직접 제어하기 위한 ref
     const calendarRef = useRef(null);
+
+    // 사이드바 접힘/펼침 상태
+    // 사이드바 전환 후 캘린더 폭을 다시 계산.
+    const sidebarShow = useSelector((state) => state.sidebarShow);
+
+    // 로그인 사용자 정보
+    // 내 일정 필터에서 현재 로그인한 사번과 일정 작성자를 비교할 때 사용.
+    const [userInfo] = useOutletContext();
 
     // 선택한 날짜
     const [selectedDate, setSelectedDate] = useState(null);
@@ -84,11 +99,79 @@ const Calendar = () => {
     const [openFilter, setOpenFilter] = useState(null);
 
     // 일정 범위 필터
+    // 개인/부서/전사 일정 표시 여부를 관리한다.
     const [scopeFilters, setScopeFilters] = useState({
-        my: true,
+        personal: true,
         department: true,
         company: true,
     });
+
+    // 구성원 일정 필터
+    // 같은 부서 팀원의 공개 개인일정 중 사용자가 선택한 사람의 일정만 보여준다.
+    const [memberScheduleMembers, setMemberScheduleMembers] = useState([]);
+    const [selectedMemberScheduleNos, setSelectedMemberScheduleNos] = useState([]);
+    const [memberScheduleLoading, setMemberScheduleLoading] = useState(false);
+    const [memberScheduleLoadError, setMemberScheduleLoadError] = useState('');
+
+    // 구성원 일정 영역 보기 모드
+    // 기본은 같은 부서 구성원 목록, ORG는 드롭다운 안에서 조직도 부서/멤버를 선택하는 화면이다.
+    const [memberScopeView, setMemberScopeView] = useState('LIST');
+    const [memberOrgDepartments, setMemberOrgDepartments] = useState([]);
+    const [memberOrgDeptId, setMemberOrgDeptId] = useState('');
+    const [memberOrgMembers, setMemberOrgMembers] = useState([]);
+    const [memberOrgLoading, setMemberOrgLoading] = useState(false);
+    const [memberOrgLoadError, setMemberOrgLoadError] = useState('');
+
+    const memberColorPalette = [
+        '#3b82f6', // blue
+        '#10b981', // emerald
+        '#f59e0b', // amber
+        '#ef4444', // red
+        '#8b5cf6', // violet
+        '#06b6d4', // cyan
+        '#ec4899', // pink
+        '#84cc16', // lime
+        '#f97316', // orange
+        '#14b8a6', // teal
+        '#6366f1', // indigo
+        '#a855f7', // purple
+        '#22c55e', // green
+        '#eab308', // yellow
+        '#0ea5e9', // sky
+        '#d946ef', // fuchsia
+    ];
+
+    const getMemberScheduleColor = (empNo) => {
+        const normalizedEmpNo = String(empNo || '');
+
+        if (!normalizedEmpNo) {
+            return '#3b82f6';
+        }
+
+        // 현재 화면에서 다루는 구성원은 먼저 중복 없이 정렬해서 색을 배정한다.
+        const visibleMemberNos = [
+            ...memberScheduleMembers.map((member) => String(member.empNo)),
+            ...memberOrgMembers.map((member) => String(member.empNo)),
+            ...selectedMemberScheduleNos.map(String),
+        ];
+
+        const uniqueMemberNos = [...new Set(visibleMemberNos)]
+            .filter(Boolean)
+            .sort();
+
+        const visibleIndex = uniqueMemberNos.indexOf(normalizedEmpNo);
+
+        if (visibleIndex >= 0) {
+            return memberColorPalette[visibleIndex % memberColorPalette.length];
+        }
+
+        // 목록에 없는 구성원 일정이 들어오는 예외 상황용 fallback.
+        const fallbackIndex = normalizedEmpNo
+            .split('')
+            .reduce((hash, char) => ((hash * 31) + char.charCodeAt(0)) >>> 0, 0) % memberColorPalette.length;
+
+        return memberColorPalette[fallbackIndex];
+    };
 
     // 카테고리 필터
     const [categoryFilters, setCategoryFilters] = useState({
@@ -97,14 +180,6 @@ const Calendar = () => {
         notice: true,
         etc: true,
     });
-
-    // 멤버 일정 필터 - 백엔드 연결 전 더미 데이터
-    const [memberFilters, setMemberFilters] = useState([
-        { id: 'me', name: '내 일정', checked: true, color: '#0D6EFD' },
-        { id: 'song', name: '송창범', checked: true, color: '#20C997' },
-        { id: 'cho', name: '조민수', checked: true, color: '#FD7E14' },
-        { id: 'kim', name: '김다솜', checked: true, color: '#6F42C1' },
-    ]);
 
     // 캘린더 일정 목록
     // 백엔드 조회 결과를 FullCalendar 형식으로 관리한다.
@@ -139,6 +214,18 @@ const Calendar = () => {
             document.head.removeChild(styleTag);
         };
     }, []);
+
+    // 사이드바 접힘/펼침 후 FullCalendar가 변경된 화면 폭을 다시 계산하도록 한다.
+    // CoreUI 사이드바 전환 애니메이션이 끝난 뒤 updateSize를 호출해야 오른쪽 빈 영역이 남지 않는다.
+    useEffect(() => {
+        const resizeTimer = setTimeout(() => {
+            calendarRef.current?.getApi()?.updateSize();
+        }, 200);
+
+        return () => {
+            clearTimeout(resizeTimer);
+        };
+    }, [sidebarShow]);
 
     // 캘린더 일정 클릭 처리
     // 기존 일정은 페이지 이동 대신 읽기 전용 상세 팝업으로 열림.
@@ -244,7 +331,17 @@ const Calendar = () => {
         start: startTime,
         end: endTime,
         allDay: schedule.isAllDay,
-        className: schedule.category === 'ONBOARDING' ? onboardingCalendarStyle.eventClass : '',
+
+        // 개인 종일 일정 스타일과 온보딩 일정 스타일을 함께 적용한다.
+        classNames: [
+            schedule.isAllDay && (schedule.type || 'PERSONAL') === 'PERSONAL'
+                ? 'calendar-event-all-day-personal'
+                : '',
+            schedule.category === 'ONBOARDING'
+                ? onboardingCalendarStyle.eventClass
+                : '',
+        ].filter(Boolean),
+
         extendedProps: {
             scheduleId: schedule.scheduleId,
             type: schedule.type,
@@ -254,6 +351,12 @@ const Calendar = () => {
             isPublic: schedule.isPublic,
             repeatRule: schedule.repeatRule,
             creatorNo: schedule.creatorNo,
+
+            // 다른팀원의 공개 일정을 화면에서 작성자명으로 구분하기위해 보관
+            creatorName: schedule.creatorName,
+
+            // 수정팝업에서 기존 참석자 목록을 복원하기 위해 원본 참석자 정보를 보관한다.
+            participants: schedule.participants || [],
 
             // 반복 일정 원본 정보
             // 화면에 표시된 반복 날짜와 DB에 저장된 원본 날짜를 구분하기 위해 보관한다.
@@ -337,13 +440,64 @@ const Calendar = () => {
         return events;
     };
 
+    // 일정 필터 적용
+    // 체크된 일정 범위/카테고리에 맞는 일정만 캘린더에 보여준다.
+    const isScheduleVisibleByFilter = (schedule) => {
+        const type = schedule.type || 'PERSONAL';
+        const category = schedule.category || 'MEETING';
+
+        const creatorNo = String(schedule.creatorNo || '');
+        const loginEmpNo = String(userInfo?.empNo || '');
+
+        const participants = schedule.participants || [];
+        const isParticipantSchedule = type === 'PERSONAL'
+            && creatorNo
+            && creatorNo !== loginEmpNo
+            && participants.some((participant) => String(participant.empId) === loginEmpNo);
+
+        const isOwnPersonalSchedule = type === 'PERSONAL' && (!creatorNo || creatorNo === loginEmpNo);
+        const isMemberPersonalSchedule = type === 'PERSONAL'
+            && creatorNo
+            && creatorNo !== loginEmpNo
+            && !isParticipantSchedule;
+
+        const scopeVisible =
+            (isOwnPersonalSchedule && scopeFilters.personal) ||
+            (isParticipantSchedule && scopeFilters.personal) ||
+            (isMemberPersonalSchedule && selectedMemberScheduleNos.includes(creatorNo)) ||
+            (type === 'DEPARTMENT' && scopeFilters.department) ||
+            (type === 'COMPANY' && scopeFilters.company);
+
+        const categoryVisible =
+            (category === 'MEETING' && categoryFilters.meeting) ||
+            (category === 'WORK' && categoryFilters.work) ||
+            (category === 'NOTICE' && categoryFilters.notice) ||
+            (!['MEETING', 'WORK', 'NOTICE'].includes(category) && categoryFilters.etc);
+
+        return scopeVisible && categoryVisible;
+    };
+
     // 일정 목록 조회
     // 서버 데이터를 FullCalendar 형식으로 변환한다.
     const fetchScheduleList = async () => {
+        if (!userInfo?.empNo) {
+            return;
+        }
+
         try {
-            // GET 요청으로 일정 목록 API 호출
-            // response.data 에 백엔드가 준 일정 배열이 들어있다.
-            const response = await request('GET', '/calendar/list', null);
+            // 기본 일정 조회에 구성원 일정 필터에서 선택한 사번 목록을 함께 전달한다.
+            // 배열은 쿼리 파라미터 바인딩이 애매할 수 있어 콤마 문자열로 보낸다.
+            const requestParams = {
+                empNo: userInfo.empNo,
+            };
+
+            if (selectedMemberScheduleNos.length > 0) {
+                requestParams.selectedMemberNos = selectedMemberScheduleNos.join(',');
+            }
+
+            const response = await request('GET', '/calendar/list', requestParams);
+
+            console.log('캘린더 목록 응답:', response.data);
 
             setScheduleList(response.data);
 
@@ -356,7 +510,116 @@ const Calendar = () => {
     // 페이지가 열릴 때 일정 목록을 한 번 불러온다.
     useEffect(() => {
         fetchScheduleList();
-    }, []);
+    }, [userInfo?.empNo, selectedMemberScheduleNos]);
+
+    // 일정 범위 필터를 열었을 때 같은 부서 구성원 목록을 불러온다.
+    useEffect(() => {
+        if (openFilter !== 'scope') {
+            return;
+        }
+
+        const deptId = getUserDeptId(userInfo);
+
+        if (!deptId) {
+            setMemberScheduleMembers([]);
+            setMemberScheduleLoadError('소속 부서 정보를 확인할 수 없습니다.');
+            return;
+        }
+
+        const fetchMemberScheduleMembers = async () => {
+            setMemberScheduleLoading(true);
+            setMemberScheduleLoadError('');
+
+            try {
+                const response = await request('GET', '/api/organization/employees', { deptId });
+
+                const members = (response.data || [])
+                    .filter((employee) => String(employee.empNo) !== String(userInfo?.empNo))
+                    .map((employee) => ({
+                        empNo: employee.empNo,
+                        name: employee.name,
+                        deptId: employee.deptId,
+                        deptName: employee.deptName,
+                        positionName: employee.positionName,
+                    }));
+
+                setMemberScheduleMembers(members);
+            } catch (error) {
+                console.error('구성원 일정 필터 목록 조회 실패:', error);
+                setMemberScheduleMembers([]);
+                setMemberScheduleLoadError('구성원 목록을 불러오지 못했습니다.');
+            } finally {
+                setMemberScheduleLoading(false);
+            }
+        };
+
+        fetchMemberScheduleMembers();
+    }, [openFilter, userInfo]);
+
+    // 일정 범위 드롭다운 안에서 조직도 보기로 전환되면 전체 부서 트리를 불러온다.
+    useEffect(() => {
+        if (openFilter !== 'scope' || memberScopeView !== 'ORG') {
+            return;
+        }
+
+        const fetchMemberOrgDepartments = async () => {
+            setMemberOrgLoading(true);
+            setMemberOrgLoadError('');
+
+            try {
+                const response = await request('GET', '/api/organization/departments/tree');
+
+                setMemberOrgDepartments(response.data || []);
+            } catch (error) {
+                console.error('조직도 부서 목록 조회 실패:', error);
+                setMemberOrgDepartments([]);
+                setMemberOrgLoadError('조직도 부서 목록을 불러오지 못했습니다.');
+            } finally {
+                setMemberOrgLoading(false);
+            }
+        };
+
+        fetchMemberOrgDepartments();
+    }, [openFilter, memberScopeView]);
+
+    // 조직도 보기에서 부서를 선택하면 해당 부서 구성원을 불러온다.
+    useEffect(() => {
+        if (openFilter !== 'scope' || memberScopeView !== 'ORG' || !memberOrgDeptId) {
+            setMemberOrgMembers([]);
+            return;
+        }
+
+        const fetchMemberOrgMembers = async () => {
+            setMemberOrgLoading(true);
+            setMemberOrgLoadError('');
+
+            try {
+                const response = await request('GET', '/api/organization/employees', {
+                    deptId: memberOrgDeptId,
+                });
+
+                const members = (response.data || [])
+                    .filter((employee) => String(employee.empNo) !== String(userInfo?.empNo))
+                    .map((employee) => ({
+                        empNo: employee.empNo,
+                        name: employee.name,
+                        deptId: employee.deptId,
+                        deptName: employee.deptName,
+                        positionName: employee.positionName,
+                    }));
+
+                setMemberOrgMembers(members);
+            } catch (error) {
+                console.error('조직도 구성원 목록 조회 실패:', error);
+                setMemberOrgMembers([]);
+                setMemberOrgLoadError('조직도 구성원 목록을 불러오지 못했습니다.');
+            } finally {
+                setMemberOrgLoading(false);
+            }
+        };
+
+        fetchMemberOrgMembers();
+    }, [openFilter, memberScopeView, memberOrgDeptId, userInfo?.empNo]);
 
     // 화면 표시용 일정 생성
     // 원본 일정 목록과 현재 캘린더 범위를 기준으로 FullCalendar용 이벤트를 만든다.
@@ -365,12 +628,14 @@ const Calendar = () => {
             return;
         }
 
-        const events = scheduleList.flatMap((schedule) =>
+        const filteredScheduleList = scheduleList.filter(isScheduleVisibleByFilter);
+
+        const events = filteredScheduleList.flatMap((schedule) =>
             expandRepeatedScheduleEvents(schedule, calendarRange.start, calendarRange.end)
         );
 
         setCalendarEvents(events);
-    }, [scheduleList, calendarRange]);
+    }, [scheduleList, calendarRange, scopeFilters, categoryFilters, selectedMemberScheduleNos, userInfo?.empNo]);
 
     // 등록 성공 처리
     // 목록을 다시 불러오고 성공 문구 띄움
@@ -403,7 +668,10 @@ const Calendar = () => {
         }
 
         try {
-            await request('DELETE', `/calendar/${schedule.scheduleId}`, null);
+            // 백엔드에서 작성자 검증을 할 수 있도록 현재 로그인 사번을 함께 보낸다.
+            await request('DELETE', `/calendar/${schedule.scheduleId}`, {
+                requesterNo: userInfo?.empNo,
+            });
 
             await fetchScheduleList();
             setSelectedSchedule(null);
@@ -544,6 +812,60 @@ const Calendar = () => {
         }));
     };
 
+    const handleMemberScheduleFilterChange = (empNo) => {
+        const normalizedEmpNo = String(empNo);
+
+        setSelectedMemberScheduleNos((prev) =>
+            prev.includes(normalizedEmpNo)
+                ? prev.filter((selectedEmpNo) => selectedEmpNo !== normalizedEmpNo)
+                : [...prev, normalizedEmpNo]
+        );
+    };
+
+    // 구성원 일정 영역을 조직도 선택 화면으로 전환한다.
+    const handleOpenMemberScopeOrg = () => {
+        setMemberScopeView('ORG');
+        setMemberOrgLoadError('');
+    };
+
+    // 조직도 선택 화면에서 같은 부서 구성원 목록으로 돌아간다.
+    const handleBackToMemberScheduleList = () => {
+        setMemberScopeView('LIST');
+        setMemberOrgDeptId('');
+        setMemberOrgMembers([]);
+        setMemberOrgLoadError('');
+    };
+
+    // 조직도 부서 트리를 재귀적으로 렌더링한다.
+    const renderMemberOrgDepartments = (departments, depth = 0) => {
+        return departments.map((department) => (
+            <div key={department.deptId}>
+                <button
+                    type="button"
+                    onClick={() => setMemberOrgDeptId(String(department.deptId))}
+                    style={{
+                        width: '100%',
+                        padding: '7px 8px',
+                        paddingLeft: `${8 + depth * 14}px`,
+                        border: 'none',
+                        borderRadius: '7px',
+                        backgroundColor: String(memberOrgDeptId) === String(department.deptId) ? '#EEF2FF' : '#fff',
+                        color: String(memberOrgDeptId) === String(department.deptId) ? '#4F46E5' : '#374151',
+                        fontSize: '12px',
+                        fontWeight: String(memberOrgDeptId) === String(department.deptId) ? '700' : '500',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                    }}
+                >
+                    {department.children?.length > 0 ? '▾ ' : '• '}
+                    {department.deptName}
+                </button>
+
+                {department.children?.length > 0 && renderMemberOrgDepartments(department.children, depth + 1)}
+            </div>
+        ));
+    };
+
     // 카테고리 필터 체크 변경
     const handleCategoryFilterChange = (key) => {
         setCategoryFilters((prev) => ({
@@ -552,20 +874,59 @@ const Calendar = () => {
         }));
     };
 
-    // 멤버 일정 필터 체크 변경
-    const handleMemberFilterChange = (id) => {
-        setMemberFilters((prev) =>
-            prev.map((member) =>
-                member.id === id
-                    ? { ...member, checked: !member.checked }
-                    : member
-            )
-        );
-    };
-
     // 필터 버튼 클릭 시 드롭다운 열고 닫기
     const handleFilterButtonClick = (filterName) => {
         setOpenFilter((prev) => (prev === filterName ? null : filterName));
+    };
+
+    // 캘린더 일정 렌더링
+    // 시간 일정은 "dot + 시작시간 + 제목"으로 보여주고, 종일/부서/전사 일정은 바 형태로 구분한다.
+    const renderCalendarEventContent = (eventInfo) => {
+        const type = eventInfo.event.extendedProps.type || 'PERSONAL';
+        const title = eventInfo.event.title || '(제목 없음)';
+        const timeText = eventInfo.timeText;
+        const isAllDay = eventInfo.event.allDay;
+        const creatorNo = String(eventInfo.event.extendedProps.creatorNo || '');
+        const loginEmpNo = String(userInfo?.empNo || '');
+        const isOrganizationSchedule = type === 'DEPARTMENT' || type === 'COMPANY';
+        const isOtherMemberPersonalSchedule = type === 'PERSONAL' && creatorNo && creatorNo !== loginEmpNo;
+        const dotColor = isOtherMemberPersonalSchedule ? getMemberScheduleColor(creatorNo) : '#3b82f6';
+
+        // 내가 초대받은 일정이면 내 참석 상태에 따라 캘린더 셀 표시를 다르게 보여준다.
+        const myParticipant = (eventInfo.event.extendedProps.participants || []).find(
+            (participant) => String(participant.empId) === loginEmpNo
+        );
+        const myParticipantStatus = myParticipant?.status || null;
+        const participantStatusClass =
+            myParticipantStatus === 'REJECTED'
+                ? 'calendar-event-participant-rejected'
+                : myParticipantStatus === 'PENDING'
+                    ? 'calendar-event-participant-pending'
+                    : '';
+
+        if (isOrganizationSchedule) {
+            const scopeLabel = type === 'DEPARTMENT' ? '부서' : '전사';
+
+            return (
+                <div className={`calendar-event-bar calendar-event-bar-${type.toLowerCase()} ${participantStatusClass}`}>
+                    <span className="calendar-event-scope-label">{scopeLabel}</span>
+                    {!isAllDay && timeText && (
+                        <span className="calendar-event-time">{timeText}</span>
+                    )}
+                    <span className="calendar-event-bar-title">{title}</span>
+                </div>
+            );
+        }
+
+        return (
+            <div className={`calendar-event-line ${participantStatusClass}`}>
+                <span className="calendar-event-dot" style={{ backgroundColor: dotColor }} />
+                {!isAllDay && timeText && (
+                    <span className="calendar-event-time">{timeText}</span>
+                )}
+                <span className="calendar-event-text">{title}</span>
+            </div>
+        );
     };
 
     // FullCalendar API 가져오기
@@ -644,16 +1005,21 @@ const Calendar = () => {
         justifyContent: 'flex-start',
     };
 
+    const calendarToolbarCenterStyle = {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+    };
+
     const calendarToolbarRightStyle = {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'flex-end',
-        gap: '2px',
+        gap: '12px',
     };
 
     const calendarTitleStyle = {
-        minWidth: '120px',
-        fontSize: '16px',
+        fontSize: '17px',
         fontWeight: '800',
         color: '#0D6EFD',
         whiteSpace: 'nowrap',
@@ -698,6 +1064,11 @@ const Calendar = () => {
         border: '1px solid #0D6EFD',
     };
 
+    const viewButtonGroupStyle = {
+        display: 'inline-flex',
+        alignItems: 'center',
+    };
+
     const filterButtonStyle = {
         border: '1px solid #cfe2ff',
         borderRadius: '999px',
@@ -738,13 +1109,6 @@ const Calendar = () => {
         gap: '8px',
         marginBottom: '8px',
         fontSize: '14px',
-    };
-
-    const memberColorDotStyle = {
-        width: '9px',
-        height: '9px',
-        borderRadius: '50%',
-        display: 'inline-block',
     };
 
     const calendarMainStyle = {
@@ -824,6 +1188,103 @@ const Calendar = () => {
                     padding: 0 6px 6px;
                 }
 
+                /* 일정 표시: 개인/팀원 시간 일정은 dot + 시작시간 + 제목으로 보여준다. */
+                .calendar-main-area .calendar-event-line {
+                    display: flex;
+                    align-items: center;
+                    min-width: 0;
+                    gap: 4px;
+                    color: #4f46e5;
+                    font-size: 12px;
+                    font-weight: 700;
+                    overflow: hidden;
+                }
+
+                .calendar-main-area .calendar-event-dot {
+                    width: 7px;
+                    height: 7px;
+                    border-radius: 999px;
+                    background-color: #3b82f6;
+                    flex-shrink: 0;
+                }
+
+                /* 초대받은 일정에서 내 응답이 미정이면 살짝 흐리게 보여준다. */
+                .calendar-main-area .calendar-event-participant-pending {
+                    opacity: 0.45;
+                }
+
+                /* 초대받은 일정에서 불참으로 응답하면 흐림 + 취소선으로 구분한다. */
+                .calendar-main-area .calendar-event-participant-rejected {
+                    opacity: 0.45;
+                    text-decoration: line-through;
+                    text-decoration-thickness: 1px;
+                }
+
+                .calendar-main-area .calendar-event-time {
+                    flex-shrink: 0;
+                    font-weight: 800;
+                }
+
+                /* 개인 종일 일정은 파란 계열을 유지하되, 점 일정이 아니라 부드러운 바 형태로 보여준다. */
+                .calendar-main-area .fc-event.calendar-event-all-day-personal {
+                    border: 1px solid #bfdbfe !important;
+                    border-radius: 5px;
+                    background-color: #dbeafe !important;
+                    overflow: hidden;
+                }
+
+                .calendar-main-area .fc-event.calendar-event-all-day-personal .calendar-event-line {
+                    width: 100%;
+                    gap: 6px;
+                    padding: 1px 7px;
+                    color: #2563eb;
+                }
+
+                .calendar-main-area .fc-event.calendar-event-all-day-personal .calendar-event-dot {
+                    display: none;
+                }
+
+                .calendar-main-area .calendar-event-text {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                /* 일정 표시: 부서/전사 일정은 부드러운 색의 바 형태로 보여준다. */
+                .calendar-main-area .calendar-event-bar {
+                    width: 100%;
+                    min-width: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    padding: 1px 7px;
+                    border-radius: 5px;
+                    color: #4c1d95;
+                    font-size: 12px;
+                    font-weight: 700;
+                    overflow: hidden;
+                    white-space: nowrap;
+                    background-color: #ede9fe;
+                }
+
+                .calendar-main-area .calendar-event-bar-company {
+                    color: #9d174d;
+                    background-color: #fce7f3;
+                }
+
+                .calendar-main-area .calendar-event-scope-label {
+                    flex-shrink: 0;
+                    font-weight: 900;
+                }
+
+                .calendar-main-area .calendar-event-bar-title {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
                 /* 더보기 링크 스타일 */
                 .calendar-main-area .fc-daygrid-more-link {
                     display: block;
@@ -887,7 +1348,7 @@ const Calendar = () => {
 
                         {/* 캘린더 상단 툴바 영역 */}
                         <div style={calendarToolbarStyle}>
-                            {/* 왼쪽: 이동 버튼 + 현재 년월 */}
+                            {/* 왼쪽 : 날짜 이동 */}
                             <div style={calendarToolbarLeftStyle}>
                                 <button
                                     type="button"
@@ -902,7 +1363,7 @@ const Calendar = () => {
                                     style={toolbarButtonStyle}
                                     onClick={handlePrevClick}
                                 >
-                                    ‹
+                                    &lt;
                                 </button>
 
                                 <button
@@ -910,199 +1371,317 @@ const Calendar = () => {
                                     style={toolbarButtonStyle}
                                     onClick={handleNextClick}
                                 >
-                                    ›
+                                    &gt;
                                 </button>
+                            </div>
 
+                            {/* 가운데 : 현재 캘린더 기간 */}
+                            <div style={calendarToolbarCenterStyle}>
                                 <span style={calendarTitleStyle}>
                                     {calendarTitle}
                                 </span>
                             </div>
 
-                            {/* 가운데: 필터 버튼 */}
-                            <div style={filterBarStyle}>
-                                {/* 일정 범위 필터 */}
-                                <div style={{ position: 'relative' }}>
-                                    <button
-                                        type="button"
-                                        style={openFilter === 'scope' ? activeFilterButtonStyle : filterButtonStyle}
-                                        onClick={() => handleFilterButtonClick('scope')}
-                                    >
-                                        일정 범위 ▾
-                                    </button>
+                            {/* 오른쪽 : 필터 + 보기 전환 */}
+                            <div style={calendarToolbarRightStyle}>
+                                <div style={filterBarStyle}>
+                                    {/* 일정 범위 필터 */}
+                                    <div style={{ position: 'relative' }}>
+                                        <button
+                                            type="button"
+                                            style={openFilter === 'scope' ? activeFilterButtonStyle : filterButtonStyle}
+                                            onClick={() => handleFilterButtonClick('scope')}
+                                        >
+                                            일정 범위 ▾
+                                        </button>
 
-                                    {openFilter === 'scope' && (
-                                        <div style={{ ...filterDropdownStyle, left: 0 }}>
-                                            <strong style={{ display: 'block', marginBottom: '10px' }}>
-                                                일정 범위
-                                            </strong>
+                                        {openFilter === 'scope' && (
+                                            <div
+                                                style={{
+                                                    ...filterDropdownStyle,
+                                                    right: 0,
+                                                    width: memberScopeView === 'ORG' ? '430px' : '230px',
+                                                }}
+                                            >
+                                                <strong style={{ display: 'block', marginBottom: '10px' }}>
+                                                    일정 범위
+                                                </strong>
 
-                                            <label style={filterOptionStyle}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={scopeFilters.my}
-                                                    onChange={() => handleScopeFilterChange('my')}
-                                                />
-                                                내 일정
-                                            </label>
-
-                                            <label style={filterOptionStyle}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={scopeFilters.department}
-                                                    onChange={() => handleScopeFilterChange('department')}
-                                                />
-                                                같은 부서 일정
-                                            </label>
-
-                                            <label style={filterOptionStyle}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={scopeFilters.company}
-                                                    onChange={() => handleScopeFilterChange('company')}
-                                                />
-                                                전사 일정
-                                            </label>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* 카테고리 필터 */}
-                                <div style={{ position: 'relative' }}>
-                                    <button
-                                        type="button"
-                                        style={openFilter === 'category' ? activeFilterButtonStyle : filterButtonStyle}
-                                        onClick={() => handleFilterButtonClick('category')}
-                                    >
-                                        카테고리 ▾
-                                    </button>
-
-                                    {openFilter === 'category' && (
-                                        <div style={{ ...filterDropdownStyle, left: 0 }}>
-                                            <strong style={{ display: 'block', marginBottom: '10px' }}>
-                                                카테고리
-                                            </strong>
-
-                                            <label style={filterOptionStyle}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={categoryFilters.meeting}
-                                                    onChange={() => handleCategoryFilterChange('meeting')}
-                                                />
-                                                회의
-                                            </label>
-
-                                            <label style={filterOptionStyle}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={categoryFilters.work}
-                                                    onChange={() => handleCategoryFilterChange('work')}
-                                                />
-                                                업무
-                                            </label>
-
-                                            <label style={filterOptionStyle}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={categoryFilters.notice}
-                                                    onChange={() => handleCategoryFilterChange('notice')}
-                                                />
-                                                공지
-                                            </label>
-
-                                            <label style={filterOptionStyle}>
-                                                <input
-                                                    type="checkbox"
-                                                    checked={categoryFilters.etc}
-                                                    onChange={() => handleCategoryFilterChange('etc')}
-                                                />
-                                                기타
-                                            </label>
-                                        </div>
-                                    )}
-                                </div>
-
-                                {/* 멤버 일정 필터 */}
-                                <div style={{ position: 'relative' }}>
-                                    <button
-                                        type="button"
-                                        style={openFilter === 'member' ? activeFilterButtonStyle : filterButtonStyle}
-                                        onClick={() => handleFilterButtonClick('member')}
-                                    >
-                                        멤버 일정 ▾
-                                    </button>
-
-                                    {openFilter === 'member' && (
-                                        <div style={{ ...filterDropdownStyle, left: 0, width: '260px' }}>
-                                            <strong style={{ display: 'block', marginBottom: '10px' }}>
-                                                같은 부서 멤버
-                                            </strong>
-
-                                            {memberFilters.map((member) => (
-                                                <label key={member.id} style={filterOptionStyle}>
+                                                <label style={filterOptionStyle}>
                                                     <input
                                                         type="checkbox"
-                                                        checked={member.checked}
-                                                        onChange={() => handleMemberFilterChange(member.id)}
+                                                        checked={scopeFilters.personal}
+                                                        onChange={() => handleScopeFilterChange('personal')}
                                                     />
-
-                                                    <span
-                                                        style={{
-                                                            ...memberColorDotStyle,
-                                                            backgroundColor: member.color,
-                                                        }}
-                                                    />
-
-                                                    {member.name}
+                                                    개인 일정
                                                 </label>
-                                            ))}
 
-                                            <button
-                                                type="button"
-                                                style={{
-                                                    width: '100%',
-                                                    marginTop: '10px',
-                                                    padding: '8px 10px',
-                                                    border: '1px solid #0D6EFD',
-                                                    borderRadius: '8px',
-                                                    backgroundColor: '#fff',
-                                                    color: '#0D6EFD',
-                                                    fontWeight: '700',
-                                                    cursor: 'pointer',
-                                                }}
-                                                onClick={() => alert('조직도 선택 모달 연결 예정')}
-                                            >
-                                                조직도에서 멤버 추가
-                                            </button>
-                                        </div>
-                                    )}
+                                                <label style={filterOptionStyle}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={scopeFilters.department}
+                                                        onChange={() => handleScopeFilterChange('department')}
+                                                    />
+                                                    부서 일정
+                                                </label>
+
+                                                <label style={filterOptionStyle}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={scopeFilters.company}
+                                                        onChange={() => handleScopeFilterChange('company')}
+                                                    />
+                                                    전사 일정
+                                                </label>
+
+                                                <hr style={{ margin: '10px 0', border: 0, borderTop: '1px solid #E5E7EB' }} />
+
+                                                <strong style={{ display: 'block', marginBottom: '8px', fontSize: '12px' }}>
+                                                    구성원 일정
+                                                </strong>
+
+                                                {memberScopeView === 'LIST' ? (
+                                                    <>
+                                                        <div style={{ maxHeight: '150px', overflowY: 'auto', marginBottom: '8px' }}>
+                                                            {memberScheduleLoading ? (
+                                                                <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                                                    구성원 목록을 불러오는 중입니다.
+                                                                </div>
+                                                            ) : memberScheduleLoadError ? (
+                                                                <div style={{ fontSize: '12px', color: '#DC2626' }}>
+                                                                    {memberScheduleLoadError}
+                                                                </div>
+                                                            ) : memberScheduleMembers.length === 0 ? (
+                                                                <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                                                    표시할 구성원이 없습니다.
+                                                                </div>
+                                                            ) : (
+                                                                memberScheduleMembers.map((member) => (
+                                                                    <label key={member.empNo} style={{ ...filterOptionStyle, fontSize: '12px' }}>
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={selectedMemberScheduleNos.includes(String(member.empNo))}
+                                                                            onChange={() => handleMemberScheduleFilterChange(member.empNo)}
+                                                                            style={{ accentColor: getMemberScheduleColor(member.empNo) }}
+                                                                        />
+                                                                        <span
+                                                                            style={{
+                                                                                width: '8px',
+                                                                                height: '8px',
+                                                                                borderRadius: '999px',
+                                                                                backgroundColor: getMemberScheduleColor(member.empNo),
+                                                                                flexShrink: 0,
+                                                                            }}
+                                                                        />
+                                                                        {member.name}
+                                                                        <span style={{ color: '#6B7280' }}>
+                                                                            {member.positionName ? ` ${member.positionName}` : ''}
+                                                                        </span>
+                                                                    </label>
+                                                                ))
+                                                            )}
+                                                        </div>
+
+                                                        {/* 모달을 띄우지 않고 일정 범위 드롭다운 안에서 조직도 선택 화면으로 전환한다. */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleOpenMemberScopeOrg}
+                                                            style={{
+                                                                width: '100%',
+                                                                padding: '6px 8px',
+                                                                border: '1px solid #C7D2FE',
+                                                                borderRadius: '7px',
+                                                                backgroundColor: '#EEF2FF',
+                                                                color: '#4F46E5',
+                                                                fontSize: '12px',
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            조직도에서 멤버 선택
+                                                        </button>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleBackToMemberScheduleList}
+                                                            style={{
+                                                                width: '100%',
+                                                                marginBottom: '10px',
+                                                                padding: '6px 8px',
+                                                                border: '1px solid #D1D5DB',
+                                                                borderRadius: '7px',
+                                                                backgroundColor: '#FFFFFF',
+                                                                color: '#374151',
+                                                                fontSize: '12px',
+                                                                fontWeight: '700',
+                                                                cursor: 'pointer',
+                                                            }}
+                                                        >
+                                                            ← 구성원 일정으로 돌아가기
+                                                        </button>
+
+                                                        <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: '10px' }}>
+                                                            <div style={{ maxHeight: '220px', overflowY: 'auto', paddingRight: '4px' }}>
+                                                                <div style={{ marginBottom: '6px', fontSize: '12px', fontWeight: '700', color: '#374151' }}>
+                                                                    부서
+                                                                </div>
+
+                                                                {memberOrgLoading && memberOrgDepartments.length === 0 ? (
+                                                                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                                                        조직도를 불러오는 중입니다.
+                                                                    </div>
+                                                                ) : memberOrgDepartments.length === 0 ? (
+                                                                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                                                        표시할 부서가 없습니다.
+                                                                    </div>
+                                                                ) : (
+                                                                    renderMemberOrgDepartments(memberOrgDepartments)
+                                                                )}
+                                                            </div>
+
+                                                            <div style={{ maxHeight: '220px', overflowY: 'auto', paddingRight: '4px' }}>
+                                                                <div style={{ marginBottom: '6px', fontSize: '12px', fontWeight: '700', color: '#374151' }}>
+                                                                    멤버
+                                                                </div>
+
+                                                                {memberOrgLoadError ? (
+                                                                    <div style={{ fontSize: '12px', color: '#DC2626' }}>
+                                                                        {memberOrgLoadError}
+                                                                    </div>
+                                                                ) : !memberOrgDeptId ? (
+                                                                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                                                        부서를 선택해주세요.
+                                                                    </div>
+                                                                ) : memberOrgLoading ? (
+                                                                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                                                        멤버를 불러오는 중입니다.
+                                                                    </div>
+                                                                ) : memberOrgMembers.length === 0 ? (
+                                                                    <div style={{ fontSize: '12px', color: '#6B7280' }}>
+                                                                        표시할 멤버가 없습니다.
+                                                                    </div>
+                                                                ) : (
+                                                                    memberOrgMembers.map((member) => (
+                                                                        <label key={member.empNo} style={{ ...filterOptionStyle, fontSize: '12px' }}>
+                                                                            <input
+                                                                                type="checkbox"
+                                                                                checked={selectedMemberScheduleNos.includes(String(member.empNo))}
+                                                                                onChange={() => handleMemberScheduleFilterChange(member.empNo)}
+                                                                                style={{ accentColor: getMemberScheduleColor(member.empNo) }}
+                                                                            />
+                                                                            <span
+                                                                                style={{
+                                                                                    width: '8px',
+                                                                                    height: '8px',
+                                                                                    borderRadius: '999px',
+                                                                                    backgroundColor: getMemberScheduleColor(member.empNo),
+                                                                                    flexShrink: 0,
+                                                                                }}
+                                                                            />
+                                                                            {member.name}
+                                                                            <span style={{ color: '#6B7280' }}>
+                                                                                {member.positionName ? ` ${member.positionName}` : ''}
+                                                                            </span>
+                                                                        </label>
+                                                                    ))
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+
+                                                {selectedMemberScheduleNos.length > 0 && (
+                                                    <div style={{ marginTop: '6px', fontSize: '11px', color: '#6B7280' }}>
+                                                        선택된 구성원 {selectedMemberScheduleNos.length}명
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 카테고리 필터 */}
+                                    <div style={{ position: 'relative' }}>
+                                        <button
+                                            type="button"
+                                            style={openFilter === 'category' ? activeFilterButtonStyle : filterButtonStyle}
+                                            onClick={() => handleFilterButtonClick('category')}
+                                        >
+                                            카테고리 ▾
+                                        </button>
+
+                                        {openFilter === 'category' && (
+                                            <div style={{ ...filterDropdownStyle, right: 0, width: '280px' }}>
+                                                <strong style={{ display: 'block', marginBottom: '10px' }}>
+                                                    카테고리
+                                                </strong>
+
+                                                <label style={filterOptionStyle}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={categoryFilters.meeting}
+                                                        onChange={() => handleCategoryFilterChange('meeting')}
+                                                    />
+                                                    회의
+                                                </label>
+
+                                                <label style={filterOptionStyle}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={categoryFilters.work}
+                                                        onChange={() => handleCategoryFilterChange('work')}
+                                                    />
+                                                    업무
+                                                </label>
+
+                                                <label style={filterOptionStyle}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={categoryFilters.notice}
+                                                        onChange={() => handleCategoryFilterChange('notice')}
+                                                    />
+                                                    공지
+                                                </label>
+
+                                                <label style={filterOptionStyle}>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={categoryFilters.etc}
+                                                        onChange={() => handleCategoryFilterChange('etc')}
+                                                    />
+                                                    기타
+                                                </label>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
-                            </div>
 
-                            {/* 오른쪽: 월/주/일 보기 전환 */}
-                            <div style={calendarToolbarRightStyle}>
-                                <button
-                                    type="button"
-                                    style={currentView === 'dayGridMonth' ? activeViewButtonStyle : viewButtonStyle}
-                                    onClick={() => handleViewChange('dayGridMonth')}
-                                >
-                                    월
-                                </button>
+                                <div style={viewButtonGroupStyle}>
+                                    <button
+                                        type="button"
+                                        style={currentView === 'dayGridMonth' ? activeViewButtonStyle : viewButtonStyle}
+                                        onClick={() => handleViewChange('dayGridMonth')}
+                                    >
+                                        월
+                                    </button>
 
-                                <button
-                                    type="button"
-                                    style={currentView === 'timeGridWeek' ? activeViewButtonStyle : viewButtonStyle}
-                                    onClick={() => handleViewChange('timeGridWeek')}
-                                >
-                                    주
-                                </button>
+                                    <button
+                                        type="button"
+                                        style={currentView === 'timeGridWeek' ? activeViewButtonStyle : viewButtonStyle}
+                                        onClick={() => handleViewChange('timeGridWeek')}
+                                    >
+                                        주
+                                    </button>
 
-                                <button
-                                    type="button"
-                                    style={currentView === 'timeGridDay' ? activeViewButtonStyle : viewButtonStyle}
-                                    onClick={() => handleViewChange('timeGridDay')}
-                                >
-                                    일
-                                </button>
+                                    <button
+                                        type="button"
+                                        style={currentView === 'timeGridDay' ? activeViewButtonStyle : viewButtonStyle}
+                                        onClick={() => handleViewChange('timeGridDay')}
+                                    >
+                                        일
+                                    </button>
+                                </div>
                             </div>
                         </div>
 
@@ -1118,6 +1697,7 @@ const Calendar = () => {
                                 dayMaxEvents={2}
                                 moreLinkContent={(arg) => `${arg.num}개 더보기`}
                                 events={draftEvent ? [...calendarEvents, draftEvent] : calendarEvents}
+                                eventContent={renderCalendarEventContent}
                                 eventClick={handleEventClick}
                                 dateClick={handleDateClick}
                                 headerToolbar={false}
@@ -1142,7 +1722,7 @@ const Calendar = () => {
                 </CCardBody>
             </CCard>
 
-            {/* 기존 일정 상세/수정/삭제 팝업 */}
+            {/* 기존 일정 상세/수정/삭제 팝업: 수정 화면에서도 일정 등록 권한 정책을 적용하기 위해 userInfo를 전달한다. */}
             <CalendarDetail
                 visible={detailVisible}
                 onClose={() => {
@@ -1150,7 +1730,9 @@ const Calendar = () => {
                     setDetailVisible(false);
                 }}
                 schedule={selectedSchedule}
+                userInfo={userInfo}
                 popupPosition={detailPopupPosition}
+                getMemberScheduleColor={getMemberScheduleColor}
                 onEdit={(schedule) => {
                     setSelectedSchedule(schedule);
                     setDetailVisible(false);

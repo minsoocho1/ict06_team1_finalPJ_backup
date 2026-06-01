@@ -65,7 +65,7 @@ function LoginPage() {
   const { login, updateUserInfo } = useUser()
 
   const [loginData, setLoginData] = useState({
-    empNo: '',
+    loginId: '',
     password: '',
   })
   const [error, setError] = useState('')
@@ -73,7 +73,7 @@ function LoginPage() {
 
   useEffect(() => {
     setLoginData({
-      empNo: '',
+      loginId: '',
       password: '',
     })
   }, [])
@@ -92,7 +92,7 @@ function LoginPage() {
 
     try {
       const response = await axios.post(`${PATH.API.BASE}/auth/login`, {
-        empNo: loginData.empNo,
+        loginId: loginData.loginId,
         password: loginData.password,
       })
 
@@ -113,7 +113,7 @@ function LoginPage() {
         sessionStorage.setItem(
           'adminLoginBridge',
           JSON.stringify({
-            username: loginData.empNo,
+            username: loginData.loginId,
             password: loginData.password,
             createdAt: Date.now(),
           }),
@@ -177,9 +177,9 @@ function LoginPage() {
           <form onSubmit={handleLogin}>
             <input
               type="text"
-              name="empNo"
-              placeholder="사번"
-              value={loginData.empNo}
+              name="loginId"
+              placeholder="사번 또는 아이디"
+              value={loginData.loginId}
               onChange={handleChange}
               style={inputStyle}
               required

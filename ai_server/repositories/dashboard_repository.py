@@ -9,6 +9,7 @@
 #  @ ----------    ---------    -------------------------------
 #  @ 2026.05.12    김다솜         database.py 분리를 위한 대시보드 통계 모듈 추가
 #  @ 2026.05.13    김다솜         팀별/본부별 온보딩 완료율, 퀴즈 점수 토글용 집계 구조 정리
+#  @ 2026.05.29    김다솜         최근 활동의 평가 제출 내역을 사원/카테고리 단위로 묶어 중복 표시 보정
 # 
 
 from datetime import datetime
@@ -464,15 +465,13 @@ def analyze_recent_activities(limit=5):
             SELECT
                 e.name,
                 qq.category_name,
-                qr.submitted_at
-            FROM (
-                SELECT DISTINCT emp_no, question_id, submitted_at
-                FROM quiz_result
-                WHERE submitted_at IS NOT NULL
-            ) qr
+                MAX(qr.submitted_at) AS event_time
+            FROM quiz_result qr
             JOIN quiz_question qq ON qr.question_id = qq.question_id
             JOIN employee e ON qr.emp_no = e.emp_no
-            ORDER BY qr.submitted_at DESC
+            WHERE qr.submitted_at IS NOT NULL
+            GROUP BY qr.emp_no, e.name, qq.category_name
+            ORDER BY event_time DESC
             LIMIT 5
         """)
 

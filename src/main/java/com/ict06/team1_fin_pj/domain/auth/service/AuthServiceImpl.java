@@ -49,9 +49,14 @@ public class AuthServiceImpl implements UserDetailsService {
      * @return UserDetails 인증 객체
      */
     @Override
-    public UserDetails loadUserByUsername(String empNo) throws UsernameNotFoundException {
-        EmpEntity emp = empRepository.findByEmpNo(empNo)
-                .orElseThrow(() -> new UsernameNotFoundException("존재하지 않는 사번입니다."));
+    public UserDetails loadUserByUsername(String empNo)
+            throws UsernameNotFoundException {
+
+        EmpEntity emp = empRepository
+                .findByEmpNoOrEmpId(empNo, empNo)
+                .orElseThrow(() ->
+                        new UsernameNotFoundException(
+                                "존재하지 않는 사용자입니다."));
 
         return new PrincipalDetails(emp);
     }
@@ -64,15 +69,15 @@ public class AuthServiceImpl implements UserDetailsService {
      * @return 토큰 및 사용자 기본 정보
      */
     @Transactional
-    public Map<String, Object> login(String empNo, String password) {
-        System.out.println("[AuthService] 로그인 요청 수신 - 사번: " + empNo);
+    public Map<String, Object> login(String loginId, String password) {
+        System.out.println("[AuthService] 로그인 요청 수신 - 로그인ID: " + loginId);
 
-        EmpEntity emp = empRepository.findByEmpNo(empNo)
+        EmpEntity emp = empRepository.findByEmpNoOrEmpId(loginId, loginId)
                 .orElseThrow(() -> new RuntimeException("사용자를 찾을 수 없습니다."));
 
         boolean match = passwordEncoder.matches(password, emp.getPassword());
         if (!match) {
-            System.out.println("[AuthService] 로그인 실패 - 비밀번호 불일치, 사번: " + empNo);
+            System.out.println("[AuthService] 로그인 실패 - 비밀번호 불일치, 로그인ID: " + loginId);
             throw new RuntimeException("사번 또는 비밀번호가 일치하지 않습니다.");
         }
 

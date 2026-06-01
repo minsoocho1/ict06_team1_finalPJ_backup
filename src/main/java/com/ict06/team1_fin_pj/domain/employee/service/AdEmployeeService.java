@@ -74,4 +74,10 @@ public interface AdEmployeeService {
 
     // 사원 수정 처리
     void updateEmployee(String empNo, EmployeeUpdateRequestDto requestDto);
+
+    /*
+     * 관리자 통계 데이터 조회
+     */
+    EmployeeStatisticsDto getEmployeeStatistics();
+
 }

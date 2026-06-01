@@ -1,3 +1,20 @@
+/**
+ * @FileName : AiKnowledgeRequestRepository.java
+ * @Description : AI 챗봇 자료 등록 요청 Repository
+ *                - 사용자가 요청한 챗봇/RAG 자료 등록 요청 조회 및 저장
+ *                - 관리자 자료 등록 요청 상세 조회
+ *                - 문서 권한 조건, 요청 사유, 참고 URL 관리에 사용
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.27  송혜진       관리자 RAG 자료 등록 요청 상세 관리 기준 반영
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.repository;
 
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiKnowledgeRequestEntity;

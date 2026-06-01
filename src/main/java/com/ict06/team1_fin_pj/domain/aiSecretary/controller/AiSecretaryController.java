@@ -1,216 +1,257 @@
+/**
+ * @FileName : AiSecretaryController.java
+ * @Description : 사용자 AI 비서 및 챗봇 API 컨트롤러
+ *                - AI 비서 문서 초안 생성, 수정, 템플릿 생성 요청 처리
+ *                - 문장 다듬기 및 참고 자료 본문 추출 API 제공
+ *                - 사내 AI 챗봇 세션 생성, 질문/답변 처리
+ *                - 사용자 템플릿 요청 및 자료 등록 요청 처리
+ *                - AI 대화 세션 및 메시지 조회 기능 제공
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.12  송혜진       AI 비서/챗봇 세션 및 메시지 API 정리
+ * @ 2026.05.27  송혜진       챗봇 참고 문서 references 응답 구조 반영
+ * @ 2026.05.28  송혜진       참고 자료 본문 추출 및 문서 작성 API 보강
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.controller;
 
-import com.ict06.team1_fin_pj.common.dto.aiSecretary.*;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AiChatMessageCreateRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AiChatMessageResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AiChatSessionCreateRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AiChatSessionResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantDraftRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantDraftResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantReviseRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantReviseResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantTemplateRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantTemplateResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.ChatbotAskRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.ChatbotAskResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.ChatbotReferenceDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.CorrectionRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.CorrectionResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.KnowledgeRequestCreateDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.KnowledgeRequestSuggestionsDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.KnowledgeResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.ReferenceExtractResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.TemplateRequestCreateRequestDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.TemplateRequestResponseDto;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatMessageEntity;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatSessionEntity;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.MessageRole;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.SessionType;
 import com.ict06.team1_fin_pj.domain.aiSecretary.repository.AiChatMessageRepository;
 import com.ict06.team1_fin_pj.domain.aiSecretary.response.ApiResponse;
-import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantDraftRequestDto;
-import com.ict06.team1_fin_pj.common.dto.aiSecretary.AssistantDraftResponseDto;
-import com.ict06.team1_fin_pj.domain.aiSecretary.service.*;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiAssistantDraftService;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiChatbotService;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiCorrectionService;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiKnowledgeRequestService;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiSecretaryService;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.AiTemplateRequestService;
+import com.ict06.team1_fin_pj.domain.aiSecretary.service.ReferenceFileExtractService;
 import jakarta.validation.Valid;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/ai-secretary")
 public class AiSecretaryController {
 
-    // SERVICE 호출
-    @Autowired
-    private AiSecretaryService aiSecretaryService;
+    private final AiSecretaryService aiSecretaryService;
+    private final AiChatbotService aiChatbotService;
+    private final AiCorrectionService aiCorrectionService;
+    private final AiAssistantDraftService aiAssistantDraftService;
+    private final AiTemplateRequestService aiTemplateRequestService;
+    private final AiKnowledgeRequestService aiKnowledgeRequestService;
+    private final AiChatMessageRepository aiChatMessageRepository;
+    private final ReferenceFileExtractService referenceFileExtractService;
 
     @Autowired
-    private  AiChatbotService aiChatbotService;
+    public AiSecretaryController(
+            AiSecretaryService aiSecretaryService,
+            AiChatbotService aiChatbotService,
+            AiCorrectionService aiCorrectionService,
+            AiAssistantDraftService aiAssistantDraftService,
+            AiTemplateRequestService aiTemplateRequestService,
+            AiKnowledgeRequestService aiKnowledgeRequestService,
+            AiChatMessageRepository aiChatMessageRepository,
+            ReferenceFileExtractService referenceFileExtractService
+    ) {
+        this.aiSecretaryService = aiSecretaryService;
+        this.aiChatbotService = aiChatbotService;
+        this.aiCorrectionService = aiCorrectionService;
+        this.aiAssistantDraftService = aiAssistantDraftService;
+        this.aiTemplateRequestService = aiTemplateRequestService;
+        this.aiKnowledgeRequestService = aiKnowledgeRequestService;
+        this.aiChatMessageRepository = aiChatMessageRepository;
+        this.referenceFileExtractService = referenceFileExtractService;
+    }
 
-    @Autowired
-    private AiCorrectionService aiCorrectionService;
+    @PostMapping("/sessions")
+    public ApiResponse<AiChatSessionResponseDto> createSession(
+            @Valid @RequestBody AiChatSessionCreateRequestDto requestDto
+    ) {
+        AiChatSessionEntity session = aiSecretaryService.createSession(
+                requestDto.getEmpNo(),
+                requestDto.getSessionType(),
+                requestDto.getTitle()
+        );
 
-    @Autowired
-    private AiAssistantDraftService aiAssistantDraftService;
+        return ApiResponse.ok("세션 생성 성공", toSessionResponse(session));
+    }
 
-    @Autowired
-    private AiTemplateRequestService aiTemplateRequestService;
+    @GetMapping("/sessions")
+    public ApiResponse<List<AiChatSessionResponseDto>> getSessions(
+            @RequestParam String empNo,
+            @RequestParam SessionType sessionType
+    ) {
+        List<AiChatSessionResponseDto> responseDto = aiSecretaryService.getSessionList(empNo, sessionType)
+                .stream()
+                .map(this::toSessionResponse)
+                .toList();
 
-    @Autowired
-    private AiKnowledgeRequestService aiKnowledgeRequestService;
+        return ApiResponse.ok("세션 목록 조회 성공", responseDto);
+    }
 
-    @Autowired
-    private AiChatMessageRepository aiChatMessageRepository;
+    @GetMapping("/sessions/{sessionId}/messages")
+    public ApiResponse<List<AiChatMessageResponseDto>> getMessages(
+            @PathVariable Integer sessionId
+    ) {
+        List<AiChatMessageEntity> messages = aiSecretaryService.getMessageList(sessionId);
+        List<Integer> assistantMessageIds = messages.stream()
+                .filter(message -> message.getRole() == MessageRole.ASSISTANT)
+                .map(AiChatMessageEntity::getMessageId)
+                .filter(messageId -> messageId != null)
+                .toList();
 
-    // 챗봇 최근 세션 조회 또는 생성
-    // POST /api/ai-secretary/chatbot/session?empNo=20209999
+        Map<Integer, List<ChatbotReferenceDto>> referencesByMessageId =
+                aiSecretaryService.getMessageReferences(assistantMessageIds);
+
+        List<AiChatMessageResponseDto> responseDto = messages.stream()
+                .map(message -> AiChatMessageResponseDto.from(
+                        message,
+                        referencesByMessageId.getOrDefault(message.getMessageId(), List.of())
+                ))
+                .toList();
+
+        return ApiResponse.ok("메시지 목록 조회 성공", responseDto);
+    }
+
+    @PostMapping("/sessions/{sessionId}/messages")
+    public ApiResponse<AiChatMessageResponseDto> saveMessage(
+            @PathVariable Integer sessionId,
+            @Valid @RequestBody AiChatMessageCreateRequestDto requestDto
+    ) {
+        AiChatMessageEntity message = AiChatMessageEntity.builder()
+                .role(requestDto.getRole())
+                .content(requestDto.getContent())
+                .modelName(requestDto.getModelName())
+                .build();
+
+        AiChatMessageEntity savedMessage = aiSecretaryService.saveMessage(sessionId, message);
+
+        return ApiResponse.ok("메시지 저장 성공", AiChatMessageResponseDto.from(savedMessage));
+    }
+
     @PostMapping("/chatbot/session")
     public ApiResponse<AiChatSessionResponseDto> getOrCreateChatbotSession(
             @RequestParam String empNo
     ) {
         AiChatSessionEntity session = aiSecretaryService.getOrCreateChatbotSession(empNo);
-
-        AiChatSessionResponseDto response = AiChatSessionResponseDto.builder()
-                .sessionId(session.getSessionId())
-                .empNo(session.getEmployee().getEmpNo())
-                .sessionType(session.getSessionType())
-                .title(session.getTitle())
-                .status(session.getStatus())
-                .lastMessageAt(session.getLastMessageAt())
-                .createdAt(session.getCreatedAt())
-                .updatedAt(session.getUpdatedAt())
-                .build();
-
-        return ApiResponse.ok("챗봇 세션 조회 성공", response);
+        return ApiResponse.ok("챗봇 세션 조회 성공", toSessionResponse(session));
     }
 
-    // AI 비서 채팅 세션 목록 조회
-    @GetMapping("/sessions")
-    public ApiResponse<List<AiChatSessionResponseDto>> getSessionList(
-            @RequestParam String empNo,
-            @RequestParam SessionType sessionType
-    ) {
-        // 세션 응답 DTO 포함 List 생성
-        List<AiChatSessionResponseDto> response  = aiSecretaryService.getSessionList(empNo, sessionType)
-                .stream() // 데이터를 하나씩 꺼내서 .map으로 반복해서 DTO를 만들어라
-                .map(session -> AiChatSessionResponseDto.builder()
-                        .sessionId(session.getSessionId())
-                        .empNo(session.getEmployee().getEmpNo())
-                        .sessionType(session.getSessionType())
-                        .documentType(resolveDocumentType(session.getSessionId()))
-                        .title(session.getTitle())
-                        .status(session.getStatus())
-                        .lastMessageAt(session.getLastMessageAt())
-                        .createdAt(session.getCreatedAt())
-                        .updatedAt(session.getUpdatedAt())
-                        .build()
-                )
-                .toList(); // 많은 DTO 들을 최종적으로 하나의 List에 담음
-
-        return ApiResponse.ok("세션 목록 조회 성공", response);
-    }
-
-    // 채팅 세션 내 메시지 목록 조회
-    @GetMapping("/sessions/{sessionId}/messages")
-    public ApiResponse<List<AiChatMessageResponseDto>> getMessageList(
-        @PathVariable Integer sessionId // URL 경로(path)에 있는 상수 값을 변수(Variable)로 가져오기
-    ) {
-        // 메시지 응답 DTO 포함 List 생성
-        List<AiChatMessageResponseDto> response = aiSecretaryService.getMessageList(sessionId)
-                .stream()
-                .map(message -> AiChatMessageResponseDto.builder()
-                        .messageId(message.getMessageId())
-                        .sessionId(message.getSession().getSessionId())
-                        .role(message.getRole())
-                        .content(message.getContent())
-                        .seqNo(message.getSeqNo())
-                        .modelName(message.getModelName())
-                        .promptTokens(message.getPromptTokens())
-                        .completionTokens(message.getCompletionTokens())
-                        .createdAt(message.getCreatedAt())
-                        .build())
-                .toList();
-
-        return ApiResponse.ok("메시지 목록 조회 성공", response);
-    }
-
-    // 채팅 세션 내 메시지 저장
-    @PostMapping("/sessions/{sessionId}/messages")
-    public ApiResponse<AiChatMessageResponseDto> saveMessage(
-        @PathVariable Integer sessionId,
-        @Valid @RequestBody AiChatMessageCreateRequestDto request
-    ){
-        // [1] PATH에서 받아온 값 DB에 넣기
-        AiChatMessageEntity message = AiChatMessageEntity.builder()
-                .role(request.getRole())
-                .content(request.getContent())
-                .modelName(request.getModelName())
-                .build();
-
-        // [2] 메시지 저장하기
-        AiChatMessageEntity savedMessage = aiSecretaryService.saveMessage(sessionId, message);
-
-        // [3] 메시지 응답 DTO 생성
-        AiChatMessageResponseDto response = AiChatMessageResponseDto.builder()
-                .messageId(savedMessage.getMessageId())
-                .sessionId(savedMessage.getSession().getSessionId())
-                .role(savedMessage.getRole())
-                .content(savedMessage.getContent())
-                .seqNo(savedMessage.getSeqNo())
-                .modelName(savedMessage.getModelName())
-                .promptTokens(savedMessage.getPromptTokens())
-                .completionTokens(savedMessage.getCompletionTokens())
-                .createdAt(savedMessage.getCreatedAt())
-                .build();
-
-        return ApiResponse.ok("메시지 저장 성공", response);
-    }
-
-    // 챗봇 응답 생성
     @PostMapping("/chatbot/ask")
     public ApiResponse<ChatbotAskResponseDto> askChatbot(
             @Valid @RequestBody ChatbotAskRequestDto requestDto
     ) {
-        ChatbotAskResponseDto response =
+        ChatbotAskResponseDto responseDto =
                 aiChatbotService.ask(requestDto.getSessionId(), requestDto.getContent());
 
-        return ApiResponse.ok("챗봇 응답 생성 성공", response);
+        return ApiResponse.ok("챗봇 응답 생성 성공", responseDto);
     }
 
-    // 문장 다듬기
     @PostMapping("/correction")
     public ApiResponse<CorrectionResponseDto> correctText(
             @Valid @RequestBody CorrectionRequestDto requestDto
     ) {
-        CorrectionResponseDto response = aiCorrectionService.correct(
+        CorrectionResponseDto responseDto = aiCorrectionService.correct(
                 requestDto.getEmpNo(),
                 requestDto.getText(),
                 requestDto.getMode()
         );
 
-        return ApiResponse.ok("문장 다듬기 성공", response);
+        return ApiResponse.ok("문장 다듬기 성공", responseDto);
     }
 
-    // AI 문서 초안 생성
     @PostMapping("/assistant/draft")
     public ApiResponse<AssistantDraftResponseDto> createAssistantDraft(
             @Valid @RequestBody AssistantDraftRequestDto requestDto
     ) {
-        System.out.println("<<< POST /api/ai-secretary/assistant/draft 진입 >>>");
-        System.out.println("type = " + requestDto.getType());
-        System.out.println("title = " + requestDto.getTitle());
-        System.out.println("empNo = " + requestDto.getEmpNo());
-
-        AssistantDraftResponseDto response =
+        AssistantDraftResponseDto responseDto =
                 aiAssistantDraftService.createDraft(requestDto);
 
-        return ApiResponse.ok("AI 초안 생성 성공", response);
+        return ApiResponse.ok("AI 문서 초안 생성 성공", responseDto);
     }
 
-    // AI 문서 추가 수정
-    // POST) /api/ai-secretary/assistant/revise
+    // 첨부 파일 본문을 1회성 참고 텍스트로 추출하는 API다.
+    // RAG 저장이나 영구 문서 등록과는 연결하지 않는다.
+    @PostMapping(
+            value = "/assistant/reference/extract",
+            consumes = MediaType.MULTIPART_FORM_DATA_VALUE
+    )
+    public ResponseEntity<ApiResponse<?>> extractReferenceText(
+            @RequestPart("file") MultipartFile file
+    ) {
+        try {
+            ReferenceExtractResponseDto responseDto = referenceFileExtractService.extract(file);
+            return ResponseEntity.ok(ApiResponse.ok("참고 자료 본문 추출 성공", responseDto));
+        } catch (IllegalArgumentException exception) {
+            return ResponseEntity.badRequest().body(ApiResponse.fail(exception.getMessage()));
+        } catch (IllegalStateException exception) {
+            return ResponseEntity.internalServerError().body(ApiResponse.fail(exception.getMessage()));
+        }
+    }
+
     @PostMapping("/assistant/revise")
     public ApiResponse<AssistantReviseResponseDto> reviseAssistantDraft(
             @Valid @RequestBody AssistantReviseRequestDto requestDto
     ) {
-        AssistantReviseResponseDto response =
+        AssistantReviseResponseDto responseDto =
                 aiAssistantDraftService.reviseDraft(requestDto);
 
-        return ApiResponse.ok("AI 문서 수정 성공", response);
+        return ApiResponse.ok("AI 문서 수정 성공", responseDto);
     }
 
-    // AI 템플릿 생성
     @PostMapping("/assistant/template")
     public ApiResponse<AssistantTemplateResponseDto> createAssistantTemplate(
             @Valid @RequestBody AssistantTemplateRequestDto requestDto
     ) {
-        AssistantTemplateResponseDto response =
+        AssistantTemplateResponseDto responseDto =
                 aiAssistantDraftService.createTemplate(requestDto);
 
-        return ApiResponse.ok("AI 템플릿 생성 성공", response);
+        return ApiResponse.ok("AI 템플릿 생성 성공", responseDto);
     }
 
-    // AI 생성 템플릿을 추천 템플릿 목록 추가 요청
     @PostMapping("/template-request")
     public ApiResponse<TemplateRequestResponseDto> createTemplateRequest(
             @Valid @RequestBody TemplateRequestCreateRequestDto requestDto
@@ -221,11 +262,10 @@ public class AiSecretaryController {
         return ApiResponse.ok("추천 템플릿 추가 요청이 접수되었습니다.", responseDto);
     }
 
-    // 추천 템플릿 추가 요청 목록 조회
     @GetMapping("/template-request/my")
     public ApiResponse<List<TemplateRequestResponseDto>> getMyTemplateRequests(
             @RequestParam String empNo
-    ){
+    ) {
         List<TemplateRequestResponseDto> responseDto =
                 aiTemplateRequestService.getMyRequests(empNo);
 
@@ -249,13 +289,27 @@ public class AiSecretaryController {
         List<KnowledgeResponseDto> responseDto =
                 aiKnowledgeRequestService.getMyRequests(empNo);
 
-        return ApiResponse.ok("내 자료 등록 요청 목록 조회 성공", responseDto);
+        return ApiResponse.ok("자료 등록 요청 목록 조회 성공", responseDto);
     }
 
     @GetMapping("/knowledge-request/suggestions")
     public ApiResponse<KnowledgeRequestSuggestionsDto> getKnowledgeRequestSuggestions() {
         KnowledgeRequestSuggestionsDto responseDto = aiKnowledgeRequestService.getSuggestions();
         return ApiResponse.ok("자동완성 후보 조회 성공", responseDto);
+    }
+
+    private AiChatSessionResponseDto toSessionResponse(AiChatSessionEntity session) {
+        return AiChatSessionResponseDto.builder()
+                .sessionId(session.getSessionId())
+                .empNo(session.getEmployee() != null ? session.getEmployee().getEmpNo() : null)
+                .sessionType(session.getSessionType())
+                .documentType(resolveDocumentType(session.getSessionId()))
+                .title(session.getTitle())
+                .status(session.getStatus())
+                .lastMessageAt(session.getLastMessageAt())
+                .createdAt(session.getCreatedAt())
+                .updatedAt(session.getUpdatedAt())
+                .build();
     }
 
     private String resolveDocumentType(Integer sessionId) {
@@ -284,5 +338,4 @@ public class AiSecretaryController {
         }
         return "REPORT";
     }
-
 }

@@ -38,6 +38,7 @@ const parseTemplate = (template) => {
   }
 };
 
+// 입력값을 서버에 저장하기 전 필드 타입에 맞게 정리합니다.
 const normalizeFieldValue = (field, value) => {
   if (field.type === 'amount') {
     return String(value || '').replace(/[^\d]/g, '');
@@ -46,6 +47,7 @@ const normalizeFieldValue = (field, value) => {
   return value;
 };
 
+// 금액 입력값을 화면에 표시할 때 1,000 단위 콤마 형식으로 변환합니다.
 const formatAmount = (value) => {
   const digits = String(value || '').replace(/[^\d]/g, '');
   return digits ? Number(digits).toLocaleString('ko-KR') : '';
@@ -55,9 +57,11 @@ const formatAmount = (value) => {
 // 현재는 비용 정산 신청에서 증빙 파일로 이미지/PDF만 허용할 때 사용합니다.
 const isImageFile = (file) => file?.type?.startsWith('image/');
 
+// 선택한 파일이 PDF인지 확인하여 비용 정산 증빙 업로드 검증에 활용합니다.
 const isPdfFile = (file) =>
   file?.type === 'application/pdf' || file?.name?.toLowerCase().endsWith('.pdf');
 
+// 서버가 내려준 상대 파일 경로를 브라우저에서 접근 가능한 전체 URL로 변환합니다.
 const buildResourceUrl = (path) => {
   if (!path) {
     return '';
@@ -70,6 +74,7 @@ const buildResourceUrl = (path) => {
   return `${PATH.API.BASE.replace(/\/api$/, '')}${path}`;
 };
 
+// 임시저장 문서의 content JSON에서 필드별 기존 입력값을 복원합니다.
 const parseContentFields = (content) => {
   if (!content) {
     return {};
@@ -86,11 +91,100 @@ const parseContentFields = (content) => {
   }
 };
 
+// 선택한 서식의 모든 입력 필드를 빈 값으로 초기화합니다.
 const createEmptyValues = (fields) =>
   fields.reduce((acc, field) => {
     acc[field.id] = '';
     return acc;
   }, {});
+
+// 날짜/시간 범위 검증에서 시작 필드와 종료 필드를 찾기 위해 id와 label을 같은 기준으로 정리합니다.
+const normalizeRangeKey = (value) =>
+  String(value || '') // 1. 값이 없으면 빈 문자열로 만들고 문자열로 변환합니다.
+    .toLowerCase() // 2. 영문 대문자를 모두 소문자로 변경합니다.
+    .replace(/[_\s]/g, '') // 3. 언더스코어(_)와 공백(띄어쓰기)을 모두 제거합니다.
+    .replace(/start|end|from|to|시작|종료|끝|부터|까지/g, ''); // 4. 시작/종료와 관련된 단어들을 지워 순수 '본문 키'만 남깁니다. (예: "startDate" -> "date")
+
+const hasStartText = (field) =>
+  // 필드의 id와 label을 공백으로 합친 문자열에서 'start', 'from', '시작', '부터'가 포함되어 있는지 대소문자 구분 없이 검사합니다.
+  /start|from|시작|부터/i.test(`${field.id || ''} ${field.label || ''}`);
+
+
+const hasEndText = (field) =>
+  // 필드의 id와 label을 공백으로 합친 문자열에서 'end', 'to', '종료', '끝', '까지'가 포함되어 있는지 대소문자 구분 없이 검사합니다.
+  /end|to|종료|끝|까지/i.test(`${field.id || ''} ${field.label || ''}`);
+
+
+const getComparableRangeKeys = (field) =>
+  // 필드의 id와 label을 각각 정규화한 뒤, 빈 문자열을 제외(filter(Boolean))하고 유효한 값만 배열로 반환합니다.
+  [normalizeRangeKey(field.id), normalizeRangeKey(field.label)].filter(Boolean);
+
+// 시작/종료 의미가 있는 date 또는 time 필드를 자동으로 짝지어 반환합니다.
+const findRangePairs = (fields, type) => {
+  // 1. 전체 필드 중 매개변수로 받은 타입('date' 또는 'time')과 일치하는 필드만 골라냅니다.
+  const rangeFields = fields.filter((field) => field.type === type);
+  // 2. 그중에서 시작 의미를 가진 필드들을 필터링합니다.
+  const startFields = rangeFields.filter(hasStartText);
+  // 3. 그중에서 종료 의미를 가진 필드들을 필터링합니다.
+  const endFields = rangeFields.filter(hasEndText);
+
+  return endFields
+    .map((endField) => {
+      // 4. 종료 필드의 정규화된 비교 키 배열을 가져옵니다.
+      const endKeys = getComparableRangeKeys(endField);
+      // 5. 시작 필드 목록 중에서 종료 필드와 동일한 '본문 키'를 공유하는 필드를 찾습니다.
+      const startField = startFields.find((candidate) => {
+        const startKeys = getComparableRangeKeys(candidate);
+        // 시작 필드의 키 중 하나라도 종료 필드의 키에 포함되어 있으면 매칭됩니다.
+        return startKeys.some((key) => endKeys.includes(key));
+      });
+
+      // 6. 매칭되는 시작 필드가 있으면 객체로 묶어 반환하고, 없으면 null을 반환합니다.
+      return startField ? { startField, endField } : null;
+    })
+    .filter(Boolean); // 7. null로 반환된 항목들을 배열에서 완전히 제거합니다.
+};
+
+// 결재 서식의 날짜/시간 범위에서 종료값이 시작값보다 빠른지 검증합니다.
+const validateDateTimeRanges = (fields, values) => {
+  // 1. 자동으로 날짜(date) 필드 쌍과 시간(time) 필드 쌍을 찾아 배열로 저장합니다.
+  const datePairs = findRangePairs(fields, 'date');
+  const timePairs = findRangePairs(fields, 'time');
+
+  // 2. 날짜 필드 쌍을 순회하며 검증합니다.
+  for (const { startField, endField } of datePairs) {
+    const startValue = values[startField.id]; // 시작 날짜 값
+    const endValue = values[endField.id]; // 종료 날짜 값
+
+    // 시작값과 종료값이 모두 입력되었는데, 종료일이 시작일보다 빠르면 에러 메시지를 즉시 반환합니다.
+    if (startValue && endValue && endValue < startValue) {
+      return `${endField.label || '종료일'}은(는) ${startField.label || '시작일'}보다 빠를 수 없습니다.`;
+    }
+  }
+
+  // 3. 사용자가 며칠 이상(Multi-Day)에 걸친 기간을 선택했는지 여부를 체크합니다.
+  const hasMultiDayRange = datePairs.some(({ startField, endField }) => {
+    const startValue = values[startField.id];
+    const endValue = values[endField.id];
+    // 종료일이 시작일보다 미래인 날짜 쌍이 하나라도 있으면 true가 됩니다.
+    return startValue && endValue && endValue > startValue;
+  });
+
+  // 4. 시간 필드 쌍을 순회하며 검증합니다.
+  for (const { startField, endField } of timePairs) {
+    const startValue = values[startField.id]; // 시작 시간 값
+    const endValue = values[endField.id]; // 종료 시간 값
+
+    // 다른 날로 넘어가는 기간(hasMultiDayRange가 true)이 아닐 때만 시간 순서를 검사합니다.
+    // (예: 5월 28일 23시 ~ 5월 29일 01시 처럼 날짜가 다르면 종료 시간이 시작 시간보다 빨라도 정상입니다.)
+    if (!hasMultiDayRange && startValue && endValue && endValue < startValue) {
+      return `${endField.label || '종료 시간'}은(는) ${startField.label || '시작 시간'}보다 빠를 수 없습니다.`;
+    }
+  }
+
+  // 5. 모든 검증을 통과하면 빈 문자열을 반환하여 에러가 없음을 알립니다.
+  return '';
+};
 
 // [전자결재] 새 결재 진행 - 결재 내용 작성 페이지
 const ApprovalWriteNew = () => {
@@ -156,6 +250,7 @@ const ApprovalWriteNew = () => {
   );
 
   // 임시저장함에서 들어온 경우에는 저장된 문서 상세와 최신 서식 정보를 함께 불러옵니다.
+  // 서식 필드가 준비되면 화면 입력값 state를 초기화하고 기존 입력값은 유지합니다.
   useEffect(() => {
     if (!draftId) {
       return;
@@ -191,6 +286,7 @@ const ApprovalWriteNew = () => {
   }, [draftId]);
 
   // 서식 목록에서 받은 데이터가 오래되었을 수 있어 작성 화면 진입 시 상세 API로 최신 template을 다시 조회합니다.
+  // 이미지 미리보기에 사용한 Object URL을 해제하여 브라우저 메모리 누수를 방지합니다.
   useEffect(() => {
     if (draftId) {
       return;
@@ -220,6 +316,7 @@ const ApprovalWriteNew = () => {
     fetchLatestForm();
   }, [draftId, initialForm?.formId]);
 
+  // 서식 필드가 준비되면 화면 입력값 state를 초기화하고 기존 입력값은 유지합니다.
   useEffect(() => {
     setFieldValues((prev) => ({
       ...createEmptyValues(template.fields),
@@ -236,6 +333,7 @@ const ApprovalWriteNew = () => {
     }
   }, [canAttachFile]);
 
+  // 이미지 미리보기에 사용한 Object URL을 해제하여 브라우저 메모리 누수를 방지합니다.
   useEffect(() => {
     return () => {
       filePreviews.forEach((item) => {
@@ -254,6 +352,7 @@ const ApprovalWriteNew = () => {
     }));
   };
 
+  // 비용 정산/OCR 대상 서식에서는 이미지 또는 PDF 파일만 업로드할 수 있게 검증합니다.
   const canUploadFile = (file) => {
     if (!isExpenseSettlementForm && !isReceiptOcrForm) {
       return true;
@@ -308,6 +407,7 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 새 첨부파일 선택 시 파일 형식을 검증하고 필요하면 OCR 자동 입력을 실행합니다.
   const handleFileChange = (event) => {
     const selectedFiles = Array.from(event.target.files || []);
     const availableFiles = selectedFiles.filter(canUploadFile);
@@ -327,11 +427,13 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 아직 서버에 저장하지 않은 신규 첨부파일을 작성 화면에서 제거합니다.
   const removeFile = (index) => {
     setFiles((prev) => prev.filter((_, fileIndex) => fileIndex !== index));
     setFileInputKey((prev) => prev + 1);
   };
 
+  // 임시저장 문서에 이미 저장되어 있던 첨부파일을 서버와 화면에서 함께 삭제합니다.
   const removeExistingFile = async (fileId) => {
     if (!window.confirm('기존 첨부파일을 삭제하시겠습니까?')) {
       return;
@@ -346,6 +448,7 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 현재 입력된 필드 값을 백엔드 Approval.content에 저장할 JSON 문자열로 변환합니다.
   const buildContent = () => {
     const fields = template.fields.map((field) => ({
       id: field.id,
@@ -362,6 +465,7 @@ const ApprovalWriteNew = () => {
     });
   };
 
+  // 임시저장/상신 API가 공통으로 사용하는 요청 본문을 생성합니다.
   const buildRequestPayload = (approvalLines = []) => ({
     formId: selectedForm.formId,
     title: documentTitle,
@@ -369,6 +473,7 @@ const ApprovalWriteNew = () => {
     approvalLines,
   });
 
+  // 저장 또는 다음 단계 이동 전에 서식 정보와 첨부파일 필수 조건을 검증합니다.
   const validateWriteForm = () => {
     if (!selectedForm?.formId) {
       setErrorMessage('결재 서식 정보가 없습니다.');
@@ -390,10 +495,17 @@ const ApprovalWriteNew = () => {
       return false;
     }
 
+    const rangeErrorMessage = validateDateTimeRanges(template.fields, fieldValues);
+    if (rangeErrorMessage) {
+      setErrorMessage(rangeErrorMessage);
+      return false;
+    }
+
     setErrorMessage('');
     return true;
   };
 
+  // 첨부파일 유무에 따라 JSON 요청 또는 multipart 요청으로 백엔드 API를 호출합니다.
   const requestApprovalApi = async (apiPath, payload, method = 'post') => {
     if (!canAttachFile || files.length === 0) {
       return axiosInstance[method](apiPath, payload);
@@ -413,6 +525,7 @@ const ApprovalWriteNew = () => {
     return axiosInstance[method](apiPath, formData);
   };
 
+  // 작성 중인 문서를 DRAFT 상태로 저장하고 임시저장함으로 이동합니다.
   const saveDraft = async () => {
     if (!validateWriteForm()) {
       return;
@@ -433,6 +546,7 @@ const ApprovalWriteNew = () => {
     }
   };
 
+  // 문서 내용을 검증한 뒤 결재선 설정 화면으로 작성 상태를 전달합니다.
   const moveToLineStep = () => {
     if (!validateWriteForm()) {
       return;
@@ -454,6 +568,7 @@ const ApprovalWriteNew = () => {
     });
   };
 
+  // 서식 필드 타입(text, select, amount 등)에 맞는 입력 컴포넌트를 렌더링합니다.
   const renderField = (field) => {
     // [결재-근태 연동용]: 조퇴 시작 시각, 외근 퇴근 시각처럼 근태 기준값으로 고정해야 하는 필드를 잠급니다.
     const isLocked = lockedFieldIdSet.has(field.id);
@@ -508,6 +623,7 @@ const ApprovalWriteNew = () => {
     );
   };
 
+  // 새로 선택한 첨부파일 목록을 카드 형태로 보여주고 개별 삭제 버튼을 제공합니다.
   const renderFilePreview = () => {
     if (files.length === 0) {
       return null;
@@ -552,6 +668,7 @@ const ApprovalWriteNew = () => {
     );
   };
 
+  // 임시저장 문서에 이미 등록되어 있던 첨부파일 목록을 보여주고 삭제할 수 있게 합니다.
   const renderExistingFiles = () => {
     if (existingFiles.length === 0) {
       return null;

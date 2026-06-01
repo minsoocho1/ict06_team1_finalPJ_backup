@@ -17,6 +17,7 @@ package com.ict06.team1_fin_pj.domain.aiSecretary.service;
 
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.AiChatMessageResponseDto;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.ChatbotAskResponseDto;
+import com.ict06.team1_fin_pj.common.dto.aiSecretary.ChatbotReferenceDto;
 import com.ict06.team1_fin_pj.common.dto.aiSecretary.RagRetrievedChunkDto;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatMessageEntity;
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiLogEntity;
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 
@@ -151,10 +153,44 @@ public class AiChatbotServiceImpl implements AiChatbotService {
             );
         }
 
+        List<ChatbotReferenceDto> references =
+                providerSuccess && !fallback && !ragChunks.isEmpty()
+                        ? buildReferences(ragChunks)
+                        : List.of();
+
         return ChatbotAskResponseDto.builder()
                 .userMessage(AiChatMessageResponseDto.from(savedUserMessage))
                 .aiMessage(AiChatMessageResponseDto.from(savedAiMessage))
+                .references(references)
                 .build();
+    }
+
+    private List<ChatbotReferenceDto> buildReferences(List<RagRetrievedChunkDto> ragChunks) {
+        if (ragChunks == null || ragChunks.isEmpty()) {
+            return List.of();
+        }
+
+        Map<Integer, ChatbotReferenceDto> deduplicated = new LinkedHashMap<>();
+        for (RagRetrievedChunkDto chunk : ragChunks) {
+            if (chunk == null || chunk.getDocumentId() == null) {
+                continue;
+            }
+
+            deduplicated.computeIfAbsent(chunk.getDocumentId(), docId ->
+                    ChatbotReferenceDto.builder()
+                            .docId(docId)
+                            .title(safe(chunk.getDocumentTitle(), "참고 문서 " + docId))
+                            .url(normalizeReferenceUrl(chunk.getFilePath()))
+                            .build()
+            );
+        }
+
+        return List.copyOf(deduplicated.values());
+    }
+
+    private String normalizeReferenceUrl(String filePath) {
+        String normalized = safe(filePath, "");
+        return normalized.isBlank() ? null : normalized;
     }
 
     private String buildPrompt(String userQuestion) {

@@ -14,4 +14,5 @@ public interface AttendanceService {
 
     // 퇴근 처리
     void checkOut(String empNo, Double lat, Double lng);
+
 }
