@@ -36,20 +36,20 @@
     --cw-primary-border: #bfd5ff;
 
     /* 보조 포인트 색상입니다. info 계열과 일부 AI/차트 포인트에 사용합니다. */
-    --cw-accent: #0077a6;
-    --cw-accent-hover: #005d82;
-    --cw-accent-soft: #e7f7fc;
+    --cw-accent: #0dcaf0;
+    --cw-accent-hover: #0aa2c0;
+    --cw-accent-soft: #cff4fc;
 
     /* 상태 색상입니다. 성공/경고/오류 버튼, 배지, alert에 연결됩니다. */
-    --cw-success: #0ba600;
-    --cw-success-hover: #087f00;
-    --cw-success-soft: #e9fbe7;
-    --cw-warning: #DE9100;
-    --cw-warning-hover: #805500;
-    --cw-warning-soft: #fff5df;
-    --cw-danger: #a60062;
-    --cw-danger-hover: #7d004a;
-    --cw-danger-soft: #fff0f8;
+    --cw-success: #198754;
+    --cw-success-hover: #157347;
+    --cw-success-soft: #d1e7dd;
+    --cw-warning: #ffc107;
+    --cw-warning-hover: #cc9a06;
+    --cw-warning-soft: #fff3cd;
+    --cw-danger: #dc3545;
+    --cw-danger-hover: #bb2d3b;
+    --cw-danger-soft: #f8d7da;
 
     /* 텍스트, 사이드바, 포커스 링, 그림자 토큰입니다. */
     --cw-text: #172033;
@@ -90,16 +90,16 @@
     --bs-link-hover-color-rgb: 0, 52, 127;
 
     --bs-success: var(--cw-success);
-    --bs-success-rgb: 11, 166, 0;
+    --bs-success-rgb: 25, 135, 84;
     --bs-success-bg-subtle: var(--cw-success-soft);
     --bs-warning: var(--cw-warning);
-    --bs-warning-rgb: 222, 145, 0;
+    --bs-warning-rgb: 255, 193, 7;
     --bs-warning-bg-subtle: var(--cw-warning-soft);
     --bs-danger: var(--cw-danger);
-    --bs-danger-rgb: 166, 0, 98;
+    --bs-danger-rgb: 220, 53, 69;
     --bs-danger-bg-subtle: var(--cw-danger-soft);
     --bs-info: var(--cw-accent);
-    --bs-info-rgb: 0, 119, 166;
+    --bs-info-rgb: 13, 202, 240;
     --bs-info-bg-subtle: var(--cw-accent-soft);
 
     --bs-focus-ring-color: var(--cw-focus-ring);
