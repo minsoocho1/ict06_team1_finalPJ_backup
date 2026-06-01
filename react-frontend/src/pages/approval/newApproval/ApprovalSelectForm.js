@@ -107,7 +107,7 @@ const ApprovalSelectForm = () => {
     <div style={containerStyle}>
       <header className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">새 결재 문서 작성</h2>
+          <h2 className="user-page-title mb-1">새 결재 문서 작성</h2>
           <div className="text-body-secondary">
             {userInfo?.name ? `${userInfo.name}님, 사용할 결재 서식을 선택하세요.` : '사용할 결재 서식을 선택하세요.'}
           </div>

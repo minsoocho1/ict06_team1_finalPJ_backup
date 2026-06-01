@@ -55,11 +55,11 @@ const Employee = ({ userInfo }) => {
     };
 
     return (
-        <div className="container-fluid">
+        <div className="container-fluid pt-4">
 
             {/* 페이지 제목 */}
             <div className="mb-4">
-                <h2 className="fw-bold">내 정보 및 조직도</h2>
+                <h2 className="user-page-title fw-bold">내 정보 및 조직도</h2>
 
                 <div className="text-medium-emphasis">
                     조직도 및 구성원 정보를 조회할 수 있습니다.

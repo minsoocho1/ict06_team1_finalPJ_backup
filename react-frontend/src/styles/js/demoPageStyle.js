@@ -2,10 +2,10 @@
 // src/styles/js/demoPageStyle.js
 
 export const containerStyle = {
-  padding: '40px',
+  padding: '24px',
   maxWidth: '1600px',
   margin: '0 auto',
-  fontFamily: 'sans-serif'
+  fontFamily: 'var(--cw-user-font-sans)'
 };
 
 export const stepCardStyle = (status) => ({

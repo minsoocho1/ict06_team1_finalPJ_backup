@@ -22,7 +22,7 @@ export const containerStyle = {
   padding: '32px 20px',
   background:
     'radial-gradient(circle at top left, rgba(255,255,255,0.18) 0, rgba(255,255,255,0) 24%), linear-gradient(135deg, #1f2a56 0%, #321fdb 58%, #4f6bff 100%)',
-  fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif',
+  fontFamily: 'var(--cw-user-font-sans)',
 }
 
 export const pageShell = {

@@ -436,6 +436,7 @@ export default function KnowledgeRequestScreen({ userInfo }) {
           자료 등록 요청
         </div>
         <h1
+          className="user-page-title"
           style={{
             margin: "6px 0 0",
             fontSize: 38,

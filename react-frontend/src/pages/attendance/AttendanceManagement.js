@@ -16,11 +16,11 @@ const AttendanceManagement = () => {
     const [userInfo] = useOutletContext();
 
     return (
-        <div style={containerStyle}>    
+        <>
 
             {/* 실제 출근/퇴근 기능 영역 */}
             <Attendance />    
-        </div>
+        </>
     );
 };
 

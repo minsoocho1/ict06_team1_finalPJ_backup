@@ -219,7 +219,7 @@ import { containerStyle } from 'src/styles/js/demoPageStyle';
       {/* 상단 제목 + 근태 메인 이동 버튼 */}
       <div className="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 className="mb-1">
+            <h2 className="user-page-title mb-1">
               {userInfo?.name ? `${userInfo.name}님의 연차 현황` : '연차 현황'}
             </h2>
             <div style={{ fontSize: '14px', color: '#6c757d' }}>

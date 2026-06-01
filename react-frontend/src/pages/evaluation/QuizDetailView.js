@@ -73,7 +73,7 @@ const QuizDetailView = () => {
     <div style={evalResultStyles.detailContainer}>
       <div style={evalResultStyles.detailHeader}>
         <div>
-          <h4 style={evalResultStyles.detailHeaderTitle}>
+          <h4 className="user-page-title" style={evalResultStyles.detailHeaderTitle}>
             {detail.categoryName} 카테고리 평가 상세 결과
           </h4>
           <p style={evalResultStyles.detailHeaderDescription}>

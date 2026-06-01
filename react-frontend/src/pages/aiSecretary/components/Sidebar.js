@@ -11,7 +11,12 @@
  * @ 2026.05.07    송혜진      문서 유형 type 값을 REPORT / MINUTES / APPROVAL 기준으로 정리
  */
 
-import React from "react";
+import React, { useState } from "react";
+import CIcon from "@coreui/icons-react";
+import {
+  cilArrowThickFromLeft,
+  cilArrowThickFromRight,
+} from "@coreui/icons";
 import { docMeta } from "../constants/aiSecretaryData";
 import { I, Icon } from "../constants/aiSecretaryIcons";
 import { C, styles } from "../styles/aiSecretaryTheme";
@@ -111,20 +116,82 @@ export default function Sidebar({
   recents = [],
   onRecentClick,
 }) {
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const safeRecents = Array.isArray(recents) ? recents : [];
   const latestRecents = safeRecents.slice(0, 3);
 
   return (
-    <aside style={styles.sidebar}>
-      <div style={{ padding: 22, borderBottom: `1px solid ${C.border}` }}>
-        <div style={{ fontSize: 20, fontWeight: 900, color: C.text }}>
-          사내 AI 포털
+    <aside
+      style={{
+        ...styles.sidebar,
+        width: sidebarOpen ? 272 : 58,
+        padding: sidebarOpen ? 0 : "14px 10px",
+        overflow: "hidden",
+        transition: "width 150ms ease",
+        willChange: "width",
+      }}
+    >
+      <div
+        style={{
+          padding: sidebarOpen ? 22 : 0,
+          borderBottom: sidebarOpen ? `1px solid ${C.border}` : "none",
+          display: "flex",
+          alignItems: sidebarOpen ? "flex-start" : "center",
+          justifyContent: sidebarOpen ? "space-between" : "center",
+          gap: 12,
+          transition: "padding 150ms ease, border-color 150ms ease",
+        }}
+      >
+        <div
+          style={{
+            opacity: sidebarOpen ? 1 : 0,
+            width: sidebarOpen ? 188 : 0,
+            overflow: "hidden",
+            whiteSpace: "nowrap",
+            transition: "opacity 120ms ease, width 150ms ease",
+          }}
+        >
+          <div style={{ fontSize: 20, fontWeight: 900, color: C.text }}>
+            사내 AI 포털
+          </div>
+          <div style={{ marginTop: 6, fontSize: 12, color: C.sub }}>
+            AI 비서와 챗봇을 한 곳에서 사용합니다.
+          </div>
         </div>
-        <div style={{ marginTop: 6, fontSize: 12, color: C.sub }}>
-          AI 비서와 챗봇을 한 곳에서 사용합니다.
-        </div>
+
+        <button
+          type="button"
+          onClick={() => setSidebarOpen((prev) => !prev)}
+          title={sidebarOpen ? "사내 AI 포털 사이드바 접기" : "사내 AI 포털 사이드바 펼치기"}
+          aria-label={sidebarOpen ? "사내 AI 포털 사이드바 접기" : "사내 AI 포털 사이드바 펼치기"}
+          style={{
+            width: 36,
+            height: 36,
+            border: `0px solid ${C.border}`,
+            borderRadius: 10,
+            background: "#fff",
+            color: C.accent,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            flexShrink: 0,
+            transition: "border-color 120ms ease, color 120ms ease, background-color 120ms ease",
+          }}
+        >
+          <CIcon icon={sidebarOpen ? cilArrowThickFromRight : cilArrowThickFromLeft} />
+        </button>
       </div>
 
+      <div
+        style={{
+          opacity: sidebarOpen ? 1 : 0,
+          pointerEvents: sidebarOpen ? "auto" : "none",
+          transform: sidebarOpen ? "translateX(0)" : "translateX(-8px)",
+          transition: "opacity 120ms ease, transform 150ms ease",
+        }}
+        aria-hidden={!sidebarOpen}
+      >
       <div style={{ padding: 16, display: "grid", gap: 8 }}>
         {topItems.map((item) =>
           renderMenuButton(item, tab === item.id, onTabChange)
@@ -236,6 +303,7 @@ export default function Sidebar({
             )}
           </div>
         </div>
+      </div>
       </div>
     </aside>
   );

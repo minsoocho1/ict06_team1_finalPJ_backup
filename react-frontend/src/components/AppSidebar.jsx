@@ -86,15 +86,7 @@ const AppSidebar = ({ userInfo }) => {
       </CSidebarBrand>
 
       <div className="p-3 border-bottom sidebar-profile-area">
-        <div
-          className="mb-3"
-          style={{
-            background: '#f4f6fb',
-            border: '1px solid #e4e8f3',
-            borderRadius: '16px',
-            padding: '14px',
-          }}
-        >
+        <div className="mb-3 sidebar-profile-card">
           <div className="d-flex align-items-center gap-3">
             <CAvatar
               color="secondary"

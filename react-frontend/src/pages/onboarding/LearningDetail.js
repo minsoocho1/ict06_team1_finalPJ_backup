@@ -708,7 +708,7 @@ const LearningDetail = () => {
       >
         <div>
           <small className="text-muted">Onboarding Step {contentId}</small>
-          <h2 style={{ fontWeight: 'bold' }}>{displayTitle}</h2>
+          <h2 className="user-page-title" style={{ fontWeight: 'bold' }}>{displayTitle}</h2>
         </div>
         <CButton color="secondary" variant="outline" onClick={() => navigate(PATH.ONBOARDING.ROADMAP)}>
           목록으로

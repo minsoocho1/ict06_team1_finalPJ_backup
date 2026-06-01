@@ -726,7 +726,7 @@ const ApprovalWriteNew = () => {
     <div style={containerStyle}>
       <header className="d-flex justify-content-between align-items-center mb-4">
         <div>
-          <h2 className="mb-1">{documentTitle || '결재 문서 작성'}</h2>
+          <h2 className="user-page-title mb-1">{documentTitle || '결재 문서 작성'}</h2>
           <div className="text-body-secondary">
             {selectedForm?.formName || '서식 미선택'}
             {userInfo?.name ? ` · 작성자 ${userInfo.name}` : ''}

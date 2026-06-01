@@ -33,7 +33,7 @@ export const dropdownLogoutItemStyle = {
 }
 
 export const logoutModalDialogStyle = {
-  fontFamily: 'Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif',
+  fontFamily: 'var(--cw-user-font-sans)',
 }
 
 export const logoutBackdropStyle = {
