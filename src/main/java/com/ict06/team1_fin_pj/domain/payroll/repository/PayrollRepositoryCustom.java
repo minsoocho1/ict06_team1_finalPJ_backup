@@ -38,4 +38,12 @@ public interface PayrollRepositoryCustom {
     // 선택 지급월 기준 근태연동 계산용 근태 집계
     PayrollAttendanceSummaryDTO selectAttendanceSummary(String empNo,  java.time.LocalDate startDate, java.time.LocalDate endDate);
 
+    // 현재 지급월 이전의 확정/지급완료 급여월 조회
+    List<PayrollClosedMonthDTO> selectClosedPayrollMonthsBefore(String empNo, String currentPayMonth);
+
+    // 특정 확정/지급완료 월의 저장된 지급/공제항목 snapshot 조회
+    List<PayrollItemLoadResponseDTO.Item> selectPayrollItemSnapshots(String empNo, String payMonth);
+
+    // 특정 발생월 조정항목이 이미 반영되었는지 확인
+    boolean existsAdjustmentItem(String empNo, String itemNameSnapshot);
 }
