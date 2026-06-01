@@ -8,6 +8,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.YearMonth;
 import java.util.ArrayList;
@@ -48,10 +50,14 @@ public class UserPayrollStatementServiceImpl implements UserPayrollStatementServ
 
         // 급여대장이 있는 경우에만 지급/공제 snapshot을 조회한다.
         if (statement.getPayrollId() != null) {
+
             List<PayrollStatementResponseDTO.Item> items =
                     payrollSummaryRepository.selectPayrollStatementItems(
                             statement.getPayrollId()
                     );
+
+            // 근태연동 항목의 분/일수 역산
+            setAttendanceCount(items);
 
             splitStatementItems(statement, items);
         }
@@ -309,6 +315,58 @@ public class UserPayrollStatementServiceImpl implements UserPayrollStatementServ
 
         statement.setEmptyAllowanceRowCount(0);
         statement.setEmptyDeductionRowCount(0);
+    }
+
+    // 근태연동 분/일수 역산
+    private void setAttendanceCount(List<PayrollStatementResponseDTO.Item> items) {
+
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+
+        for (PayrollStatementResponseDTO.Item item : items) {
+
+            if (item == null
+                    || item.getItemName() == null
+                    || item.getAmount() == null
+                    || item.getAmount().compareTo(BigDecimal.ZERO) == 0
+                    || item.getAppliedAmount() == null) {
+
+                if (item != null) {
+                    item.setAttendanceCount(BigDecimal.ZERO);
+                }
+
+                continue;
+            }
+
+            BigDecimal unitAmount = item.getAmount();
+            BigDecimal appliedAmount = item.getAppliedAmount();
+            String itemName = item.getItemName();
+
+            if (itemName.startsWith("연장수당")
+                    || itemName.startsWith("조정수당")) {
+
+                item.setAttendanceCount(
+                        appliedAmount
+                                .multiply(BigDecimal.valueOf(60))
+                                .divide(unitAmount, 0, RoundingMode.HALF_UP)
+                );
+
+                continue;
+            }
+
+            if (itemName.startsWith("결근공제")
+                    || itemName.startsWith("조정공제")) {
+
+                item.setAttendanceCount(
+                        appliedAmount.divide(unitAmount, 0, RoundingMode.HALF_UP)
+                );
+
+                continue;
+            }
+
+            item.setAttendanceCount(BigDecimal.ZERO);
+        }
     }
 
 

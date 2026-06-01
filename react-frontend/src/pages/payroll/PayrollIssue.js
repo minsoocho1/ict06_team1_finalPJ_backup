@@ -60,6 +60,9 @@ const PayrollIssue = () => {
     const [insuranceOpen, setInsuranceOpen] = useState(false);
     const [taxOpen, setTaxOpen] = useState(false);
 
+    // 근태연동 지급/공제 계산 과정 펼치기/접기
+    const [attendanceOpen, setAttendanceOpen] = useState(false);
+
     // 화면 최초 진입 시 조회년월 옵션 + 기본 급여명세서 조회
     useEffect(() => {
         fetchInitialData();
@@ -136,6 +139,10 @@ const PayrollIssue = () => {
         );
 
         setStatement(res.data);
+
+        setInsuranceOpen(false);
+        setAttendanceOpen(false);
+        setTaxOpen(false);
 
         if (updateLoaded) {
             setLoadedYear(Number(payYear));
@@ -221,6 +228,85 @@ const PayrollIssue = () => {
 
         return Number(value).toLocaleString();
     };
+
+    /**
+     * 급여명세서 표시용 금액 반환
+     *
+     * 기존 item.amount:
+     * - 일반항목은 실제 금액
+     * - 연장수당/결근공제/조정수당/조정공제는 단가
+     *
+     * 따라서 백단에서 계산한 실제 반영금액(appliedAmount)이 있으면
+     * 명세서에는 appliedAmount를 우선 표시한다.
+     */
+    const getStatementItemAmount = (item) => {
+
+        if (!item) {
+            return 0;
+        }
+
+        if (item.appliedAmount !== null
+            && item.appliedAmount !== undefined
+            && item.appliedAmount !== '') {
+
+            return item.appliedAmount;
+        }
+
+        // 과거 데이터 호환용 fallback
+        return item.amount || 0;
+    };
+
+    /**
+     * 근태연동 항목 여부
+     *
+     * 사용자 명세서에서는 백단 linkedAttendanceType이 없을 수도 있으므로
+     * 항목명 기준도 같이 사용한다.
+     */
+    const isAttendanceLinkedItem = (item) => {
+
+        if (!item || !item.itemName) {
+            return false;
+        }
+
+        return item.linkedAttendanceType === 'OVERTIME'
+            || item.linkedAttendanceType === 'ABSENCE'
+            || item.itemName.startsWith('연장수당')
+            || item.itemName.startsWith('조정수당')
+            || item.itemName.startsWith('결근공제')
+            || item.itemName.startsWith('조정공제');
+    };
+
+    /**
+     * 근태연동 계산 수량
+     *
+     * 백단에서 역산한 attendanceCount 사용
+     * - 연장수당 / 조정수당 → 분
+     * - 결근공제 / 조정공제 → 일
+     */
+    const getAttendanceCount = (item) => {
+
+        if (!item) {
+            return 0;
+        }
+
+        return Number(item.attendanceCount || 0);
+    };
+
+    /**
+     * 연장/조정수당 여부
+     */
+    const isOvertimeAmountItem = (item) => {
+
+        if (!item || !item.itemName) {
+            return false;
+        }
+
+        return item.linkedAttendanceType === 'OVERTIME'
+            || item.itemName.startsWith('연장수당')
+            || item.itemName.startsWith('조정수당');
+    };
+
+
 
     // 지급/공제 표의 행 개수를 맞추기 위한 빈 행 개수 계산
     const getEmptyRowCount = (currentCount, targetCount) => {
@@ -808,7 +894,7 @@ const PayrollIssue = () => {
                                                         <CTableRow key={index}>
                                                             <CTableDataCell className="text-center">{item.itemName}</CTableDataCell>
                                                             <CTableDataCell className="text-end">
-                                                                {numberFormat(item.amount)}원
+                                                                {numberFormat(getStatementItemAmount(item))}원
                                                             </CTableDataCell>
                                                             <CTableDataCell className="text-center">
                                                                 {item.taxType === 'NON_TAXABLE' ? '비과세' : '과세'}
@@ -851,7 +937,7 @@ const PayrollIssue = () => {
                                                         <CTableRow key={index}>
                                                             <CTableDataCell className="text-center">{item.itemName}</CTableDataCell>
                                                             <CTableDataCell className="text-end">
-                                                                {numberFormat(item.amount)}원
+                                                                {numberFormat(getStatementItemAmount(item))}원
                                                             </CTableDataCell>
                                                             <CTableDataCell className="text-center">-</CTableDataCell>
                                                         </CTableRow>
@@ -956,6 +1042,144 @@ const PayrollIssue = () => {
 
                                             </CTableBody>
                                         </CTable>
+                                    </CCardBody>
+                                )}
+
+                            </CCard>
+
+                            {/* 근태연동 지급/공제 계산내역 */}
+                            <CCard className="mb-3">
+
+                                <CCardHeader
+                                    className="d-flex justify-content-between align-items-center"
+                                    style={{
+                                        cursor: 'pointer',
+                                        minHeight: '32px',
+                                        paddingTop: '6px',
+                                        paddingBottom: '6px',
+                                    }}
+                                    onClick={() =>
+                                        setAttendanceOpen(!attendanceOpen)
+                                    }
+                                >
+                                    <strong>
+                                        근태연동 지급/공제 계산내역
+                                    </strong>
+
+                                    <span>
+                                        {attendanceOpen ? '▲' : '▼'}
+                                    </span>
+                                </CCardHeader>
+
+                                {attendanceOpen && (
+                                    <CCardBody>
+
+                                        <CTable
+                                            bordered
+                                            responsive
+                                            align="middle"
+                                        >
+                                            <CTableHead>
+                                                <CTableRow>
+
+                                                    <CTableHeaderCell className="text-center">
+                                                        구분
+                                                    </CTableHeaderCell>
+
+                                                    <CTableHeaderCell className="text-center">
+                                                        계산 설명
+                                                    </CTableHeaderCell>
+
+                                                    <CTableHeaderCell className="text-center">
+                                                        계산식
+                                                    </CTableHeaderCell>
+
+                                                    <CTableHeaderCell className="text-center">
+                                                        금액(원)
+                                                    </CTableHeaderCell>
+
+                                                    <CTableHeaderCell className="text-center">
+                                                        비고
+                                                    </CTableHeaderCell>
+
+                                                </CTableRow>
+                                            </CTableHead>
+
+                                            <CTableBody>
+
+                                                {/* 지급 항목 */}
+                                                {(statement.allowanceItems || [])
+                                                    .filter(item =>
+                                                        isAttendanceLinkedItem(item)
+                                                    )
+                                                    .map((item, index) => {
+
+                                                        const count =
+                                                            getAttendanceCount(item);
+
+                                                        const isOvertime =
+                                                            isOvertimeAmountItem(item);
+
+                                                        return (
+                                                            <CalcRow
+                                                                key={`attendance-allowance-${index}`}
+                                                                title={item.itemName}
+                                                                description={
+                                                                    isOvertime
+                                                                        ? '연장분 × 60분당 단가 / 60분'
+                                                                        : '결근일수 × 하루당 공제단가'
+                                                                }
+                                                                formula={
+                                                                    isOvertime
+                                                                        ? `${numberFormat(count)}분 × ${numberFormat(item.amount)}원 / 60분`
+                                                                        : `${numberFormat(count)}일 × ${numberFormat(item.amount)}원`
+                                                                }
+                                                                amount={
+                                                                    item.appliedAmount
+                                                                }
+                                                                note="근태연동"
+                                                            />
+                                                        );
+                                                    })}
+
+                                                {/* 공제 항목 */}
+                                                {(statement.deductionItems || [])
+                                                    .filter(item =>
+                                                        isAttendanceLinkedItem(item)
+                                                    )
+                                                    .map((item, index) => {
+                                                        const count =
+                                                            getAttendanceCount(item);
+
+                                                        const isOvertime =
+                                                            isOvertimeAmountItem(item);
+
+                                                        return (
+                                                            <CalcRow
+                                                                key={`attendance-deduction-${index}`}
+                                                                title={item.itemName}
+                                                                description={
+                                                                    isOvertime
+                                                                        ? '연장분 × 60분당 단가 / 60분'
+                                                                        : '결근일수 × 하루당 공제단가'
+                                                                }
+                                                                formula={
+                                                                    isOvertime
+                                                                        ? `${numberFormat(count)}분 × ${numberFormat(item.amount)}원 / 60분`
+                                                                        : `${numberFormat(count)}일 × ${numberFormat(item.amount)}원`
+                                                                }
+                                                                amount={
+                                                                    item.appliedAmount
+                                                                }
+                                                                note="근태연동"
+                                                            />
+                                                        );
+                                                    })}
+
+                                            </CTableBody>
+
+                                        </CTable>
+
                                     </CCardBody>
                                 )}
 
@@ -1150,7 +1374,7 @@ const PayrollIssue = () => {
                                                     {(statement.allowanceItems || []).map((item, index) => (
                                                         <tr key={`print-allowance-${index}`}>
                                                             <td>{item.itemName}</td>
-                                                            <td>{numberFormat(item.amount)}</td>
+                                                            <td>{numberFormat(getStatementItemAmount(item))}</td>
                                                             <td>{item.taxType === 'NON_TAXABLE' ? '비과세' : '과세'}</td>
                                                         </tr>
                                                     ))}
@@ -1189,7 +1413,7 @@ const PayrollIssue = () => {
                                                     {(statement.deductionItems || []).map((item, index) => (
                                                         <tr key={`print-deduction-${index}`}>
                                                             <td>{item.itemName}</td>
-                                                            <td>{numberFormat(item.amount)}</td>
+                                                            <td>{numberFormat(getStatementItemAmount(item))}</td>
                                                             <td>-</td>
                                                         </tr>
                                                     ))}
@@ -1299,6 +1523,68 @@ const PayrollIssue = () => {
                                                 <td>{numberFormat(statement.employmentInsuranceAmount)}</td>
                                                 <td>0.9%</td>
                                             </tr>
+
+                                            {/* 연장수당 / 조정수당 계산방법 */}
+                                            {(statement.allowanceItems || [])
+                                                .filter(item => isAttendanceLinkedItem(item))
+                                                .map((item, index) => {
+
+                                                    const count = getAttendanceCount(item);
+                                                    const isOvertime = isOvertimeAmountItem(item);
+
+                                                    return (
+                                                        <tr key={`print-attendance-allowance-${index}`}>
+                                                            <td>{item.itemName}</td>
+
+                                                            <td>
+                                                                {isOvertime
+                                                                    ? '연장분 × 60분당 단가 / 60분'
+                                                                    : '결근일수 × 하루당 공제단가'}
+                                                            </td>
+
+                                                            <td>
+                                                                {isOvertime
+                                                                    ? `${numberFormat(count)}분 × ${numberFormat(item.amount)}원 / 60분`
+                                                                    : `${numberFormat(count)}일 × ${numberFormat(item.amount)}원`}
+                                                            </td>
+
+                                                            <td>{numberFormat(getStatementItemAmount(item))}</td>
+
+                                                            <td>근태연동</td>
+                                                        </tr>
+                                                    );
+                                                })}
+
+                                            {/* 결근공제 / 조정공제 계산방법 */}
+                                            {(statement.deductionItems || [])
+                                                .filter(item => isAttendanceLinkedItem(item))
+                                                .map((item, index) => {
+
+                                                    const count = getAttendanceCount(item);
+                                                    const isOvertime = isOvertimeAmountItem(item);
+
+                                                    return (
+                                                        <tr key={`print-attendance-deduction-${index}`}>
+                                                            <td>{item.itemName}</td>
+
+                                                            <td>
+                                                                {isOvertime
+                                                                    ? '연장분 × 60분당 단가 / 60분'
+                                                                    : '결근일수 × 하루당 공제단가'}
+                                                            </td>
+
+                                                            <td>
+                                                                {isOvertime
+                                                                    ? `${numberFormat(count)}분 × ${numberFormat(item.amount)}원 / 60분`
+                                                                    : `${numberFormat(count)}일 × ${numberFormat(item.amount)}원`}
+                                                            </td>
+
+                                                            <td>{numberFormat(getStatementItemAmount(item))}</td>
+
+                                                            <td>근태연동</td>
+                                                        </tr>
+                                                    );
+                                                })}
                                         </tbody>
                                     </table>
 
@@ -1328,7 +1614,7 @@ const PayrollIssue = () => {
     }
 
     // 계산 과정 행
-    function CalcRow({ title, description, formula, amount }) {
+    function CalcRow({ title, description, formula, amount, note }) {
         return (
             <CTableRow>
                 <CTableDataCell className="text-center fw-semibold">
@@ -1345,6 +1631,10 @@ const PayrollIssue = () => {
 
                 <CTableDataCell className="text-end">
                     {numberFormat(amount)}원
+                </CTableDataCell>
+
+                <CTableDataCell className="text-center">
+                    {note || '-'}
                 </CTableDataCell>
             </CTableRow>
         );

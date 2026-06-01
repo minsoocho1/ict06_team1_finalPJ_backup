@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.util.StringUtils;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -264,6 +265,13 @@ public class PayrollSummaryRepositoryCustomImpl implements PayrollSummaryReposit
                         payrollItemEntity.itemNameSnapshot.as("itemName"),
                         payrollItemEntity.itemType.as("itemType"),
                         payrollItemEntity.amount.as("amount"),
+                        payrollItemEntity.taxableAmount
+                                .coalesce(BigDecimal.ZERO)
+                                .add(
+                                        payrollItemEntity.nonTaxableAmount
+                                                .coalesce(BigDecimal.ZERO)
+                                )
+                                .as("appliedAmount"),
                         payrollItemEntity.taxType.as("taxType"),
                         payrollItemEntity.nonTaxCode.as("nonTaxCode"),
 

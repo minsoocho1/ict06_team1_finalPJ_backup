@@ -69,12 +69,34 @@ $(document).ready(function () {
     // 지급/공제항목 변경 선택 여부
     let itemSettingDecisionRequired = false;
     let itemSettingDecisionCompleted = true;
+    let suppressItemSettingWarningOnce = false;
+    let suppressResetWarningOnce = false;
+    let itemSettingChangedByCurrentScreenKey = null;
+
+    // 저장 직후 첫 재조회에서는 근태변경 알림/초기화를 막는다.
+    let suppressAttendanceInvalidationOnce = false;
+
+    // 현재 사원/월에 처음 진입했을 때 항목변경권고가 떴는지 기억
+    let initialItemSettingWarningKey = null;
+    let initialItemSettingWarningRequired = false;
+
+    function getCurrentPayrollScreenKey() {
+
+        if (!currentEmpNo || !currentPayMonth) {
+            return null;
+        }
+
+        return currentEmpNo + '|' + currentPayMonth;
+    }
 
     // 현재 화면에 표시 중인 지급/공제항목
     let currentPayrollItems = [];
 
+    let lastAttendanceImpactSnapshotJson = '';
+
     // 마지막으로 조회/저장된 급여대장 화면 상태 - DRAFT에서 변경 없이 저장하는 것을 막기 위해 사용
     let lastSavedPayrollSnapshotJson = '';
+    let skipNextSnapshotUpdate = false;
 
     /**
      * 작성년월 선택 제어용 상태값
@@ -462,7 +484,6 @@ $(document).ready(function () {
         * 작성년월이 바뀌면 아직 해당 기간을 조회하지 않은 상태다.
         * 따라서 계산결과를 초기화하고 조회 버튼 상태를 다시 계산한다.
         */
-       resetPreviewResult();
 
        updatePeriodSearchButtonState();
 
@@ -477,7 +498,6 @@ $(document).ready(function () {
          * 작성월이 바뀌면 아직 해당 기간을 조회하지 않은 상태다.
          * 따라서 계산결과를 초기화하고 조회 버튼 상태를 다시 계산한다.
          */
-        resetPreviewResult();
 
         updatePeriodSearchButtonState();
 
@@ -872,8 +892,6 @@ $(document).ready(function () {
              .removeClass('d-none');
    }
 
-
-
    /**
     * 변경된 기본급 적용
     */
@@ -887,11 +905,13 @@ $(document).ready(function () {
        $('#baseSalaryInput').val(numberFormat(currentBaseSalaryInfo.policyBaseSalary));
 
        baseSalaryDecisionCompleted = true;
+       baseSalaryDecisionRequired = false;
 
        $('#baseSalaryWarningBox').addClass('d-none');
 
        resetPreviewResult();
        applyButtonState(currentPayrollStatus);
+       savePayrollTempState();
    });
 
    /**
@@ -954,29 +974,184 @@ $(document).ready(function () {
            },
            success: function (result) {
 
-               currentPayrollItems = result.items || [];
+              currentPayrollItems = result.items || [];
 
-               renderPayrollItems(currentPayrollItems);
+              console.log('===== items 응답 확인 =====');
+              console.log('attendanceInvalidationRequired =', result.attendanceInvalidationRequired);
+              console.log('attendanceInvalidationMessage =', result.attendanceInvalidationMessage);
+              console.log('currentPayrollStatus =', currentPayrollStatus);
 
-               renderItemSettingWarning(result);
+              renderPayrollItems(currentPayrollItems);
 
-               applyButtonState(currentPayrollStatus);
+              /**
+               * 항목변경 권고는 초기화 후에도 정상 표시되어야 한다.
+               * - 지급/공제항목 설정이 바뀐 상태라면 권고 표시
+               * - 초기화 버튼을 눌렀다고 항목변경 권고까지 숨기면 안 된다.
+               */
+              renderItemSettingWarning(result);
 
-               setTimeout(function () {
+             if (currentPayrollStatus === 'DRAFT'
+                     && result.attendanceInvalidationRequired === true) {
 
-                   const restoredRequestData = collectPayrollRequestDataForSnapshot();
+                 /**
+                  * 저장 직후 첫 재조회는 예외
+                  *
+                  * 이유:
+                  * 계산미리보기 → 저장 직후에는
+                  * 같은 근태 데이터로 다시 초기화되면 안 된다.
+                  */
+                 if (suppressAttendanceInvalidationOnce) {
 
-                   if (restoredRequestData) {
-                       lastSavedPayrollSnapshotJson =
-                           makePayrollSnapshot(restoredRequestData);
-                   }
+                     suppressAttendanceInvalidationOnce = false;
 
-               }, 100);
+                 } else {
+
+                     /**
+                      * 기존 계산결과 무효화
+                      *
+                      * 연장/결근/조정 누적분이 달라졌으므로
+                      * 기존 4대보험은 신뢰할 수 없다.
+                      */
+                     resetPreviewResult();
+
+                     clearInsuranceFields();
+
+                     previewCompleted = false;
+                     previewResult = null;
+                     previewModalResult = null;
+                     lastAppliedPreviewResultJson = '';
+
+                     /**
+                      * [추가]
+                      * 화면만이 아니라 DB의 저장 4대보험도 제거
+                      *
+                      * 중요:
+                      * - DRAFT 상태만
+                      * - 근태/조정 변경 감지 시만
+                      * - 저장/확정/지급확정에서는 절대 호출 안 함
+                      */
+                     resetAttendanceCalculation();
+
+                     $('#previewStateBadge')
+                         .removeClass('text-bg-success')
+                         .addClass('text-bg-secondary')
+                         .text('계산 필요');
+
+                     if (!suppressResetWarningOnce) {
+                         alert(result.attendanceInvalidationMessage
+                             || '저장 이후 근태연동 값이 변경되어 계산 미리보기가 다시 필요합니다.');
+                     }
+                 }
+             }
+
+              /**
+               * 초기화 alert suppress는 한 번만 사용한다.
+               */
+              suppressResetWarningOnce = false;
+
+              applyButtonState(currentPayrollStatus);
+
+              setTimeout(function () {
+
+                  if (skipNextSnapshotUpdate) {
+                      skipNextSnapshotUpdate = false;
+                      return;
+                  }
+
+                  const restoredRequestData = collectPayrollRequestDataForSnapshot();
+
+                  if (restoredRequestData) {
+                      lastSavedPayrollSnapshotJson =
+                          makePayrollSnapshot(restoredRequestData);
+                  }
+
+              }, 100);
           },
            error: function (xhr) {
                alert(xhr.responseText || '지급/공제항목 조회 중 오류가 발생했습니다.');
            }
        });
+   }
+
+   /**
+    * 근태연동/조정항목 변경 시 계산결과 초기화
+    *
+    * 기준:
+    * - DRAFT 상태만 대상
+    * - 저장된 4대보험 값이 화면에 있는 경우만 대상
+    * - 연장분/결근일수/조정항목 구성이 이전 조회와 달라지면 초기화
+    */
+   function invalidatePreviewIfAttendanceImpactChanged() {
+
+       if (currentPayrollStatus !== 'DRAFT') {
+           return;
+       }
+
+       if (!previewCompleted || !previewResult) {
+           lastAttendanceImpactSnapshotJson = makeAttendanceImpactSnapshot();
+           return;
+       }
+
+       const currentSnapshotJson = makeAttendanceImpactSnapshot();
+
+       if (!lastAttendanceImpactSnapshotJson) {
+           lastAttendanceImpactSnapshotJson = currentSnapshotJson;
+           return;
+       }
+
+       if (lastAttendanceImpactSnapshotJson !== currentSnapshotJson) {
+           resetPreviewResult();
+       }
+
+       lastAttendanceImpactSnapshotJson = currentSnapshotJson;
+   }
+
+   /**
+    * 4대보험 계산에 영향을 주는 근태/조정 항목만 snapshot으로 만든다.
+    */
+   function makeAttendanceImpactSnapshot() {
+
+       const items = [];
+
+       $('.payroll-item-row').each(function () {
+
+           const row = $(this);
+
+           const linkedAttendanceType =
+               row.data('linked-attendance-type') || '';
+
+           const derivedAdjustment =
+               row.data('derived-adjustment') === true
+               || row.data('derived-adjustment') === 'true';
+
+           if (linkedAttendanceType !== 'OVERTIME'
+                   && linkedAttendanceType !== 'ABSENCE'
+                   && !derivedAdjustment) {
+               return;
+           }
+
+           const countText =
+               row.find('.attendance-count-input').val() || '0';
+
+           const attendanceCount =
+               Number(
+                   removeComma(
+                       countText
+                           .replace('분', '')
+                           .replace('일', '')
+                   ) || '0'
+               );
+
+           items.push({
+               itemNameSnapshot: String(row.data('item-name') || ''),
+               linkedAttendanceType: linkedAttendanceType,
+               derivedAdjustment: derivedAdjustment,
+               sourcePayMonth: String(row.data('source-pay-month') || ''),
+               attendanceCount: attendanceCount
+           });
+       });
+
+       return JSON.stringify(items);
    }
 
    /**
@@ -990,63 +1165,70 @@ $(document).ready(function () {
        itemSettingDecisionRequired = false;
        itemSettingDecisionCompleted = true;
 
-       if (!result || !result.itemSettingChanged) {
+       const currentKey = getCurrentPayrollScreenKey();
+       const serverWarningRequired = !!(result && result.itemSettingChanged);
+
+        if (currentKey && currentKey === itemSettingChangedByCurrentScreenKey) {
+            initialItemSettingWarningKey = currentKey;
+            initialItemSettingWarningRequired = false;
+
+            itemSettingDecisionRequired = false;
+            itemSettingDecisionCompleted = true;
+
+            $('#itemSettingWarningBox').addClass('d-none');
+            $('#itemSettingWarningMessage').text('');
+
+            return;
+        }
+       /**
+        * 사원/월이 바뀐 첫 조회라면
+        * 그 순간의 항목변경권고 여부를 저장한다.
+        *
+        * 규칙:
+        * - 처음 진입 시 권고가 떴으면 초기화 후에도 다시 뜬다.
+        * - 처음 진입 시 권고가 안 떴으면
+        *   항목설정 조작 후 초기화해도 갑자기 권고를 띄우지 않는다.
+        */
+       if (initialItemSettingWarningKey !== currentKey) {
+           initialItemSettingWarningKey = currentKey;
+           initialItemSettingWarningRequired = serverWarningRequired;
+       }
+
+       /**
+        * 항목설정 모달에서 직접 저장한 직후에는
+        * 이미 현재 화면에 변경사항을 직접 반영한 것이므로
+        * 경고를 다시 띄우지 않는다.
+        */
+      if (suppressItemSettingWarningOnce) {
+
+          if (currentKey && currentKey === itemSettingChangedByCurrentScreenKey) {
+              suppressItemSettingWarningOnce = false;
+              return;
+          }
+
+          suppressItemSettingWarningOnce = false;
+      }
+
+       /**
+        * 현재 사원/월에 처음 들어왔을 때 항목변경권고가 없었다면,
+        * 중간에 항목설정을 조작하고 초기화하더라도
+        * updatedAt 때문에 갑자기 권고를 띄우지 않는다.
+        */
+       if (!initialItemSettingWarningRequired) {
+           return;
+       }
+
+       if (!serverWarningRequired) {
            return;
        }
 
        $('#itemSettingWarningBox').removeClass('d-none');
-       $('#itemSettingWarningMessage').text(result.warningMessage || '지급/공제항목 설정이 변경되었습니다.');
+       $('#itemSettingWarningMessage').text(
+           result.warningMessage || '지급/공제항목 설정이 변경되었습니다.'
+       );
 
        itemSettingDecisionRequired = true;
        itemSettingDecisionCompleted = false;
-   }
-
-   /**
-    * 지급/공제항목 설정 변경 확인 처리
-    *
-    * 역할:
-    * - 사용자가 '최신 설정 적용' 또는 '기존 항목 유지'를 눌렀을 때
-    * - 백단에서 PAYROLL.updatedAt을 갱신하게 한다.
-    * - 같은 항목 설정 변경 건에 대해 경고가 반복 표시되지 않게 한다.
-    */
-   function confirmItemSettingDecision(decision) {
-
-       const requestData = {
-           empNo: currentEmpNo,
-           payYear: Number($('#payYear').val()),
-           payMonth: Number($('#payMonth').val()),
-           itemSettingDecision: decision
-       };
-
-       $.ajax({
-           url: '/admin/payroll/main/item-settings/decision',
-           type: 'POST',
-           contentType: 'application/json',
-           data: JSON.stringify(requestData),
-           success: function () {
-
-               itemSettingDecisionCompleted = true;
-               itemSettingDecisionRequired = false;
-
-               $('#itemSettingWarningBox').addClass('d-none');
-
-              loadPayrollItems(
-                  Number($('#payYear').val()),
-                  Number($('#payMonth').val())
-              );
-
-              /**
-               * 최신 설정 적용(APPLY)은 항목 구조가 바뀌므로 계산결과 초기화.
-               * 기존 항목 유지(KEEP)는 snapshot이 그대로라 계산결과를 굳이 초기화하지 않는다.
-               */
-              if (decision === 'APPLY') {
-                  resetPreviewResult();
-              }
-           },
-           error: function (xhr) {
-               alert(xhr.responseText || '지급/공제항목 설정 변경 확인 처리 중 오류가 발생했습니다.');
-           }
-       });
    }
 
    /**
@@ -1054,16 +1236,94 @@ $(document).ready(function () {
     */
    $('#applyLatestItemSettingBtn').on('click', function () {
 
-       confirmItemSettingDecision('APPLY');
+       itemSettingDecisionCompleted = true;
+       itemSettingDecisionRequired = false;
+
+       $('#itemSettingWarningBox').addClass('d-none');
+
+       /**
+        * 항목 구조가 바뀌면 기존 4대보험/세금/실수령액은 무효다.
+        */
+       resetPreviewResult();
+
+       /**
+        * 최신 항목 임시 반영 상태를
+        * 마지막 저장 snapshot으로 기록하면 안 된다.
+        */
+       skipNextSnapshotUpdate = true;
+       lastSavedPayrollSnapshotJson = '';
+
+       /**
+        * 현재 화면에 입력되어 있던 금액을 먼저 보관한다.
+        */
+       const beforeItems = collectCurrentPayrollItemsWithAmount();
+
+       /**
+        * DB snapshot은 건드리지 않고,
+        * 최신 PAY_ITEM_SETTING 기준 미리보기 항목만 조회한다.
+        */
+       $.ajax({
+           url: '/admin/payroll/main/items/latest-preview',
+           type: 'GET',
+           data: {
+               empNo: currentEmpNo,
+               payYear: Number($('#payYear').val()),
+               payMonth: Number($('#payMonth').val())
+           },
+           success: function (previewItems) {
+
+               let mergedItems =
+                   mergeLatestItemsWithCurrentAmount(
+                       previewItems || [],
+                       beforeItems
+                   );
+
+               mergedItems =
+                   keepAdjustmentItemAmountAfterSettingSave(
+                       mergedItems,
+                       beforeItems
+                   );
+
+               currentPayrollItems = mergedItems;
+
+               renderPayrollItems(currentPayrollItems);
+
+               applyButtonState(currentPayrollStatus);
+               savePayrollTempState();
+           },
+           error: function (xhr) {
+               alert(xhr.responseText || '최신 항목 미리보기 조회 중 오류가 발생했습니다.');
+           }
+       });
    });
 
-  /**
-   * 기존 저장 항목 유지
-   */
-  $('#keepSavedItemSettingBtn').on('click', function () {
+     /**
+      * 기존 저장 항목 유지
+      *
+      * 중요:
+      * - 이 버튼도 DB 저장이 아니다.
+      * - 현재 화면에서는 기존 저장 항목을 그대로 보겠다는 임시 선택이다.
+      * - 저장하지 않고 초기화하거나 다른 월/사원 조회 후 돌아오면
+      *   항목 변경 권고가 다시 떠야 한다.
+      */
+     $('#keepSavedItemSettingBtn').on('click', function () {
 
-      confirmItemSettingDecision('KEEP');
-  });
+         /**
+          * 현재 화면에서는 경고만 숨긴다.
+          * DB에는 아무것도 저장하지 않는다.
+          */
+         itemSettingDecisionCompleted = true;
+         itemSettingDecisionRequired = false;
+
+         $('#itemSettingWarningBox').addClass('d-none');
+
+         /**
+          * 기존 항목 유지 선택이므로
+          * 항목 구조 / 금액 / 4대보험은 건드리지 않는다.
+          */
+         applyButtonState(currentPayrollStatus);
+         savePayrollTempState();
+     });
 
     /**
      * 기본급 변경 시 계산결과 초기화
@@ -1110,94 +1370,239 @@ $(document).ready(function () {
         deductionBody.empty();
 
         if (!items || items.length === 0) {
-
-            allowanceBody.empty();
             deductionBody.html(emptyDeductionRow());
             applyButtonState(currentPayrollStatus);
-
             return;
         }
 
         items.forEach(item => {
 
-            /**
-             * 과세 / 비과세 표시
-             */
-            let typeBadge = '';
+            let taxBadge = '';
+            let calculationBadge = '<span class="badge text-bg-secondary">수동계산</span>';
 
-            if (item.itemType === 'ALLOWANCE') {
+            let linkedAttendanceType = item.linkedAttendanceType || '';
 
-                if (item.taxType === 'TAXABLE') {
-                    typeBadge = '<span class="badge text-bg-primary">과세</span>';
-                } else if (item.taxType === 'NON_TAXABLE') {
-                    typeBadge = '<span class="badge text-bg-success">비과세</span>';
+            const itemNameSnapshot = String(item.itemNameSnapshot || '');
+
+            if (!linkedAttendanceType) {
+                if (itemNameSnapshot === '연장수당'
+                        || itemNameSnapshot.startsWith('조정수당')) {
+                    linkedAttendanceType = 'OVERTIME';
                 }
 
-            } else if (item.itemType === 'DEDUCTION') {
-
-                typeBadge = '<span class="badge text-bg-secondary">수동</span>';
+                if (itemNameSnapshot === '결근공제'
+                        || itemNameSnapshot.startsWith('조정공제')) {
+                    linkedAttendanceType = 'ABSENCE';
+                }
             }
 
-           /*
-            * 화면 표시용
-            * - 실제 금액이 0이거나 없으면 input value는 비워둔다.
-            * - 대신 placeholder="0"으로 흐리게 0을 보여준다.
-            * - 이렇게 해야 사용자가 입력한 0인지, 아직 미입력인지 구분하기 쉽다.
-            */
-          let amountDisplay = `
-              <input type="text"
-                     class="form-control payroll-amount-input text-end"
-                     value="${item.amount && Number(item.amount) !== 0 ? numberFormat(item.amount) : ''}"
-                     placeholder="0"
-                     data-item-id="${item.itemSettingId}">
-          `;
+            if (linkedAttendanceType === 'OVERTIME' || linkedAttendanceType === 'ABSENCE') {
+                calculationBadge = '<span class="badge text-bg-info">자동계산</span>';
+            }
 
-            const row = `
+            if (item.itemType === 'ALLOWANCE') {
+                if (item.taxType === 'TAXABLE') {
+                    taxBadge = '<span class="badge text-bg-primary">과세</span>';
+                } else if (item.taxType === 'NON_TAXABLE') {
+                    taxBadge = '<span class="badge text-bg-success">비과세</span>';
+                }
+            }
+
+            const displayItemName =
+                String(item.itemNameSnapshot || '')
+                    .replace(
+                        '[',
+                        '<br><small class="text-muted">'
+                    )
+                    .replace(
+                        ']',
+                        '</small>'
+                    );
+
+            let amountDisplay = '';
+
+           if (linkedAttendanceType === 'OVERTIME') {
+              amountDisplay = `
+              <div class="d-flex align-items-center gap-2 w-100 justify-content-between">
+
+                     <div class="input-group input-group-sm" style="width: 90px; flex: 0 0 90px;">
+                         <input type="text"
+                                class="form-control text-end attendance-count-input"
+                                value="${item.overtimeMinutes != null ? numberFormat(item.overtimeMinutes) : '0'}"
+                                readonly>
+                         <span class="input-group-text">분</span>
+                     </div>
+
+                     <span class="fw-bold">×</span>
+
+                     <div class="input-group input-group-sm" style="width: 150px; flex: 0 0 150px;">
+                         <input type="text"
+                                class="form-control payroll-amount-input text-end"
+                                value="${item.amount && Number(item.amount) !== 0 ? numberFormat(item.amount) : ''}"
+                                placeholder="0">
+                         <span class="input-group-text">원/60분</span>
+                     </div>
+
+                     <span class="fw-bold">=</span>
+
+                     <input type="text"
+                            class="form-control form-control-sm text-end attendance-calculated-amount"
+                            value="0"
+                            readonly
+                           style="flex: 1; min-width: 140px;">
+                 </div>
+             `;
+            }else if (linkedAttendanceType === 'ABSENCE') {
+
+                 amountDisplay = `
+                     <div class="d-flex align-items-center gap-2 w-100 justify-content-between">
+                            <div class="input-group input-group-sm" style="width: 90px; flex: 0 0 90px;">
+                                <input type="text"
+                                       class="form-control text-end attendance-count-input"
+                                       value="${item.absenceDays != null ? numberFormat(item.absenceDays) : '0'}"
+                                       readonly>
+                                <span class="input-group-text">일</span>
+                            </div>
+
+                            <span class="fw-bold">×</span>
+
+                            <div class="input-group input-group-sm" style="width: 150px; flex: 0 0 150px;">
+                                <input type="text"
+                                       class="form-control payroll-amount-input text-end"
+                                       value="${item.amount && Number(item.amount) !== 0 ? numberFormat(item.amount) : ''}"
+                                       placeholder="0">
+                                <span class="input-group-text">원/하루</span>
+                            </div>
+
+                            <span class="fw-bold">=</span>
+
+                            <input type="text"
+                                   class="form-control form-control-sm text-end attendance-calculated-amount"
+                                   value="0"
+                                   readonly
+                                   style="flex: 1; min-width: 140px;">
+                        </div>
+                    `;
+              } else {
+                amountDisplay = `
+                    <input type="text"
+                           class="form-control payroll-amount-input text-end"
+                           value="${item.amount && Number(item.amount) !== 0 ? numberFormat(item.amount) : ''}"
+                           placeholder="0">
+                `;
+            }
+
+            const allowanceRow = `
+                <tr class="payroll-item-row"
+                   data-item-setting-id="${item.itemSettingId || ''}"
+                   data-item-name="${item.itemNameSnapshot}"
+                   data-item-type="${item.itemType}"
+                   data-tax-type="${item.taxType || ''}"
+                   data-non-tax-code="${item.nonTaxCode || ''}"
+                   data-linked-attendance-type="${linkedAttendanceType}"
+                   data-derived-adjustment="${item.derivedAdjustment === true}"
+                   data-source-pay-month="${item.sourcePayMonth || ''}">
+                  <td class="fw-semibold text-center">
+                      ${displayItemName}
+                  </td>
+                    <td>${taxBadge}</td>
+                    <td>${calculationBadge}</td>
+                    <td>${amountDisplay}</td>
+                </tr>
+            `;
+
+            const deductionRow = `
                 <tr class="payroll-item-row"
                     data-item-setting-id="${item.itemSettingId || ''}"
                     data-item-name="${item.itemNameSnapshot}"
                     data-item-type="${item.itemType}"
                     data-tax-type="${item.taxType || ''}"
                     data-non-tax-code="${item.nonTaxCode || ''}"
-                    data-linked-attendance-type="${item.linkedAttendanceType || ''}">
-
-                    <td class="fw-semibold">
-                        ${item.itemNameSnapshot}
-                    </td>
-
-                    <td>
-                        ${typeBadge}
-                    </td>
-
-                    <td>
-                        ${amountDisplay}
-                    </td>
+                    data-linked-attendance-type="${linkedAttendanceType}"
+                    data-derived-adjustment="${item.derivedAdjustment === true}"
+                    data-source-pay-month="${item.sourcePayMonth || ''}">
+                   <td class="fw-semibold text-center">
+                       ${displayItemName}
+                   </td>
+                    <td>${calculationBadge}</td>
+                    <td>${amountDisplay}</td>
                 </tr>
             `;
 
-            /**
-             * 지급 / 공제 구분
-             */
             if (item.itemType === 'ALLOWANCE') {
-
-                allowanceBody.append(row);
-
+                allowanceBody.append(allowanceRow);
             } else {
-
-                deductionBody.append(row);
+                deductionBody.append(deductionRow);
             }
         });
 
         /**
-         * 상태별 readonly 재적용
-         *
-         * - CONFIRMED
-         * - PAID
-         *
-         * 상태에서는 input 수정 불가 처리
+         * 지급/공제 중 한쪽 항목만 없는 경우에도
+         * 빈 안내 문구를 표시한다.
          */
+        if (deductionBody.children().length === 0) {
+            deductionBody.html(emptyDeductionRow());
+        }
+
+        recalculateAttendanceRows();
         applyButtonState(currentPayrollStatus);
     }
+
+    // 화면상의 근태연동 행 계산금액 표시
+    // - 실제 저장/확정 계산은 백단 preview가 최종 기준이다.
+    // - 이 함수는 사용자가 입력 중인 단가를 즉시 확인하기 위한 화면 보조용이다.
+    function recalculateAttendanceRows() {
+
+        $('.payroll-item-row').each(function () {
+
+            const row = $(this);
+            const linkedAttendanceType = row.data('linked-attendance-type');
+
+            if (linkedAttendanceType !== 'OVERTIME'
+                    && linkedAttendanceType !== 'ABSENCE') {
+                return;
+            }
+
+            const unitAmount = Number(removeComma(row.find('.payroll-amount-input').val() || '0'));
+            const countText = row.find('.attendance-count-input').val() || '0';
+
+            const count = Number(removeComma(countText.replace('분', '').replace('일', '')) || '0');
+
+            let calculatedAmount = 0;
+
+           if (linkedAttendanceType === 'OVERTIME') {
+
+               calculatedAmount =
+                   Math.round(
+                       (count * unitAmount) / 60
+                   );
+           }
+
+           if (linkedAttendanceType === 'ABSENCE') {
+
+               calculatedAmount =
+                   Math.round(
+                       count * unitAmount
+                   );
+           }
+
+            row.find('.attendance-calculated-amount')
+                .val(numberFormat(calculatedAmount));
+        });
+    }
+
+   $(document).on(
+       'input',
+       '.payroll-amount-input',
+       function () {
+
+           recalculateAttendanceRows();
+
+           resetPreviewResult();
+
+           savePayrollTempState();
+       }
+   );
 
     /**
      * =====================================================
@@ -1228,6 +1633,8 @@ $(document).ready(function () {
         originalPayItemSettingJson = JSON.stringify(currentPayItemSettingRows);
 
         renderPayItemSettingModalRows(currentPayItemSettingRows);
+
+        updatePayItemSettingSaveButtonState();
     });
 
     // 현재 메인 지급/공제항목을 모달용 데이터로 변환
@@ -1237,20 +1644,57 @@ $(document).ready(function () {
 
         $('.payroll-item-row').each(function () {
 
-            const itemName = $(this).data('item-name');
+            const row = $(this);
 
-            // 기본급은 설정 대상이 아니므로 제외
+            const itemName = row.data('item-name');
+            const derivedAdjustment = row.data('derived-adjustment');
+
+            // 기본급은 PAYROLL.baseSalary 전용이므로 설정 모달 대상이 아니다.
             if (itemName === '기본급') {
                 return;
             }
 
-            result.push({
-                itemSettingId: $(this).data('item-setting-id') || null,
-                itemName: itemName,
-                itemType: $(this).data('item-type'),
-                taxType: $(this).data('tax-type') || null,
-                nonTaxCode: $(this).data('non-tax-code') || null
-            });
+            // 조정수당/조정공제는 시스템 자동 생성 항목이므로 설정 모달에 절대 반입하지 않는다.
+            if (derivedAdjustment === true || derivedAdjustment === 'true') {
+                return;
+            }
+
+            if (String(itemName || '').startsWith('조정수당')
+                    || String(itemName || '').startsWith('조정공제')) {
+                return;
+            }
+
+            // 중요:
+            // 급여대장 메인의 일반항목은 전부 반입한다.
+            // 여기에는 연장수당/결근공제 같은 근태연동 항목도 포함된다.
+           let linkedAttendanceType =
+               row.data('linked-attendance-type') || null;
+
+           /**
+            * 중요:
+            * DRAFT snapshot 유지 시
+            * 항목설정 변경 때문에 linkedAttendanceType이 사라져도
+            * 저장 당시 연장수당/결근공제는 자동계산으로 복원한다.
+            */
+           if (!linkedAttendanceType) {
+
+               if (itemName === '연장수당') {
+                   linkedAttendanceType = 'OVERTIME';
+               }
+
+               if (itemName === '결근공제') {
+                   linkedAttendanceType = 'ABSENCE';
+               }
+           }
+
+           result.push({
+               itemSettingId: row.data('item-setting-id') || null,
+               itemName: itemName,
+               itemType: row.data('item-type'),
+               taxType: row.data('tax-type') || null,
+               nonTaxCode: row.data('non-tax-code') || null,
+               linkedAttendanceType: linkedAttendanceType
+           });
         });
 
         return result;
@@ -1270,22 +1714,78 @@ $(document).ready(function () {
 
             const row = $(this);
 
-            /**
-             * placeholder="0"은 화면 표시용이다.
-             * 사용자가 아무것도 입력하지 않으면 실제 value는 '' 이다.
-             *
-             * 저장/계산 시에는 빈 값을 0으로 처리한다.
-             */
             const amountValue =
                 removeComma(
                     row.find('.payroll-amount-input').val() || '0'
                 );
 
+           const itemNameSnapshot =
+               row.data('item-name');
+
+           let linkedAttendanceType =
+               row.data('linked-attendance-type') || null;
+
+           /**
+            * 조정항목은 PAY_ITEM_SETTING에 없는 자동 생성 항목이라
+            * linkedAttendanceType이 비어 있을 수 있다.
+            * 저장/비교용 데이터에서는 이름 기준으로 근태유형을 복원한다.
+            */
+           if (String(itemNameSnapshot || '').startsWith('조정수당')) {
+               linkedAttendanceType = 'OVERTIME';
+           }
+
+           if (String(itemNameSnapshot || '').startsWith('조정공제')) {
+               linkedAttendanceType = 'ABSENCE';
+           }
+
+           if (!linkedAttendanceType) {
+
+               if (itemNameSnapshot === '연장수당') {
+                   linkedAttendanceType = 'OVERTIME';
+               }
+
+               if (itemNameSnapshot === '결근공제') {
+                   linkedAttendanceType = 'ABSENCE';
+               }
+           }
+
+            const countText =
+                row.find('.attendance-count-input').val() || '0';
+
+            const attendanceCount =
+                Number(
+                    removeComma(
+                        countText
+                            .replace('분', '')
+                            .replace('일', '')
+                    ) || '0'
+                );
+
             result.push({
                 itemSettingId: row.data('item-setting-id') || null,
-                itemNameSnapshot: row.data('item-name'),
+                itemNameSnapshot: itemNameSnapshot,
                 itemType: row.data('item-type'),
-                amount: amountValue
+                taxType: row.data('tax-type') || null,
+                nonTaxCode: row.data('non-tax-code') || null,
+                linkedAttendanceType: linkedAttendanceType,
+                amount: amountValue,
+
+                overtimeMinutes:
+                    linkedAttendanceType === 'OVERTIME'
+                        ? attendanceCount
+                        : null,
+
+                absenceDays:
+                    linkedAttendanceType === 'ABSENCE'
+                        ? attendanceCount
+                        : null,
+
+                derivedAdjustment:
+                    row.data('derived-adjustment') === true
+                    || row.data('derived-adjustment') === 'true',
+
+                sourcePayMonth:
+                    row.data('source-pay-month') || null
             });
         });
 
@@ -1295,14 +1795,23 @@ $(document).ready(function () {
     /**
      * 최신 설정 목록에 기존 입력 금액을 반영한다.
      *
-     * 유지 조건:
-     * - 같은 itemSettingId
-     * - 지급/공제 구분(itemType)이 그대로
+     * 금액 초기화 조건:
+     * 1. 지급 ↔ 공제 변경
+     * 2. 근태연동 예 -> 아니오/disabled 변경
+     * 3. 근태연동 아니오/disabled -> 예 변경
+     * 4. OVERTIME -> null, null -> OVERTIME
+     * 5. ABSENCE -> null, null -> ABSENCE
      *
-     * 초기화 조건:
-     * - 신규 항목
-     * - 지급 -> 공제 변경
-     * - 공제 -> 지급 변경
+     * 금액 유지 조건:
+     * - 항목명 변경
+     * - 과세/비과세 변경
+     * - 비과세 코드 변경
+     * - 같은 지급/공제 구분
+     * - 같은 근태연동 상태
+     *
+     * 중요:
+     * - 급여대장 메인 일반항목에는 근태연동 연장수당/결근공제도 포함된다.
+     * - 조정수당/조정공제는 설정 모달 대상이 아니므로 여기서 금액 보존 대상으로 보지 않는다.
      */
     function mergeLatestItemsWithCurrentAmount(latestItems, beforeItems) {
 
@@ -1314,13 +1823,28 @@ $(document).ready(function () {
 
             let matchedItem = null;
 
-            beforeItems.forEach(function (beforeItem) {
+            (beforeItems || []).forEach(function (beforeItem) {
 
-                if (item.itemSettingId
-                        && beforeItem.itemSettingId
-                        && Number(item.itemSettingId) === Number(beforeItem.itemSettingId)
-                        && item.itemType === beforeItem.itemType) {
+                const itemId = item.itemSettingId ? Number(item.itemSettingId) : null;
+                const beforeId = beforeItem.itemSettingId ? Number(beforeItem.itemSettingId) : null;
 
+                /**
+                 * PAY_ITEM_SETTING 기준 항목은 반드시 itemSettingId로만 매칭한다.
+                 * 이름 기준 매칭을 허용하면 일반공제가 결근공제/근태연동 항목과 섞일 수 있다.
+                 */
+                const sameId =
+                    itemId !== null
+                    && beforeId !== null
+                    && itemId === beforeId;
+
+                const sameType =
+                    item.itemType === beforeItem.itemType;
+
+                const sameAttendanceGroup =
+                    getAttendanceAmountGroup(item.linkedAttendanceType)
+                    === getAttendanceAmountGroup(beforeItem.linkedAttendanceType);
+
+                if (sameId && sameType && sameAttendanceGroup) {
                     matchedItem = beforeItem;
                 }
             });
@@ -1333,6 +1857,108 @@ $(document).ready(function () {
         });
 
         return latestItems;
+    }
+
+    function appendAdjustmentItemsAfterSettingSave(mergedItems, beforeItems) {
+
+        const result = mergedItems ? [...mergedItems] : [];
+
+        const hasOvertimeItem = result.some(item =>
+            item
+            && item.linkedAttendanceType === 'OVERTIME'
+            && !isAdjustmentItem(item)
+        );
+
+        const hasAbsenceItem = result.some(item =>
+            item
+            && item.linkedAttendanceType === 'ABSENCE'
+            && !isAdjustmentItem(item)
+        );
+
+        (beforeItems || []).forEach(item => {
+
+            if (!isAdjustmentItem(item)) {
+                return;
+            }
+
+            if (item.linkedAttendanceType === 'OVERTIME' && !hasOvertimeItem) {
+                return;
+            }
+
+            if (item.linkedAttendanceType === 'ABSENCE' && !hasAbsenceItem) {
+                return;
+            }
+
+            const alreadyExists = result.some(row =>
+                row.itemNameSnapshot === item.itemNameSnapshot
+            );
+
+            if (!alreadyExists) {
+                result.push(item);
+            }
+        });
+
+        return result;
+    }
+
+    function isAdjustmentItem(item) {
+
+        if (!item) {
+            return false;
+        }
+
+        const itemNameSnapshot =
+            String(item.itemNameSnapshot || item.itemName || '');
+
+        return item.derivedAdjustment === true
+            || itemNameSnapshot.startsWith('조정수당[')
+            || itemNameSnapshot.startsWith('조정공제[');
+    }
+
+    function keepAdjustmentItemAmountAfterSettingSave(previewItems, beforeItems) {
+
+        if (!previewItems) {
+            return [];
+        }
+
+        previewItems.forEach(function (item) {
+
+            if (!isAdjustmentItem(item)) {
+                return;
+            }
+
+            const beforeItem = (beforeItems || []).find(function (oldItem) {
+                return isAdjustmentItem(oldItem)
+                    && oldItem.itemNameSnapshot === item.itemNameSnapshot;
+            });
+
+            if (!beforeItem) {
+                return;
+            }
+
+            /**
+             * 조정항목은 항목설정 대상이 아니므로
+             * 항목설정 추가/삭제/변경과 무관하게 기존 단가를 유지한다.
+             */
+            item.amount = beforeItem.amount || 0;
+        });
+
+        return previewItems;
+    }
+
+    // 근태연동 금액 유지/초기화 판단용 그룹
+    function getAttendanceAmountGroup(linkedAttendanceType) {
+
+        if (linkedAttendanceType === 'OVERTIME') {
+            return 'OVERTIME';
+        }
+
+        if (linkedAttendanceType === 'ABSENCE') {
+            return 'ABSENCE';
+        }
+
+        // null, '', undefined, disabled, N 등은 전부 근태연동 아님으로 본다.
+        return 'NONE';
     }
 
     // 모달 row 렌더링
@@ -1357,21 +1983,32 @@ $(document).ready(function () {
     $('#addPayItemSettingRowBtn').on('click', function () {
         $('#payItemSettingTableBody').append(makePayItemSettingRow(null));
         refreshAllPayItemSettingRows();
+        updatePayItemSettingSaveButtonState();
     });
 
     // row 삭제
     $(document).on('click', '.setting-row-delete-btn', function () {
         $(this).closest('tr').remove();
+        updatePayItemSettingSaveButtonState();
     });
 
     // 초기화 버튼: 모달 열었을 때 상태로 되돌림
     $('#resetPayItemSettingBtn').on('click', function () {
-        const originalRows = JSON.parse(originalPayItemSettingJson || '[]');
+
+        const originalRows =
+            JSON.parse(originalPayItemSettingJson || '[]');
+
         renderPayItemSettingModalRows(originalRows);
+
+        $('#savePayItemSettingBtn').prop('disabled', true);
     });
 
    // 설정 저장
    $('#savePayItemSettingBtn').on('click', function () {
+
+        if ($(this).prop('disabled')) {
+            return;
+        }
 
        /**
         * 설정 저장 전 현재 화면 금액을 보관한다.
@@ -1387,15 +2024,15 @@ $(document).ready(function () {
            return;
        }
 
-       const currentJson = JSON.stringify(
-           normalizePayItemSettingRows(items)
-       );
+       const currentJson =
+           makePayItemSettingCompareJson(
+               collectPayItemSettingRowsForCompare()
+           );
 
-       const originalJson = JSON.stringify(
-           normalizePayItemSettingRows(
+       const originalJson =
+           makePayItemSettingCompareJson(
                JSON.parse(originalPayItemSettingJson || '[]')
-           )
-       );
+           );
 
        if (currentJson === originalJson) {
            alert('변경된 항목 설정이 없습니다.');
@@ -1413,41 +2050,92 @@ $(document).ready(function () {
 
                 $('#payItemSettingModal').modal('hide');
 
-                // NEW는 최신 설정 바로 반영
-               if (currentPayrollStatus === 'NEW') {
+                suppressItemSettingWarningOnce = true;
+                itemSettingDecisionRequired = false;
+                itemSettingDecisionCompleted = true;
 
-                   /**
-                    * 최신 설정 저장 후에도
-                    * 현재 입력 중인 금액을 최대한 유지한다.
-                    */
-                   const mergedItems =
-                       mergeLatestItemsWithCurrentAmount(latestItems, beforeItems);
+                itemSettingChangedByCurrentScreenKey = getCurrentPayrollScreenKey();
 
-                   renderPayrollItems(mergedItems);
+                initialItemSettingWarningKey = itemSettingChangedByCurrentScreenKey;
+                initialItemSettingWarningRequired = false;
 
-                   resetPreviewResult();
+                $('#itemSettingWarningBox').addClass('d-none');
 
-                   return;
-               }
+                resetPreviewResult();
 
-               // DRAFT도 설정 저장 직후 현재 화면에 바로 반영한다.
-               // 단, 계산 결과는 무효화하고 계산 미리보기를 다시 요구한다.
-               if (currentPayrollStatus === 'DRAFT') {
+                skipNextSnapshotUpdate = true;
+                lastSavedPayrollSnapshotJson = '';
 
-                   const mergedItems = mergeLatestItemsWithCurrentAmount(latestItems, beforeItems);
+                /**
+                 * 항목설정 등록 직후에는 PAYROLL_ITEM snapshot을 바꾸지 않는다.
+                 *
+                 * NEW:
+                 * - 저장된 급여대장이 없으므로 최신 항목 설정 기준으로 다시 조회한다.
+                 *
+                 * DRAFT:
+                 * - 저장된 DRAFT snapshot은 유지해야 한다.
+                 * - 현재 화면만 latestItems 기준으로 바꾼다.
+                 * - 실제 반영은 급여대장 저장/확정/지급확정 시점에 이루어진다.
+                 */
+                if (currentPayrollStatus === 'NEW') {
 
-                   renderPayrollItems(mergedItems);
+                    loadPayrollItems(
+                        Number($('#payYear').val()),
+                        Number($('#payMonth').val())
+                    );
 
-                   itemSettingDecisionRequired = false;
-                   itemSettingDecisionCompleted = true;
+                } else if (currentPayrollStatus === 'DRAFT') {
 
-                   $('#itemSettingWarningBox').addClass('d-none');
+                    /**
+                     * DRAFT에서는 PAYROLL_ITEM snapshot을 바꾸지 않고
+                     * 최신 설정 + 근태연동 + 조정항목이 포함된 미리보기 목록만 다시 조회한다.
+                     */
+                    $.ajax({
+                        url: '/admin/payroll/main/items/latest-preview',
+                        type: 'GET',
+                        data: {
+                            empNo: currentEmpNo,
+                            payYear: Number($('#payYear').val()),
+                            payMonth: Number($('#payMonth').val())
+                        },
+                        success: function (previewItems) {
 
-                   resetPreviewResult();
-                   applyButtonState(currentPayrollStatus);
+                           let mergedItems =
+                               mergeLatestItemsWithCurrentAmount(
+                                   previewItems || [],
+                                   beforeItems
+                               );
 
-                   return;
-               }
+                           mergedItems =
+                               keepAdjustmentItemAmountAfterSettingSave(
+                                   mergedItems,
+                                   beforeItems
+                               );
+
+                           currentPayrollItems = mergedItems;
+
+                            renderPayrollItems(currentPayrollItems);
+
+                            applyButtonState(currentPayrollStatus);
+                            savePayrollTempState();
+                        },
+                        error: function (xhr) {
+                            alert(xhr.responseText || '최신 항목 미리보기 조회 중 오류가 발생했습니다.');
+                        }
+                    });
+
+                    return;
+
+                } else {
+
+                    loadPayrollItems(
+                        Number($('#payYear').val()),
+                        Number($('#payMonth').val())
+                    );
+                }
+
+                applyButtonState(currentPayrollStatus);
+                savePayrollTempState();
             },
             error: function (xhr) {
                 alert(xhr.responseText || '지급/공제항목 설정 저장 중 오류가 발생했습니다.');
@@ -1463,80 +2151,54 @@ $(document).ready(function () {
         const itemType = item ? item.itemType : '';
         const taxType = item ? item.taxType : '';
         const nonTaxCode = item ? item.nonTaxCode : '';
+        const linkedAttendanceType = item ? (item.linkedAttendanceType || '') : '';
+
+        const attendanceYn =
+            linkedAttendanceType === 'OVERTIME' || linkedAttendanceType === 'ABSENCE'
+                ? 'Y'
+                : itemType
+                       ? 'N'
+                       : '';
 
         return `
             <tr class="pay-item-setting-row"
                 data-item-setting-id="${itemSettingId}">
 
-                <!-- 지급 / 공제 -->
                 <td>
                     <select class="form-select setting-item-type">
                         <option value="">선택</option>
-
-                        <option value="ALLOWANCE"
-                            ${itemType === 'ALLOWANCE' ? 'selected' : ''}>
-                            지급
-                        </option>
-
-                        <option value="DEDUCTION"
-                            ${itemType === 'DEDUCTION' ? 'selected' : ''}>
-                            공제
-                        </option>
+                        <option value="ALLOWANCE" ${itemType === 'ALLOWANCE' ? 'selected' : ''}>지급</option>
+                        <option value="DEDUCTION" ${itemType === 'DEDUCTION' ? 'selected' : ''}>공제</option>
                     </select>
                 </td>
 
-                <!-- 과세 / 비과세 -->
                 <td>
                     <select class="form-select setting-tax-type">
                         <option value="">선택</option>
-
-                        <option value="TAXABLE"
-                            ${taxType === 'TAXABLE' ? 'selected' : ''}>
-                            과세
-                        </option>
-
-                        <option value="NON_TAXABLE"
-                            ${taxType === 'NON_TAXABLE' ? 'selected' : ''}>
-                            비과세
-                        </option>
+                        <option value="TAXABLE" ${taxType === 'TAXABLE' ? 'selected' : ''}>과세</option>
+                        <option value="NON_TAXABLE" ${taxType === 'NON_TAXABLE' ? 'selected' : ''}>비과세</option>
                     </select>
                 </td>
 
-                <!-- 비과세 항목 -->
                 <td>
                     <select class="form-select setting-non-tax-code">
-
                         <option value="">선택</option>
-
-                        <option value="MEAL"
-                            ${nonTaxCode === 'MEAL' ? 'selected' : ''}>
-                            식대
-                        </option>
-
-                        <option value="CAR"
-                            ${nonTaxCode === 'CAR' ? 'selected' : ''}>
-                            차량유지비
-                        </option>
-
-                        <option value="RESEARCH"
-                            ${nonTaxCode === 'RESEARCH' ? 'selected' : ''}>
-                            연구활동비
-                        </option>
-
-                        <option value="CHILDCARE"
-                            ${nonTaxCode === 'CHILDCARE' ? 'selected' : ''}>
-                            보육수당
-                        </option>
-
-                        <option value="OVERSEAS"
-                            ${nonTaxCode === 'OVERSEAS' ? 'selected' : ''}>
-                            국외근로
-                        </option>
-
+                        <option value="MEAL" ${nonTaxCode === 'MEAL' ? 'selected' : ''}>식대</option>
+                        <option value="CAR" ${nonTaxCode === 'CAR' ? 'selected' : ''}>차량유지비</option>
+                        <option value="RESEARCH" ${nonTaxCode === 'RESEARCH' ? 'selected' : ''}>연구활동비</option>
+                        <option value="CHILDCARE" ${nonTaxCode === 'CHILDCARE' ? 'selected' : ''}>보육수당</option>
+                        <option value="OVERSEAS" ${nonTaxCode === 'OVERSEAS' ? 'selected' : ''}>국외근로</option>
                     </select>
                 </td>
 
-                <!-- 항목명 -->
+                <td>
+                    <select class="form-select setting-attendance-yn">
+                        <option value="">선택</option>
+                        <option value="Y" ${attendanceYn === 'Y' ? 'selected' : ''}>예</option>
+                        <option value="N" ${attendanceYn === 'N' ? 'selected' : ''}>아니오</option>
+                    </select>
+                </td>
+
                 <td>
                     <input type="text"
                            class="form-control setting-item-name"
@@ -1544,7 +2206,6 @@ $(document).ready(function () {
                            placeholder="항목명 입력">
                 </td>
 
-                <!-- 삭제 -->
                 <td>
                     <button type="button"
                             class="btn btn-sm btn-outline-danger setting-row-delete-btn">
@@ -1565,73 +2226,67 @@ $(document).ready(function () {
     // row별 enable/disable 처리
     function refreshPayItemSettingRow(row) {
 
-    const itemType = row.find('.setting-item-type').val();
-    const taxType = row.find('.setting-tax-type').val();
+        const itemType = row.find('.setting-item-type').val();
+        const taxType = row.find('.setting-tax-type').val();
+        const attendanceYn = row.find('.setting-attendance-yn').val();
 
-    const taxSelect = row.find('.setting-tax-type');
-    const nonTaxSelect = row.find('.setting-non-tax-code');
-    const nameInput = row.find('.setting-item-name');
+        const taxSelect = row.find('.setting-tax-type');
+        const nonTaxSelect = row.find('.setting-non-tax-code');
+        const attendanceSelect = row.find('.setting-attendance-yn');
+        const nameInput = row.find('.setting-item-name');
 
-    /**
-     * 항목명은 항상 입력 가능
-     */
-    nameInput.prop('disabled', false);
-    nameInput.prop('readonly', false);
+        nameInput.prop('disabled', false).prop('readonly', false);
 
-    /**
-     * 지급/공제 미선택
-     */
-    if (!itemType) {
+        if (!itemType) {
+            taxSelect.val('').prop('disabled', true);
+            nonTaxSelect.val('').prop('disabled', true);
+            attendanceSelect.val('').prop('disabled', true);
+            return;
+        }
 
-        taxSelect.val('').prop('disabled', true);
+        if (itemType === 'DEDUCTION') {
+            taxSelect.val('').prop('disabled', true);
+            nonTaxSelect.val('').prop('disabled', true);
+            attendanceSelect.prop('disabled', false);
 
-        nonTaxSelect
-            .val('')
-            .prop('disabled', true);
+            if (attendanceYn === 'Y') {
+                nameInput.val('결근공제').prop('readonly', true);
+            } else if (nameInput.val().trim() === '결근공제') {
+                nameInput.val('');
+            }
 
-        return;
-    }
+            return;
+        }
 
-    /**
-     * 공제
-     *
-     * - 과세/비과세 사용 안 함
-     * - 비과세 항목 사용 안 함
-     */
-    if (itemType === 'DEDUCTION') {
+        // 지급
+        taxSelect.prop('disabled', false);
 
-        taxSelect
-            .val('')
-            .prop('disabled', true);
+        if (!taxType) {
+            nonTaxSelect.val('').prop('disabled', true);
+            attendanceSelect.val('').prop('disabled', true);
+            return;
+        }
 
-        nonTaxSelect
-            .val('')
-            .prop('disabled', true);
+        if (taxType === 'NON_TAXABLE') {
+            nonTaxSelect.prop('disabled', false);
+            attendanceSelect.val('N').prop('disabled', true);
 
-        return;
-    }
+            if (nameInput.val().trim() === '연장수당') {
+                nameInput.val('');
+            }
 
-    /**
-     * 지급
-     */
-    taxSelect.prop('disabled', false);
+            return;
+        }
 
-    /**
-     * 지급 + 비과세
-     */
-    if (taxType === 'NON_TAXABLE') {
+        // 지급 + 과세
+        nonTaxSelect.val('').prop('disabled', true);
+        attendanceSelect.prop('disabled', false);
 
-        nonTaxSelect.prop('disabled', false);
-
-        return;
-    }
-
-    /**
-     * 지급 + 과세
-     */
-    nonTaxSelect
-        .val('')
-        .prop('disabled', true);
+        if (attendanceYn === 'Y') {
+            nameInput.val('연장수당').prop('readonly', true);
+        } else if (nameInput.val().trim() === '연장수당') {
+            nameInput.val('');
+        }
     }
 
     /**
@@ -1648,17 +2303,31 @@ $(document).ready(function () {
      * 공제 / 선택 / 선택 / 복리후생비
      */
     $(document).on('change', '.setting-item-type', function () {
-
         const row = $(this).closest('tr');
 
-        // 과세/비과세 select를 "선택"으로 초기화
+        const nameInput = row.find('.setting-item-name');
+        const currentName = nameInput.val().trim();
+
+        /**
+         * 지급 ↔ 공제 변경 시
+         * 기존 근태연동 전용 항목명은 더 이상 맞지 않으므로 제거한다.
+         *
+         * 예:
+         * - 지급/근태연동/연장수당 → 공제로 변경 시 연장수당 제거
+         * - 공제/근태연동/결근공제 → 지급으로 변경 시 결근공제 제거
+         */
+        if (currentName === '연장수당' || currentName === '결근공제') {
+            nameInput.val('');
+        }
+
+        nameInput.prop('readonly', false);
+
         row.find('.setting-tax-type').val('');
-
-        // 비과세 항목 select도 "선택"으로 초기화
         row.find('.setting-non-tax-code').val('');
+        row.find('.setting-attendance-yn').val('');
 
-        // 현재 row의 지급/공제 상태에 맞게 disabled 처리 재적용
         refreshPayItemSettingRow(row);
+        updatePayItemSettingSaveButtonState();
     });
 
     /**
@@ -1674,14 +2343,25 @@ $(document).ready(function () {
      * 지급 / 과세 / 선택 / 식대보조
      */
     $(document).on('change', '.setting-tax-type', function () {
-
         const row = $(this).closest('tr');
 
-        // 비과세 항목 select를 "선택"으로 초기화
         row.find('.setting-non-tax-code').val('');
+        row.find('.setting-attendance-yn').val('');
 
-        // 과세면 비과세 항목 disabled, 비과세면 enabled 처리
         refreshPayItemSettingRow(row);
+    });
+
+    // 근태연동 여부 변경 이벤트
+    $(document).on('change', '.setting-attendance-yn', function () {
+        const row = $(this).closest('tr');
+
+        refreshPayItemSettingRow(row);
+        updatePayItemSettingSaveButtonState();
+    });
+
+    // 항목명 입력
+    $(document).on('input', '.setting-item-name', function () {
+        updatePayItemSettingSaveButtonState();
     });
 
     // 저장 요청 데이터 수집 및 프론트 검증
@@ -1701,7 +2381,8 @@ $(document).ready(function () {
             const itemType = row.find('.setting-item-type').val();
             const taxType = row.find('.setting-tax-type').val();
             const nonTaxCode = row.find('.setting-non-tax-code').val();
-            const itemName = row.find('.setting-item-name').val().trim();
+            let itemName = row.find('.setting-item-name').val().trim();
+            const attendanceYn = row.find('.setting-attendance-yn').val();
 
             /**
              * 지급/공제 선택 검증
@@ -1747,6 +2428,7 @@ $(document).ready(function () {
 
             let sendTaxType = null;
             let sendNonTaxCode = null;
+            let sendLinkedAttendanceType = null;
 
             /**
              * 지급항목 검증
@@ -1773,7 +2455,22 @@ $(document).ready(function () {
                     }
 
                     sendNonTaxCode = nonTaxCode;
+                    sendLinkedAttendanceType = null;
                 }
+                 if (taxType === 'TAXABLE') {
+                        sendNonTaxCode = null;
+
+                        if (!attendanceYn) {
+                            valid = false;
+                            message = '과세 지급항목은 근태연동 여부를 선택해 주세요.';
+                            return false;
+                        }
+
+                        if (attendanceYn === 'Y') {
+                            sendLinkedAttendanceType = 'OVERTIME';
+                            itemName = '연장수당';
+                        }
+                 }
             }
 
             /**
@@ -1784,7 +2481,17 @@ $(document).ready(function () {
             if (itemType === 'DEDUCTION') {
                 sendTaxType = null;
                 sendNonTaxCode = null;
-            }
+                if (!attendanceYn) {
+                        valid = false;
+                        message = '공제항목은 근태연동 여부를 선택해 주세요.';
+                        return false;
+                    }
+
+                    if (attendanceYn === 'Y') {
+                        sendLinkedAttendanceType = 'ABSENCE';
+                        itemName = '결근공제';
+                    }
+                }
 
             items.push({
                 itemSettingId: itemSettingId,
@@ -1792,12 +2499,7 @@ $(document).ready(function () {
                 itemType: itemType,
                 taxType: sendTaxType,
                 nonTaxCode: sendNonTaxCode,
-
-                /**
-                 * 근태연동은 후순위 구현으로 제외한다.
-                 * 현재 설정 모달에서는 항상 null로 저장한다.
-                 */
-                linkedAttendanceType: null
+                linkedAttendanceType: sendLinkedAttendanceType,
             });
         });
 
@@ -1816,14 +2518,137 @@ $(document).ready(function () {
         }
 
         return items.map(function (item) {
+
             return {
-                itemSettingId: item.itemSettingId ? Number(item.itemSettingId) : null,
-                itemName: item.itemName || '',
-                itemType: item.itemType || '',
-                taxType: item.taxType || null,
-                nonTaxCode: item.nonTaxCode || null
+
+                /**
+                 * 숫자 / 문자열 / null 차이 제거
+                 */
+                itemSettingId:
+                    item.itemSettingId === null
+                    || item.itemSettingId === undefined
+                    || item.itemSettingId === ''
+                        ? null
+                        : Number(item.itemSettingId),
+
+                /**
+                 * itemName / itemNameSnapshot 차이 제거
+                 * trim()으로 공백 차이 제거
+                 */
+                itemName:
+                    String(
+                        item.itemName
+                        || item.itemNameSnapshot
+                        || ''
+                    ).trim(),
+
+                itemType:
+                    item.itemType || '',
+
+                /**
+                 * '' 와 null 차이 제거
+                 */
+                taxType:
+                    item.taxType || null,
+
+                nonTaxCode:
+                    item.nonTaxCode || null,
+
+                linkedAttendanceType:
+                    item.linkedAttendanceType || null
             };
         });
+    }
+
+    function makePayItemSettingCompareJson(items) {
+        return JSON.stringify(
+            normalizePayItemSettingRows(items)
+        );
+    }
+
+    // 항목설정 모달의 현재 상태를 비교용으로 수집한다.
+    // 저장 검증용 collectPayItemSettingRequestItems()를 쓰면
+    // 입력 중인 상태에서 alert가 뜰 수 있어서 비교용은 따로 둔다.
+    function collectPayItemSettingRowsForCompare() {
+
+        const items = [];
+
+        $('.pay-item-setting-row').each(function () {
+
+            const row = $(this);
+
+            const itemType = row.find('.setting-item-type').val();
+            const taxType = row.find('.setting-tax-type').val();
+            const nonTaxCode = row.find('.setting-non-tax-code').val();
+            const attendanceYn = row.find('.setting-attendance-yn').val();
+
+            let itemName = row.find('.setting-item-name').val().trim();
+
+            let compareTaxType = null;
+            let compareNonTaxCode = null;
+            let linkedAttendanceType = null;
+
+            if (itemType === 'ALLOWANCE') {
+
+                compareTaxType = taxType || null;
+
+                if (taxType === 'NON_TAXABLE') {
+                    compareNonTaxCode = nonTaxCode || null;
+                    linkedAttendanceType = null;
+                }
+
+                if (taxType === 'TAXABLE') {
+                    compareNonTaxCode = null;
+
+                    if (attendanceYn === 'Y') {
+                        linkedAttendanceType = 'OVERTIME';
+                        itemName = '연장수당';
+                    }
+                }
+            }
+
+            if (itemType === 'DEDUCTION') {
+
+                compareTaxType = null;
+                compareNonTaxCode = null;
+
+                if (attendanceYn === 'Y') {
+                    linkedAttendanceType = 'ABSENCE';
+                    itemName = '결근공제';
+                }
+            }
+
+            items.push({
+                itemSettingId: row.data('item-setting-id') || null,
+                itemName: itemName,
+                itemType: itemType || '',
+                taxType: compareTaxType,
+                nonTaxCode: compareNonTaxCode,
+                linkedAttendanceType: linkedAttendanceType
+            });
+        });
+
+        return items;
+    }
+
+    // 최초 모달 진입 상태와 현재 상태를 비교해서 등록 버튼을 제어한다.
+    // 삭제 후 다시 같은 항목을 추가해서 결과가 같으면 disabled 처리된다.
+    function updatePayItemSettingSaveButtonState() {
+
+        const originalRows =
+            normalizePayItemSettingRows(
+                JSON.parse(originalPayItemSettingJson || '[]')
+            );
+
+        const currentRows =
+            normalizePayItemSettingRows(
+                collectPayItemSettingRowsForCompare()
+            );
+
+        const originalJson = JSON.stringify(originalRows);
+        const currentJson = JSON.stringify(currentRows);
+
+        $('#savePayItemSettingBtn').prop('disabled', originalJson === currentJson);
     }
 
     /**
@@ -1892,9 +2717,33 @@ $(document).ready(function () {
             return;
         }
 
+        suppressResetWarningOnce = true;
+
+        /**
+         * 초기화는 저장된 DB 상태로 되돌리는 동작이다.
+         * 따라서 임시 적용 상태를 모두 버린다.
+         */
+        baseSalaryDecisionRequired = false;
+        baseSalaryDecisionCompleted = true;
+
+        itemSettingDecisionRequired = false;
+        itemSettingDecisionCompleted = true;
+        suppressItemSettingWarningOnce = false;
+
+        skipNextSnapshotUpdate = false;
+        lastSavedPayrollSnapshotJson = '';
+
+        /**
+         * 화면 계산값은 일단 비운 뒤,
+         * searchPayroll()에서 저장된 계산결과가 있으면 renderSavedInsurance()로 다시 표시된다.
+         */
         resetPreviewResult();
 
-        // 현재 사원/작성년월 유지 후 다시 조회
+        /**
+         * 저장된 PAYROLL / PAYROLL_ITEM snapshot 기준으로 다시 조회한다.
+         * 저장하지 않은 최신 항목 적용은 여기서 사라지고,
+         * 항목 변경 권고가 유효하면 다시 표시된다.
+         */
         searchPayroll();
     });
 
@@ -1912,6 +2761,7 @@ $(document).ready(function () {
      */
     function resetPreviewResult() {
 
+        lastAttendanceImpactSnapshotJson = '';
         lastAppliedPreviewResultJson = '';
         previewCompleted = false;
         previewResult = null;
@@ -1937,6 +2787,23 @@ $(document).ready(function () {
      */
     $('#payrollPreviewModal').on('hidden.bs.modal', function () {
 
+        /**
+         * 확정/지급완료 상태에서는
+         * 계산 미리보기는 조회용으로만 사용한다.
+         * 따라서 모달을 닫아도 반영 버튼을 다시 활성화하면 안 된다.
+         */
+        if (currentPayrollStatus === 'CONFIRMED'
+                || currentPayrollStatus === 'PAID') {
+
+            $('#applyPreviewBtn')
+                .prop('disabled', true)
+                .removeClass('btn-primary')
+                .addClass('btn-secondary')
+                .text('반영 불가');
+
+            return;
+        }
+
         $('#applyPreviewBtn')
             .prop('disabled', false)
             .removeClass('btn-secondary')
@@ -1951,6 +2818,31 @@ $(document).ready(function () {
         $('#longTermCareAmount').val('');
         $('#employmentInsuranceAmount').val('');
         $('#totalInsurance').val('');
+    }
+
+    function resetAttendanceCalculation() {
+
+        if (currentPayrollStatus !== 'DRAFT') {
+            return;
+        }
+
+        if (!currentEmpNo) {
+            return;
+        }
+
+        $.ajax({
+            url: '/admin/payroll/main/reset-attendance-calculation',
+            type: 'POST',
+            contentType: 'application/json',
+            data: JSON.stringify({
+                empNo: currentEmpNo,
+                payYear: Number($('#payYear').val()),
+                payMonth: Number($('#payMonth').val())
+            }),
+            error: function (xhr) {
+                console.error(xhr.responseText);
+            }
+        });
     }
 
     /**
@@ -2332,11 +3224,15 @@ $(document).ready(function () {
     /**
      * 지급 상세
      *
-     * 현재 화면에 입력된 지급항목을 기준으로 보여준다.
+     * 기존 기능 유지:
+     * - 계산 미리보기는 현재 메인 화면에 입력된 값을 기준으로 표시한다.
+     * - 계산결과 반영 버튼을 누르기 전까지 메인 4대보험/세금 값은 변경하지 않는다.
+     *
+     * 근태연동 추가:
+     * - 일반 지급항목: 수동계산
+     * - 연장수당: 자동계산, "연장분 × 60분당 단가 / 60" 구조로 표시
      */
     function renderPreviewAllowanceArea(result) {
-
-        let allowanceRowCount = 0;
 
         let html = `
             <table class="table table-bordered align-middle text-center">
@@ -2344,18 +3240,18 @@ $(document).ready(function () {
                 <tr>
                     <th>항목명</th>
                     <th>유형</th>
-                    <th>금액(원)</th>
+                    <th>계산유형</th>
+                    <th>반영금액(원)</th>
                 </tr>
                 </thead>
                 <tbody>
                 <tr>
                     <td class="text-center">기본급</td>
                     <td class="text-center">과세</td>
+                    <td class="text-center">수동계산</td>
                     <td class="text-end">${numberFormat(result.baseSalary)}</td>
                 </tr>
         `;
-
-        allowanceRowCount++;
 
         $('.payroll-item-row').each(function () {
 
@@ -2367,17 +3263,45 @@ $(document).ready(function () {
 
             const itemName = row.data('item-name');
             const taxType = row.data('tax-type') === 'NON_TAXABLE' ? '비과세' : '과세';
-            const amount = row.find('.payroll-amount-input').val() || '0';
+            const linkedAttendanceType = row.data('linked-attendance-type') || '';
+
+            const unitAmount = removeComma(row.find('.payroll-amount-input').val() || '0');
+
+            let calculationType = '수동계산';
+            let inputText = numberFormat(unitAmount);
+            let calculatedAmount = Number(unitAmount || 0);
+            let formulaHtml = '';
+
+            if (linkedAttendanceType === 'OVERTIME') {
+
+                calculationType = '자동계산';
+
+                const minuteText = row.find('.attendance-count-input').val() || '0분';
+                const overtimeMinutes = Number(removeComma(minuteText.replace('분', '')) || '0');
+
+                calculatedAmount = Math.round(overtimeMinutes * Number(unitAmount || 0) / 60);
+
+                inputText = `${numberFormat(overtimeMinutes)}분 / ${numberFormat(unitAmount)}원`;
+
+                formulaHtml = `
+                    <tr class="table-light">
+                        <td colspan="4" class="text-center small text-primary fw-semibold">
+                            계산식: ${numberFormat(overtimeMinutes)}분 × ${numberFormat(unitAmount)}원 / 60분
+                            = ${numberFormat(calculatedAmount)}원
+                        </td>
+                    </tr>
+                `;
+            }
 
             html += `
                 <tr>
                     <td class="text-center">${itemName}</td>
                     <td class="text-center">${taxType}</td>
-                    <td class="text-end">${amount}</td>
+                    <td class="text-center">${calculationType}</td>
+                    <td class="text-end">${numberFormat(calculatedAmount)}</td>
                 </tr>
+                ${formulaHtml}
             `;
-
-            allowanceRowCount++;
         });
 
         html += `
@@ -2390,29 +3314,33 @@ $(document).ready(function () {
 
     /**
      * 공제 상세
+     *
+     * 기존 기능 유지:
+     * - 4대보험, 소득세, 지방소득세는 기존 result 값을 그대로 사용한다.
+     * - 일반 공제항목은 기존처럼 입력 금액을 표시한다.
+     *
+     * 근태연동 추가:
+     * - 결근공제는 자동계산으로 표시한다.
+     * - "결근일수 × 1일 공제단가" 구조로 보여준다.
      */
     function renderPreviewDeductionArea(result) {
-
-        let deductionRowCount = 0;
 
         let html = `
             <table class="table table-bordered align-middle text-center">
                 <thead class="table-light">
                 <tr>
                     <th>항목명</th>
-                    <th>금액(원)</th>
+                    <th>계산유형</th>
+                    <th>반영금액(원)</th>
                 </tr>
                 </thead>
                 <tbody>
+                <tr>
+                    <td class="text-center">4대보험 합계</td>
+                    <td class="text-center">자동계산</td>
+                    <td class="text-end">${numberFormat(result.totalInsurance)}</td>
+                </tr>
         `;
-
-        html += `
-            <tr>
-                <td class="text-center">4대보험 합계</td>
-                <td class="text-end">${numberFormat(result.totalInsurance)}</td>
-            </tr>
-        `;
-        deductionRowCount++;
 
         $('.payroll-item-row').each(function () {
 
@@ -2423,32 +3351,56 @@ $(document).ready(function () {
             }
 
             const itemName = row.data('item-name');
-            const amount = row.find('.payroll-amount-input').val() || '0';
+            const linkedAttendanceType = row.data('linked-attendance-type') || '';
+            const unitAmount = removeComma(row.find('.payroll-amount-input').val() || '0');
+
+            let calculationType = '수동계산';
+            let inputText = numberFormat(unitAmount);
+            let calculatedAmount = Number(unitAmount || 0);
+            let formulaHtml = '';
+
+            if (linkedAttendanceType === 'ABSENCE') {
+
+                calculationType = '자동계산';
+
+                const dayText = row.find('.attendance-count-input').val() || '0일';
+                const absenceDays = Number(removeComma(dayText.replace('일', '')) || '0');
+
+                calculatedAmount = Math.round(absenceDays * Number(unitAmount || 0));
+
+                inputText = `${numberFormat(absenceDays)}일 / ${numberFormat(unitAmount)}원`;
+
+                formulaHtml = `
+                    <tr class="table-light">
+                        <td colspan="3" class="text-center small text-primary fw-semibold">
+                            계산식: ${numberFormat(absenceDays)}일 × ${numberFormat(unitAmount)}원
+                            = ${numberFormat(calculatedAmount)}원
+                        </td>
+                    </tr>
+                `;
+            }
 
             html += `
                 <tr>
                     <td class="text-center">${itemName}</td>
-                    <td class="text-end">${amount}</td>
+                    <td class="text-center">${calculationType}</td>
+                    <td class="text-end">${numberFormat(calculatedAmount)}</td>
                 </tr>
+                ${formulaHtml}
             `;
-
-            deductionRowCount++;
         });
 
         html += `
-            <tr>
-                <td class="text-center">소득세</td>
-                <td class="text-end">${numberFormat(result.incomeTax)}</td>
-            </tr>
-            <tr>
-                <td class="text-center">지방소득세</td>
-                <td class="text-end">${numberFormat(result.localIncomeTax)}</td>
-            </tr>
-        `;
-
-       deductionRowCount += 2;
-
-        html += `
+                <tr>
+                    <td class="text-center">소득세</td>
+                    <td class="text-center">자동계산</td>
+                    <td class="text-end">${numberFormat(result.incomeTax)}</td>
+                </tr>
+                <tr>
+                    <td class="text-center">지방소득세</td>
+                    <td class="text-center">자동계산</td>
+                    <td class="text-end">${numberFormat(result.localIncomeTax)}</td>
+                </tr>
                 </tbody>
             </table>
         `;
@@ -2793,27 +3745,44 @@ $(document).ready(function () {
              const sameResult =
                  isSamePreviewResult(previewModalResult, previewResult);
 
-                 console.log('previewModalResult', previewModalResult);
-                 console.log('previewResult', previewResult);
-                 console.log('sameResult', sameResult);
+             const fixedStatus =
+                 currentPayrollStatus === 'CONFIRMED'
+                 || currentPayrollStatus === 'PAID';
 
-              $('#applyPreviewBtn').prop('disabled', sameResult);
+             console.log('previewModalResult', previewModalResult);
+             console.log('previewResult', previewResult);
+             console.log('sameResult', sameResult);
+             console.log('fixedStatus', fixedStatus);
 
-              if (sameResult) {
+             /**
+              * 확정/지급완료 상태에서는
+              * 계산 미리보기는 조회 전용이다.
+              * 따라서 반영 버튼은 항상 비활성화한다.
+              */
+             if (fixedStatus) {
 
-                  $('#applyPreviewBtn')
-                      .removeClass('btn-primary')
-                      .addClass('btn-secondary')
-                      .text('이미 반영됨');
+                 $('#applyPreviewBtn')
+                     .prop('disabled', true)
+                     .removeClass('btn-primary')
+                     .addClass('btn-secondary')
+                     .text('반영 불가');
 
-              } else {
+             } else if (sameResult) {
 
-                  $('#applyPreviewBtn')
-                      .prop('disabled', false)
-                      .removeClass('btn-secondary')
-                      .addClass('btn-primary')
-                      .text('반영');
-              }
+                 $('#applyPreviewBtn')
+                     .prop('disabled', true)
+                     .removeClass('btn-primary')
+                     .addClass('btn-secondary')
+                     .text('이미 반영됨');
+
+             } else {
+
+                 $('#applyPreviewBtn')
+                     .prop('disabled', false)
+                     .removeClass('btn-secondary')
+                     .addClass('btn-primary')
+                     .text('반영');
+             }
 
               $('#payrollPreviewModal').modal('show');
           },
@@ -2932,16 +3901,34 @@ $(document).ready(function () {
             data: JSON.stringify(requestData),
             success: function () {
 
-                // 저장 성공 시 현재 화면 상태를 마지막 저장 snapshot으로 보관
-                lastSavedPayrollSnapshotJson = makePayrollSnapshot(requestData);
+               // 저장 성공 시 현재 화면 상태를 마지막 저장 snapshot으로 보관
+               lastSavedPayrollSnapshotJson = makePayrollSnapshot(requestData);
 
-                alert('저장되었습니다.');
+               /**
+                * 저장 직후 searchPayroll() → loadPayrollItems()가 다시 실행된다.
+                * 이때 서버가 attendanceInvalidationRequired=true를 내려주더라도
+                * 방금 계산결과를 반영해서 저장한 직후이므로
+                * 첫 1회는 근태변경 알림/4대보험 초기화를 막는다.
+                */
+               suppressAttendanceInvalidationOnce = true;
 
-                searchPayroll();
-            },
-            error: function () {
+               alert('저장되었습니다.');
 
-                alert('저장 실패');
+               searchPayroll();
+           },
+            error: function (xhr) {
+
+                const serverMessage = xhr.responseText || '';
+
+                if (serverMessage.includes('반영 대상 근태 또는 조정항목')) {
+                    alert(
+                        '반영 대상 근태 또는 조정항목이 존재합니다.\n'
+                        + '단가 입력 후 저장을 진행해 주세요.'
+                    );
+                    return;
+                }
+
+                alert(serverMessage || '급여대장 저장 중 오류가 발생했습니다.');
             }
         });
     });
@@ -2976,7 +3963,6 @@ $(document).ready(function () {
             success: function () {
 
                 alert('확정 처리되었습니다.');
-
                 searchPayroll();
             },
             error: function (xhr) {
@@ -3076,14 +4062,25 @@ $(document).ready(function () {
             success: function () {
 
                 alert('지급완료 처리되었습니다.');
-
                 searchPayroll();
 
                 $('#payConfirmModal').modal('hide');
             },
-            error: function () {
+            error: function (xhr) {
 
-                alert('지급확정 실패');
+                const message = xhr.responseText || '';
+
+                if (xhr.status === 400 && message.includes('확정 상태')) {
+                    alert('작성중 상태에서는 지급확정을 할 수 없습니다.\n먼저 급여대장을 확정한 뒤 지급확정을 진행해 주세요.');
+                    return;
+                }
+
+                if (xhr.status === 400 && message.includes('지급일')) {
+                    alert('지급일을 선택해 주세요.');
+                    return;
+                }
+
+                alert(message || '지급확정 처리 중 오류가 발생했습니다.');
             }
         });
     });
@@ -3151,14 +4148,53 @@ $(document).ready(function () {
                 ? removeComma(amountInput.val())
                 : '0';
 
+            const linkedAttendanceType =
+                row.data('linked-attendance-type') || null;
+
+            const countText =
+                row.find('.attendance-count-input').val() || '0';
+
+            const attendanceCount =
+                Number(
+                    removeComma(
+                        countText
+                            .replace('분', '')
+                            .replace('일', '')
+                    ) || '0'
+                );
+
             itemList.push({
                 itemSettingId: row.data('item-setting-id') || null,
                 itemNameSnapshot: row.data('item-name'),
                 itemType: row.data('item-type'),
+
+                // 일반항목: 금액
+                // 연장수당: 60분당 단가
+                // 결근공제: 하루당 단가
                 amount: amount,
+
                 taxType: row.data('tax-type') || null,
                 nonTaxCode: row.data('non-tax-code') || null,
-                linkedAttendanceType: null
+                linkedAttendanceType: linkedAttendanceType,
+
+                // 근태연동 계산용
+                overtimeMinutes:
+                    linkedAttendanceType === 'OVERTIME'
+                        ? attendanceCount
+                        : null,
+
+                absenceDays:
+                    linkedAttendanceType === 'ABSENCE'
+                        ? attendanceCount
+                        : null,
+
+                // 조정항목 저장/확정/지급확정 연결용
+                derivedAdjustment:
+                    row.data('derived-adjustment') === true
+                    || row.data('derived-adjustment') === 'true',
+
+                sourcePayMonth:
+                    row.data('source-pay-month') || null
             });
         });
 
@@ -3208,14 +4244,32 @@ $(document).ready(function () {
 
             const row = $(this);
 
+            const itemNameSnapshot = row.data('item-name');
+
+            let linkedAttendanceType =
+                row.data('linked-attendance-type') || null;
+
+            /**
+             * 조정항목은 항목설정에 없는 자동 생성 항목이라
+             * linkedAttendanceType이 null로 들어올 수 있다.
+             * 저장 요청에서는 이름 기준으로 근태유형을 복원한다.
+             */
+            if (String(itemNameSnapshot || '').startsWith('조정수당')) {
+                linkedAttendanceType = 'OVERTIME';
+            }
+
+            if (String(itemNameSnapshot || '').startsWith('조정공제')) {
+                linkedAttendanceType = 'ABSENCE';
+            }
+
             itemList.push({
                 itemSettingId: row.data('item-setting-id') || null,
-                itemNameSnapshot: row.data('item-name'),
+                itemNameSnapshot: itemNameSnapshot,
                 itemType: row.data('item-type'),
                 amount: removeComma(row.find('.payroll-amount-input').val() || '0'),
                 taxType: row.data('tax-type') || null,
                 nonTaxCode: row.data('non-tax-code') || null,
-                linkedAttendanceType: row.data('linked-attendance-type') || null
+                linkedAttendanceType: linkedAttendanceType
             });
         });
 
@@ -3338,7 +4392,7 @@ $(document).ready(function () {
 
            $('.payroll-amount-input').prop('disabled', false);
 
-           $('#payItemSettingBtn').prop('disabled', false);
+           $('#payItemSettingBtn').prop('disabled', decisionBlocked);
 
            $('#previewBtn').prop('disabled', decisionBlocked);
 
@@ -3370,7 +4424,7 @@ $(document).ready(function () {
 
            $('.payroll-amount-input').prop('disabled', false);
 
-           $('#payItemSettingBtn').prop('disabled', false);
+           $('#payItemSettingBtn').prop('disabled', decisionBlocked);
 
            $('#previewBtn').prop('disabled', decisionBlocked);
 
@@ -3630,12 +4684,24 @@ $(document).ready(function () {
         `;
     }
 
-    function emptyDeductionRow() {
-
+    function emptyAllowanceRow() {
         return `
             <tr>
-                <td colspan="3" class="text-muted py-4">
-                    공제항목이 없습니다.
+                <td colspan="4" class="text-center text-muted py-3">
+                    지급항목이 없습니다.
+                </td>
+            </tr>
+        `;
+    }
+
+    function emptyDeductionRow() {
+        return `
+            <tr>
+                <td colspan="3" class="align-middle p-2">
+                    <div class="d-flex align-items-center justify-content-center"
+                         style="height: 34px;">
+                        <span class="text-muted">공제항목이 없습니다.</span>
+                    </div>
                 </td>
             </tr>
         `;

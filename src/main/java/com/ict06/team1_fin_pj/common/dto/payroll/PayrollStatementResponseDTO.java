@@ -81,5 +81,7 @@ public class PayrollStatementResponseDTO {
         private String taxType;
         private String nonTaxCode;
         private String linkedAttendanceType;
+        private BigDecimal appliedAmount;
+        private BigDecimal attendanceCount;
     }
 }
