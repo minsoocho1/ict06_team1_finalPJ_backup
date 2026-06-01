@@ -11,7 +11,7 @@
 <!--begin::Sidebar-->
 <aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
     <!--begin::Sidebar Brand-->
-    <div class="sidebar-brand d-flex justify-content-center py-2">
+    <div class="sidebar-brand d-flex justify-content-center">
         <a th:href="@{/admin/home}"
            class="brand-link d-flex align-items-center text-decoration-none"
            style="width: fit-content; gap: 10px; padding: 11px 14px; border-bottom: 0; border-radius: 16px; background: linear-gradient(135deg, rgba(142, 166, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%); box-shadow: none;">
@@ -44,11 +44,11 @@
                         stroke-width="2.4"
                 />
             </svg>
-            <span class="d-flex flex-column" style="user-select: none; line-height: 1; gap: 3px;">
-                <span style="font-size: 1.2rem; font-weight: 900; letter-spacing: -0.06em; color: #f8f9fa; text-decoration: none;">
-                    CORE<span style="color: #8ea6ff;">WORK</span>
+            <span class="brand-copy d-flex flex-column">
+                <span class="brand-title">
+                    CORE<span class="brand-title-accent">WORK</span>
                 </span>
-                <small style="font-size: 0.58rem; font-weight: 800; letter-spacing: 0.1em; color: #cbd5e1; text-decoration: none;">
+                <small class="brand-subtitle">
                     AI-BASED GROUPWARE
                 </small>
             </span>
@@ -68,11 +68,10 @@
                     data-accordion="false"
                     id="navigation"
             >
-                <li class="nav-item"><hr></li>
-
                 <li class="nav-item">
                     <a th:href="@{/admin/home}" class="nav-link">
-                        <i class="nav-icon fa-regular fa-house"></i>
+<!--                        <i class="nav-icon fa-regular fa-house"></i>-->
+                        <i class="fa-solid fa-chart-column"></i>
                         <p>대시보드</p>
                     </a>
                 </li>
@@ -97,22 +96,25 @@
                 </li>
                 <li class="nav-item">
                     <a href="/admin/AiSecretary/dashboard" class="nav-link">
-                        <i class="nav-icon fa-regular fa-comments"></i>
+<!--                        <i class="nav-icon fa-regular fa-comments"></i>-->
+                        <i class="fa-solid fa-chart-column"></i>
                         <p>AI 데이터 운영 대시보드</p>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a href="/admin/AiSecretary/rag" class="nav-link">
-                        <i class="nav-icon fa-regular fa-comments"></i>
+<!--                        <i class="nav-icon fa-regular fa-comments"></i>-->
+                        <i class="fa-solid fa-file"></i>
                         <p>지식베이스 및 RAG 관리</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a href="/admin/AiSecretary/security" class="nav-link">
-                        <i class="nav-icon fa-regular fa-comments"></i>
+<!--                        <i class="nav-icon fa-regular fa-comments"></i>-->
+                        <i class="fa-solid fa-lock"></i>
                         <p>보안 및 권한 제어</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
 
@@ -128,7 +130,8 @@
                 </li>
                 <li class="nav-item">
                     <a th:href="@{/admin/departments}" class="nav-link">
-                        <i class="nav-icon fa-regular fa-user"></i>
+<!--                        <i class="nav-icon fa-regular fa-user"></i>-->
+                        <i class="fa-solid fa-folder-tree"></i>
                         <p>조직도 관리</p>
                     </a>
                 </li>
@@ -141,14 +144,15 @@
                     <a th:href="@{/admin/onboarding/main}" class="nav-link">
                         <i class="nav-icon fa-solid fa-user-group"></i>
                         <p>AI 온보딩 관리</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
                 <li class="nav-item">
                     <a th:href="@{/admin/evaluation/main}" class="nav-link">
-                        <i class="nav-icon fa-solid fa-user-group"></i>
+<!--                        <i class="nav-icon fa-solid fa-user-group"></i>-->
+                        <i class="fa-solid fa-list-check"></i>
                         <p>AI 온보딩 평가</p>
-                        <span class="badge ms-auto" style="background-color: #eef2ff; color: #321fdb; border: 1px solid #c7d2fe; font-weight: 700;">AI</span>
+                        <span class="badge badge-ai ms-auto">AI</span>
                     </a>
                 </li>
 
@@ -179,7 +183,8 @@
                             <a th:href="@{/admin/attendance/main}"
                                class="nav-link"
                                th:classappend="${activeAttendanceMenu == 'main'} ? ' active'">
-                                <i class="nav-icon fa-solid fa-angle-right"></i>
+<!--                                <i class="nav-icon fa-solid fa-angle-right"></i>-->
+                                <i class="fa-solid fa-bars-progress"></i>
                                 <p>근태 현황</p>
                             </a>
                         </li>
@@ -189,7 +194,8 @@
                             <a th:href="@{/admin/attendance/statistics}"
                                class="nav-link"
                                th:classappend="${activeAttendanceMenu == 'statistics'} ? ' active'">
-                                <i class="nav-icon fa-solid fa-angle-right"></i>
+<!--                                <i class="nav-icon fa-solid fa-angle-right"></i>-->
+                                <i class="fa-solid fa-chart-pie"></i>
                                 <p>근태 통계</p>
                             </a>
                         </li>
@@ -199,7 +205,8 @@
                             <a th:href="@{/admin/attendance/leave}"
                                class="nav-link"
                                th:classappend="${activeAttendanceMenu == 'leave'} ? ' active'">
-                                <i class="nav-icon fa-solid fa-angle-right"></i>
+<!--                                <i class="nav-icon fa-solid fa-angle-right"></i>-->
+                                <i class="fa-solid fa-umbrella-beach"></i>
                                 <p>연차/휴가 현황</p>
                             </a>
                         </li>

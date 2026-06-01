@@ -13,7 +13,9 @@
 <!--begin::Header-->
 <style>
     .corework-admin-header {
-        min-height: 68px;
+        min-height: var(--cw-admin-header-height);
+        padding-top: 0;
+        padding-bottom: 0;
         background:
             linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(244, 247, 251, 0.94) 100%);
         border-bottom: 1px solid rgba(148, 163, 184, 0.18);
@@ -23,7 +25,7 @@
     }
 
     .corework-admin-header .container-fluid {
-        min-height: 68px;
+        min-height: var(--cw-admin-header-height);
         padding: 0 26px;
     }
 

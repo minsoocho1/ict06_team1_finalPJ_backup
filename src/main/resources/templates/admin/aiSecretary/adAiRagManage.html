@@ -16,9 +16,11 @@
 <!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
 
-<head th:insert="~{/admin/common/head.html :: common_header}">
+<head th:include="/admin/common/head.html :: common_header">
   <title id="page_title">지식 베이스 및 RAG 관리</title>
-  <style>
+</head>
+
+<style>
     .request-reference-box { word-break: break-word; }
     .request-reference-link,
     .request-reference-text {
@@ -30,13 +32,13 @@
       word-break: normal;
     }
     .request-detail-section {
-      border: 1px solid #e5e7eb;
-      border-radius: 0.75rem;
-      background: #fff;
+      border: 1px solid var(--cw-border);
+      border-radius: 0.5rem;
+      background: var(--cw-surface);
       padding: 1rem;
     }
     .request-summary-value {
-      color: #0f172a;
+      color: var(--cw-text);
       font-size: 0.95rem;
       line-height: 1.45;
       word-break: break-word;
@@ -49,9 +51,9 @@
       white-space: pre-wrap;
     }
     .document-management-detail-panel {
-      border: 1px solid #dbe2ea;
-      border-radius: 0.75rem;
-      background: #f8fafc;
+      border: 1px solid var(--cw-border);
+      border-radius: 0.5rem;
+      background: var(--cw-surface-muted);
       padding: 1rem;
     }
     .document-management-detail-list {
@@ -61,9 +63,9 @@
       overflow: auto;
     }
     .document-management-detail-card {
-      border: 1px solid #e5e7eb;
-      border-radius: 0.75rem;
-      background: #fff;
+      border: 1px solid var(--cw-border);
+      border-radius: 0.5rem;
+      background: var(--cw-surface);
       padding: 0.875rem 1rem;
     }
     .document-management-stage-wrap {
@@ -79,23 +81,60 @@
       line-height: 1;
     }
     .document-management-stage-badge.is-active {
-      background: var(--bs-primary);
-      color: #fff;
+      background: var(--cw-primary);
+      color: var(--bs-white);
     }
     .document-management-stage-badge.is-idle {
-      background: var(--bs-light);
-      color: #111827;
-      border: 1px solid #dbe2ea;
+      background: var(--cw-surface-muted);
+      color: var(--cw-text);
+      border: 1px solid var(--cw-border);
     }
     .document-management-stage-badge.is-failure {
-      background: var(--bs-danger);
-      color: #fff;
+      background: var(--cw-danger);
+      color: var(--bs-white);
     }
     .document-management-failure-box {
-      border: 1px solid rgba(220, 53, 69, 0.28);
-      background: rgba(220, 53, 69, 0.05);
-      border-radius: 0.75rem;
+      border: 1px solid var(--cw-danger);
+      background: var(--cw-danger-soft);
+      border-radius: 0.5rem;
       padding: 1rem;
+    }
+    .rag-help-button {
+      appearance: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: middle;
+      flex: 0 0 20px;
+      width: 20px !important;
+      height: 20px !important;
+      min-width: 20px !important;
+      max-width: 20px !important;
+      min-height: 20px !important;
+      max-height: 20px !important;
+      padding: 0 !important;
+      aspect-ratio: 1;
+      border-radius: 50% !important;
+      border: 1px solid var(--cw-border);
+      background: var(--cw-surface-muted);
+      color: var(--cw-primary);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1;
+      box-sizing: border-box;
+      cursor: help;
+    }
+    .rag-help-button:hover,
+    .rag-help-button:focus {
+      border-color: var(--cw-primary);
+      background: var(--cw-primary-soft);
+      color: var(--cw-primary);
+    }
+    .rag-help-button > i,
+    .rag-help-button > svg {
+      display: block;
+      flex: 0 0 auto;
+      line-height: 1;
     }
     .admin-autocomplete {
       position: relative;
@@ -108,10 +147,10 @@
       left: 0;
       right: 0;
       z-index: 1056;
-      background: #fff;
-      border: 1px solid #e5e7eb;
-      border-radius: 0.75rem;
-      box-shadow: 0 12px 24px rgba(15, 23, 42, 0.12);
+      background: var(--cw-surface);
+      border: 1px solid var(--cw-border);
+      border-radius: 0.5rem;
+      box-shadow: var(--cw-shadow-md);
       max-height: 220px;
       overflow-y: auto;
       overflow-x: hidden;
@@ -130,38 +169,43 @@
       border: 0;
       background: transparent;
       text-align: left;
-      color: #0f172a;
+      color: var(--cw-text);
       transition: background-color 0.12s ease;
     }
     .admin-autocomplete-item:hover,
-    .admin-autocomplete-item.active { background: #f8fafc; }
-    .admin-autocomplete-item:not(:last-child) { border-bottom: 1px solid #f1f5f9; }
+    .admin-autocomplete-item.active { background: var(--cw-surface-muted); }
+    .admin-autocomplete-item:not(:last-child) { border-bottom: 1px solid var(--cw-border); }
     .admin-autocomplete-empty {
       padding: 0.75rem 0.875rem;
-      color: #64748b;
+      color: var(--cw-text-muted);
       font-size: 0.9rem;
     }
     .admin-autocomplete-input.is-invalid,
     .js-admin-autocomplete-input.is-invalid,
     .org-target-selector select.is-invalid,
     .org-target-selector input.is-invalid {
-      border-color: #dc3545;
-      box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.08);
+      border-color: var(--cw-danger);
+      box-shadow: 0 0 0 0.2rem rgba(166, 0, 98, 0.08);
     }
     .cta-action-card {
-      background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-      color: #fff;
-      border-radius: 1rem;
+      background: var(--cw-surface);
+      color: var(--cw-text);
+      border-radius: 0.5rem;
+      border: 1px solid var(--cw-border) !important;
+    }
+    .cta-action-card .btn-outline-light {
+      color: var(--cw-text-muted);
+      border-color: var(--cw-border);
+      background: var(--cw-surface);
     }
     .cta-action-card .btn-outline-light:hover {
-      color: #1d4ed8;
-      background: #fff;
-      border-color: #fff;
+      color: var(--cw-primary);
+      background: var(--cw-primary-soft);
+      border-color: var(--cw-primary);
     }
-    .processed-request-row-rejected { background-color: #f3f4f6 !important; }
-    .document-management-row-failed { background-color: #fef2f2 !important; }
-  </style>
-</head>
+    .processed-request-row-rejected { background-color: var(--cw-surface-muted) !important; }
+    .document-management-row-failed { background-color: var(--cw-danger-soft) !important; }
+</style>
 
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
 <div class="app-wrapper">
@@ -202,10 +246,9 @@
                 <div class="card-body">
                   <div class="d-flex align-items-center gap-2 mb-2">
                     <p class="text-muted fw-bold mb-0">전체 RAG 문서</p>
-                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
-                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                    <button type="button" class="rag-help-button"
                             data-bs-toggle="tooltip" data-bs-placement="top"
-                            title="챗봇/RAG 검색 대상으로 관리되는 AI_RAG 문서 전체 수입니다. 온보딩 문서는 포함하지 않습니다. 집계 기준: UPLOADED, CHUNKING, CHUNK_FAILED, EMBEDDING, EMBED_FAILED, APPROVAL_PENDING, PUBLISHED.">i</button>
+                            title="챗봇/RAG 검색 대상으로 관리되는 AI_RAG 문서 전체 수입니다. 온보딩 문서는 포함하지 않습니다. 집계 기준: UPLOADED, CHUNKING, CHUNK_FAILED, EMBEDDING, EMBED_FAILED, APPROVAL_PENDING, PUBLISHED."><i class="fa-solid fa-info"></i></button>
                   </div>
                   <div class="d-flex align-items-end gap-2 mb-2">
                     <h3 class="fw-bold mb-0" th:text="${ragTotalCount}">0</h3>
@@ -220,10 +263,9 @@
                 <div class="card-body">
                   <div class="d-flex align-items-center gap-2 mb-2">
                     <p class="text-muted fw-bold mb-0">처리 진행</p>
-                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
-                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                    <button type="button" class="rag-help-button"
                             data-bs-toggle="tooltip" data-bs-placement="top"
-                            title="본문 추출, 청크 분할 또는 임베딩 생성이 진행 중인 문서 수입니다. 집계 기준: CHUNKING, EMBEDDING.">i</button>
+                            title="본문 추출, 청크 분할 또는 임베딩 생성이 진행 중인 문서 수입니다. 집계 기준: CHUNKING, EMBEDDING."><i class="fa-solid fa-info"></i></button>
                   </div>
                   <div class="d-flex align-items-end gap-2 mb-2">
                     <h3 class="fw-bold mb-0" th:text="${ragProcessingCount}">0</h3>
@@ -238,10 +280,9 @@
                 <div class="card-body">
                   <div class="d-flex align-items-center gap-2 mb-2">
                     <p class="text-muted fw-bold mb-0">반영 대기</p>
-                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
-                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                    <button type="button" class="rag-help-button"
                             data-bs-toggle="tooltip" data-bs-placement="top"
-                            title="업로드 후 처리 시작 전이거나, 임베딩 완료 후 관리자 활성화를 기다리는 문서 수입니다. 집계 기준: UPLOADED, APPROVAL_PENDING.">i</button>
+                            title="업로드 후 처리 시작 전이거나, 임베딩 완료 후 관리자 활성화를 기다리는 문서 수입니다. 집계 기준: UPLOADED, APPROVAL_PENDING."><i class="fa-solid fa-info"></i></button>
                   </div>
                   <div class="d-flex align-items-end gap-2 mb-2">
                     <h3 class="fw-bold mb-0" th:text="${ragPendingCount}">0</h3>
@@ -256,10 +297,9 @@
                 <div class="card-body">
                   <div class="d-flex align-items-center gap-2 mb-2">
                     <p class="text-muted fw-bold mb-0">RAG 반영 완료</p>
-                    <button type="button" class="btn btn-sm btn-light border rounded-circle p-0"
-                            style="width: 20px; height: 20px; font-size: 12px; line-height: 1;"
+                    <button type="button" class="rag-help-button"
                             data-bs-toggle="tooltip" data-bs-placement="top"
-                            title="챗봇 RAG 검색에 실제로 사용 가능한 문서 수입니다. 집계 기준: PUBLISHED.">i</button>
+                            title="챗봇 RAG 검색에 실제로 사용 가능한 문서 수입니다. 집계 기준: PUBLISHED."><i class="fa-solid fa-info"></i></button>
                   </div>
                   <div class="d-flex align-items-end gap-2 mb-2">
                     <h3 class="fw-bold mb-0" th:text="${ragPublishedCount}">0</h3>
@@ -608,8 +648,7 @@
                         <div class="d-flex align-items-center gap-2 mb-1">
                           <label class="form-label fw-bold mb-0"><span class="text-danger me-1">*</span>자료 유형</label>
                           <button type="button"
-                                  class="btn btn-sm btn-light border rounded-circle p-0 flex-shrink-0"
-                                  style="width:20px;height:20px;font-size:12px;line-height:1;"
+                                  class="rag-help-button flex-shrink-0"
                                   data-bs-toggle="tooltip"
                                   data-bs-placement="top"
                                   title="요청 자료가 어떤 업무 자료인지 구분하는 값입니다. 예: 사내 규정, 업무 매뉴얼, FAQ, 서비스 이용 안내">
@@ -629,8 +668,7 @@
                         <div class="d-flex align-items-center gap-2 mb-1">
                           <label class="form-label fw-bold mb-0"><span class="text-danger me-1">*</span>카테고리</label>
                           <button type="button"
-                                  class="btn btn-sm btn-light border rounded-circle p-0 flex-shrink-0"
-                                  style="width:20px;height:20px;font-size:12px;line-height:1;"
+                                  class="rag-help-button flex-shrink-0"
                                   data-bs-toggle="tooltip"
                                   data-bs-placement="top"
                                   title="자료가 속한 업무 영역입니다. 예: 근태, 인사, 전자결재, 교육, 보안">
@@ -1142,4 +1180,3 @@
 
 </body>
 </html>
-
