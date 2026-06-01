@@ -21,6 +21,7 @@
 [data-bs-theme="light"] {
     /* 전역 폰트입니다. common/head.html에서 Pretendard를 로드한 뒤 이 변수로 전체에 적용합니다. */
     --cw-font-sans: "Pretendard", "Apple SD Gothic Neo", "Noto Sans KR", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --cw-admin-header-height: 68px;
 
     /* 베이스 색상입니다. 배경, 카드 표면, 보조 표면, 경계선에 사용합니다. */
     --cw-base: #f8f9fa;
@@ -176,11 +177,22 @@ body.layout-fixed {
     background-color: var(--cw-sidebar-bg) !important;
 }
 
+/* header.html의 공통 헤더와 로고 영역의 하단선을 같은 높이에 맞춥니다. */
+.app-sidebar .sidebar-brand {
+    height: var(--cw-admin-header-height);
+    padding: 0;
+}
+
 /*
  * 데스크톱에서 사이드바가 열린 상태일 때 메뉴명 길이에 맞춰 폭을 자동 조정합니다.
  * 모바일과 접힘 상태는 AdminLTE 기본 동작을 유지하기 위해 조건을 제한합니다.
  */
 @media (min-width: 992px) {
+    /* 브랜드 영역이 커진 만큼 스크롤 가능한 메뉴 높이도 함께 보정합니다. */
+    .sidebar-expand-lg .app-sidebar .sidebar-wrapper {
+        height: calc(100vh - var(--cw-admin-header-height));
+    }
+
     body:not(.sidebar-collapse) .app-wrapper {
         grid-template-columns: max-content 1fr;
     }
