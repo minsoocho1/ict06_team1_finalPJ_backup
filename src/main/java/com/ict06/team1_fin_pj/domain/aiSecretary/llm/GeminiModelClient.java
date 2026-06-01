@@ -1,5 +1,22 @@
+/**
+ * @FileName : GeminiModelClient.java
+ * @Description : Gemini API 연동 클라이언트
+ *                - AI 비서, 챗봇, 문장 다듬기 기능에서 사용하는 외부 LLM 호출 처리
+ *                - Gemini generateContent API 요청/응답 처리
+ *                - prompt 전달, 응답 텍스트 추출, API 오류 처리 담당
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 04. 28
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.04.28  송혜진       최초 생성
+ * @ 2026.05.12  송혜진       Gemini API 호출 및 응답 로그 보강
+ * @ 2026.05.28  송혜진       AI 비서 문서 작성 및 챗봇 호출 흐름 정리
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.llm;
-/* [ Gemini 호출 담당 ] */
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

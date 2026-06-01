@@ -1,3 +1,21 @@
+/**
+ * @FileName : AiChatCleanupScheduler.java
+ * @Description : AI 챗봇 대화 정리 스케줄러
+ *                - 일정 시간이 지난 CHATBOT 세션 및 메시지 정리
+ *                - 챗봇 단기 대화 데이터 보관 정책 적용
+ *                - AI 비서 ASSISTANT 세션과 챗봇 CHATBOT 세션 보관 정책 분리
+ *                - 장기 분석용 로그와 단기 대화 데이터를 분리하여 관리
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 05. 12
+ * @Modification_History
+ * @
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.05.12  송혜진       최초 생성
+ * @ 2026.05.28  송혜진       CHATBOT 단기 보관 및 세션 정리 정책 기준 반영
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.scheduler;
 
 import com.ict06.team1_fin_pj.domain.aiSecretary.entity.AiChatSessionEntity;

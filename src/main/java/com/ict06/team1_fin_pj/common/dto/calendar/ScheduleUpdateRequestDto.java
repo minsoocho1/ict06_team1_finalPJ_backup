@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 // 일정 수정 요청
 @Getter
@@ -30,4 +31,7 @@ public class ScheduleUpdateRequestDto {
     private Boolean isPublic;
 
     private String repeatRule;
+
+    // 수정 시 새로 선택된 참석자 사번 목록.
+    private List<String> participantNos;
 }

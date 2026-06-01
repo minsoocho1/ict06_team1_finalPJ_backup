@@ -11,8 +11,13 @@
 <html xmlns:th="http://www.thymleaf.org">
 <!--begin::Head-->
 <head th:include="/admin/common/head.html :: common_header">
-    <title id="page_title">캘린더 메인</title>    <!-- 해당 페이지별 사용할 title 내용 넣기 -->
+    <title id="page_title">캘린더 메인</title>
 </head>
+
+<!-- 공통 head fragment가 head 내부를 교체하므로, 페이지 전용 CSS는 head 밖에서 로드한다. -->
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.css" rel="stylesheet">
+<link rel="stylesheet" th:href="@{/css/calendar/adCalendar.css}">
+
 <!--end::Head-->
 <!--begin::Body-->
 <body class="layout-fixed sidebar-expand-lg bg-body-tertiary">
@@ -38,6 +43,473 @@
                     <h3 class="fw-bold mb-2">캘린더 메인</h3>
                 </div>
                 <!-- end::Row-->
+
+                <!-- 관리자 캘린더 화면 영역 -->
+                <div class="admin-calendar-page">
+                    <!-- 참석자 응답 변경 시 현재 로그인 관리자 사번을 JS에서 사용한다. -->
+                    <input type="hidden" id="adminCalendarLoginEmpNo" th:value="${adminLoginEmpNo}">
+
+                    <!-- 사용자 캘린더와 동일한 상단 조작 영역 -->
+                    <div class="admin-calendar-toolbar">
+                        <div class="admin-calendar-toolbar-left">
+                            <button type="button" id="adminCalendarToday" class="admin-calendar-btn">오늘</button>
+                            <button type="button" id="adminCalendarPrev" class="admin-calendar-btn">&lt;</button>
+                            <button type="button" id="adminCalendarNext" class="admin-calendar-btn">&gt;</button>
+                        </div>
+
+                        <div class="admin-calendar-toolbar-center">
+                            <span id="adminCalendarTitle" class="admin-calendar-title"></span>
+                        </div>
+
+                        <div class="admin-calendar-toolbar-right">
+                            <div class="admin-calendar-filter-bar">
+
+                                <!-- 일정 범위 필터 -->
+                                <div class="admin-calendar-filter-wrap">
+                                    <button type="button" id="adminScopeFilterButton" class="admin-calendar-filter-btn">
+                                        일정 범위 ▾
+                                    </button>
+
+                                    <div id="adminScopeFilterDropdown" class="admin-calendar-filter-dropdown">
+                                        <strong>일정 범위</strong>
+
+                                        <label>
+                                            <input type="checkbox" data-admin-scope-filter="PERSONAL" checked>
+                                            개인 일정
+                                        </label>
+
+                                        <label>
+                                            <input type="checkbox" data-admin-scope-filter="DEPARTMENT" checked>
+                                            부서 일정
+                                        </label>
+
+                                        <label>
+                                            <input type="checkbox" data-admin-scope-filter="COMPANY" checked>
+                                            전사 일정
+                                        </label>
+
+                                        <!-- 구성원 일정: 조직도에서 선택한 멤버의 공개 개인일정을 함께 볼 때 사용한다. -->
+                                        <div class="admin-calendar-filter-divider"></div>
+
+                                        <strong class="admin-calendar-member-filter-title">구성원 일정</strong>
+
+                                        <div id="adminCalendarMemberScheduleList" class="admin-calendar-member-schedule-list">
+                                            <div class="admin-calendar-member-empty">구성원 목록을 불러오는 중입니다.</div>
+                                        </div>
+
+                                        <button type="button" id="adminCalendarMemberOrgButton" class="admin-calendar-member-org-button">
+                                            조직도에서 멤버 선택
+                                        </button>
+
+                                        <div id="adminCalendarMemberOrgPanel" class="admin-calendar-member-org-panel" hidden>
+                                            <select id="adminCalendarMemberOrgDeptSelect" class="admin-calendar-member-org-select">
+                                                <option value="">부서를 선택해주세요.</option>
+                                            </select>
+
+                                            <div id="adminCalendarMemberOrgList" class="admin-calendar-member-org-list">
+                                                <div class="admin-calendar-member-empty">부서를 선택해주세요.</div>
+                                            </div>
+                                        </div>
+
+                                        <small id="adminCalendarMemberScheduleCount" class="admin-calendar-member-count"></small>
+                                    </div>
+                                </div>
+
+                                <!-- 카테고리 필터 -->
+                                <div class="admin-calendar-filter-wrap">
+                                    <button type="button" id="adminCategoryFilterButton" class="admin-calendar-filter-btn">
+                                        카테고리 ▾
+                                    </button>
+
+                                    <div id="adminCategoryFilterDropdown" class="admin-calendar-filter-dropdown admin-calendar-category-dropdown">
+                                        <strong>카테고리</strong>
+
+                                        <label>
+                                            <input type="checkbox" data-admin-category-filter="MEETING" checked>
+                                            회의
+                                        </label>
+
+                                        <label>
+                                            <input type="checkbox" data-admin-category-filter="WORK" checked>
+                                            업무
+                                        </label>
+
+                                        <label>
+                                            <input type="checkbox" data-admin-category-filter="NOTICE" checked>
+                                            공지
+                                        </label>
+
+                                        <label>
+                                            <input type="checkbox" data-admin-category-filter="ETC" checked>
+                                            기타
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="admin-calendar-view-group">
+                                <button type="button" class="admin-calendar-view-btn active" data-admin-calendar-view="dayGridMonth">월</button>
+                                <button type="button" class="admin-calendar-view-btn" data-admin-calendar-view="timeGridWeek">주</button>
+                                <button type="button" class="admin-calendar-view-btn" data-admin-calendar-view="timeGridDay">일</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FullCalendar 렌더링 영역 -->
+                    <main class="admin-calendar-main-area">
+                        <div id="adminCalendar" class="admin-calendar-main"></div>
+                    </main>
+
+                    <!-- 관리자 일정 간단 확인 팝업: 사용자 CalendarDetail 보기 모드와 같은 정보 구조를 사용한다. -->
+                    <section id="adminCalendarDetailPopup" class="admin-calendar-detail-popup" hidden>
+                        <div class="admin-calendar-detail-header">
+                            <span id="adminCalendarDetailColor" class="admin-calendar-detail-color"></span>
+
+                            <div class="admin-calendar-detail-actions">
+                                <button
+                                        type="button"
+                                        id="adminCalendarDetailEdit"
+                                        class="admin-calendar-detail-action-btn"
+                                        aria-label="일정 수정"
+                                >
+                                    <i class="fa-solid fa-pen"></i>
+                                    <span class="admin-calendar-detail-tooltip">일정 수정</span>
+                                </button>
+
+                                <button
+                                        type="button"
+                                        id="adminCalendarDetailDelete"
+                                        class="admin-calendar-detail-action-btn"
+                                        aria-label="일정 삭제"
+                                >
+                                    <i class="fa-solid fa-trash"></i>
+                                    <span class="admin-calendar-detail-tooltip">일정 삭제</span>
+                                </button>
+
+                                <button
+                                        type="button"
+                                        id="adminCalendarDetailClose"
+                                        class="admin-calendar-detail-action-btn"
+                                        aria-label="닫기"
+                                >
+                                    <i class="fa-solid fa-xmark"></i>
+                                    <span class="admin-calendar-detail-tooltip">닫기</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <h4 id="adminCalendarDetailTitle" class="admin-calendar-detail-title"></h4>
+
+                        <div id="adminCalendarDetailTime" class="admin-calendar-detail-time"></div>
+
+                        <!-- 반복 일정이면 사용자 캘린더처럼 상세 팝업에 반복 표시를 보여준다. -->
+                        <div id="adminCalendarDetailRepeatBadge" class="admin-calendar-detail-repeat-badge" hidden>
+                            반복일정
+                        </div>
+
+                        <div class="admin-calendar-detail-divider"></div>
+
+                        <div class="admin-calendar-detail-info-list">
+                            <div class="admin-calendar-detail-info-row">
+                                <i class="fa-regular fa-user admin-calendar-detail-icon"></i>
+                                <span id="adminCalendarDetailOwner"></span>
+                            </div>
+
+                            <div class="admin-calendar-detail-info-row">
+                                <i class="fa-solid fa-location-dot admin-calendar-detail-icon"></i>
+                                <span id="adminCalendarDetailLocation"></span>
+                            </div>
+
+                            <div class="admin-calendar-detail-info-row">
+                                <i class="fa-solid fa-tag admin-calendar-detail-icon"></i>
+                                <span id="adminCalendarDetailCategory"></span>
+                            </div>
+
+                            <div class="admin-calendar-detail-info-row">
+                                <i class="fa-solid fa-layer-group admin-calendar-detail-icon"></i>
+                                <span id="adminCalendarDetailType"></span>
+                            </div>
+                        </div>
+
+                        <!-- 참석자가 있는 일정만 사용자 상세 팝업처럼 참석자 요약을 노출한다. -->
+                        <div id="adminCalendarDetailParticipants" class="admin-calendar-detail-participants" hidden>
+                            <div class="admin-calendar-detail-participant-header">
+                                <i class="fa-regular fa-user admin-calendar-detail-icon"></i>
+                                <span id="adminCalendarDetailParticipantCount"></span>
+                            </div>
+
+                            <div id="adminCalendarDetailParticipantList" class="admin-calendar-detail-participant-list"></div>
+                        </div>
+
+                        <!-- 내가 초대받은 일정이면 사용자 캘린더처럼 참석 여부를 변경할 수 있게 한다. -->
+                        <div id="adminCalendarParticipantResponse" class="admin-calendar-detail-participants" hidden>
+                            <div class="admin-calendar-detail-participant-header">
+                                <i class="fa-regular fa-circle-check admin-calendar-detail-icon"></i>
+                                <span>참석여부</span>
+                            </div>
+
+                            <select id="adminCalendarParticipantStatus" class="admin-calendar-form-control">
+                                <option value="ACCEPTED">예</option>
+                                <option value="REJECTED">아니오</option>
+                                <option value="PENDING">미정</option>
+                            </select>
+                        </div>
+
+                        <div class="admin-calendar-detail-divider"></div>
+
+                        <div id="adminCalendarDetailContent" class="admin-calendar-detail-content"></div>
+                    </section>
+
+                    <!-- 관리자 일정 간단 등록 팝업: 날짜 셀 근처에 뜨는 사용자 간단등록 팝업 구조를 따른다. -->
+                    <section id="adminCalendarSimpleAddPopup" class="admin-calendar-simple-popup" hidden>
+                        <div class="admin-calendar-simple-header">
+                            <!-- 사용자 캘린더 간단등록 팝업과 동일하게 제목을 표시한다. -->
+                            <strong>일정 간단 등록</strong>
+
+                            <button type="button" id="adminCalendarSimpleClose" class="admin-calendar-popup-close" aria-label="닫기">
+                                ×
+                            </button>
+                        </div>
+
+                        <form id="adminCalendarSimpleForm" class="admin-calendar-simple-form">
+                            <input type="hidden" id="adminCalendarSimpleDate">
+
+                            <input
+                                    type="text"
+                                    id="adminCalendarSimpleTitle"
+                                    class="admin-calendar-simple-title"
+                                    placeholder="제목을 입력하세요"
+                                    required
+                            >
+
+                            <select id="adminCalendarSimpleCategory" class="admin-calendar-form-control">
+                                <option value="MEETING">회의</option>
+                                <option value="WORK">업무</option>
+                                <option value="NOTICE">공지</option>
+                                <option value="ETC">기타</option>
+                            </select>
+
+                            <!-- 선택한 날짜를 사용자 캘린더 간단등록 팝업처럼 노출한다. -->
+                            <div id="adminCalendarSimpleDateText" class="admin-calendar-simple-date"></div>
+
+                            <div class="admin-calendar-simple-time-row">
+                                <input type="time" id="adminCalendarSimpleStartTime" class="admin-calendar-form-control" required>
+                                <span>~</span>
+                                <input type="time" id="adminCalendarSimpleEndTime" class="admin-calendar-form-control" required>
+                            </div>
+
+                            <label class="admin-calendar-form-check">
+                                <input type="checkbox" id="adminCalendarSimpleAllDay">
+                                종일
+                            </label>
+
+                            <input
+                                    type="text"
+                                    id="adminCalendarSimpleLocation"
+                                    class="admin-calendar-form-control"
+                                    placeholder="장소를 입력하세요"
+                            >
+
+                            <!-- 간단등록에서도 참석자 선택 가능. 참석자가 있으면 JS에서 공개 일정으로 저장한다. -->
+                            <div class="admin-calendar-simple-participants">
+                                <strong>참석자</strong>
+                                <div id="adminCalendarSimpleParticipantNames" class="admin-calendar-form-participant-names">
+                                    선택된 참석자가 없습니다.
+                                </div>
+                                <button type="button" id="adminCalendarSimpleParticipantButton" class="admin-calendar-outline-btn">
+                                    참석자 선택
+                                </button>
+                            </div>
+
+                            <div class="admin-calendar-simple-footer">
+                                <button type="button" id="adminCalendarSimpleCancel" class="admin-calendar-outline-btn">
+                                    취소
+                                </button>
+                                <button type="button" id="adminCalendarSimpleDetailButton" class="admin-calendar-outline-btn">
+                                    상세등록
+                                </button>
+                                <button type="submit" class="admin-calendar-primary-btn">
+                                    등록
+                                </button>
+                            </div>
+                        </form>
+                    </section>
+
+                    <!-- 관리자 일정 상세 등록/수정 팝업: 사용자 상세등록/수정 팝업처럼 fixed 카드로 띄운다. -->
+                    <section id="adminCalendarDetailFormLayer" class="admin-calendar-detail-form-layer" hidden>
+                        <div id="adminCalendarDetailFormPopup" class="admin-calendar-detail-form-popup">
+                            <div class="admin-calendar-detail-form-header">
+                                <strong id="adminCalendarDetailFormTitle">일정 상세 등록</strong>
+
+                                <button type="button" id="adminCalendarDetailFormClose" class="admin-calendar-popup-close" aria-label="닫기">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+
+                            <form id="adminCalendarDetailForm" class="admin-calendar-detail-form">
+                                <input type="hidden" id="adminCalendarDetailFormScheduleId">
+
+                                <!-- 작성자 사번은 화면에 노출하지 않는다. 기존 관리자 API 호환을 위해 값만 JS에서 관리한다. -->
+                                <input type="hidden" id="adminCalendarDetailFormCreatorNo">
+
+                                <input
+                                        type="text"
+                                        id="adminCalendarDetailFormTitleInput"
+                                        class="admin-calendar-detail-form-title"
+                                        placeholder="제목을 입력하세요"
+                                        required
+                                >
+
+                                <!-- 관리자는 개인/부서/전사 일정을 모두 등록할 수 있다. -->
+                                <select id="adminCalendarDetailFormType" class="admin-calendar-form-control">
+                                    <option value="PERSONAL">개인일정</option>
+                                    <option value="DEPARTMENT">부서일정</option>
+                                    <option value="COMPANY">전사일정</option>
+                                </select>
+
+                                <select id="adminCalendarDetailFormCategory" class="admin-calendar-form-control">
+                                    <option value="MEETING">회의</option>
+                                    <option value="WORK">업무</option>
+                                    <option value="NOTICE">공지</option>
+                                    <option value="ETC">기타</option>
+                                </select>
+
+                                <label class="admin-calendar-form-label" for="adminCalendarDetailFormDate">날짜</label>
+                                <input type="date" id="adminCalendarDetailFormDate" class="admin-calendar-form-control" required>
+
+                                <div class="admin-calendar-form-time-row">
+                                    <input type="time" id="adminCalendarDetailFormStartTime" class="admin-calendar-form-control" required>
+                                    <span>~</span>
+                                    <input type="time" id="adminCalendarDetailFormEndTime" class="admin-calendar-form-control" required>
+                                </div>
+
+                                <label class="admin-calendar-form-check">
+                                    <input type="checkbox" id="adminCalendarDetailFormAllDay">
+                                    종일
+                                </label>
+
+                                <label class="admin-calendar-form-label" for="adminCalendarDetailFormLocation">장소</label>
+                                <input
+                                        type="text"
+                                        id="adminCalendarDetailFormLocation"
+                                        class="admin-calendar-form-control"
+                                        placeholder="장소를 입력하세요"
+                                >
+
+                                <div class="admin-calendar-detail-form-participants">
+                                    <strong>참석자</strong>
+                                    <div id="adminCalendarDetailFormParticipantNames" class="admin-calendar-form-participant-names">
+                                        선택된 참석자가 없습니다.
+                                    </div>
+                                    <button type="button" id="adminCalendarDetailParticipantButton" class="admin-calendar-outline-btn">
+                                        참석자 선택
+                                    </button>
+                                </div>
+
+                                <label class="admin-calendar-form-label" for="adminCalendarDetailFormContent">내용</label>
+                                <textarea
+                                        id="adminCalendarDetailFormContent"
+                                        class="admin-calendar-form-control admin-calendar-form-textarea"
+                                        placeholder="일정 내용을 입력하세요"
+                                ></textarea>
+
+                                <label class="admin-calendar-form-label" for="adminCalendarDetailFormRepeatRule">반복</label>
+                                <select id="adminCalendarDetailFormRepeatRule" class="admin-calendar-form-control">
+                                    <!-- 사용자 캘린더와 같은 반복 옵션을 사용한다. -->
+                                    <option value="">반복 없음</option>
+                                    <option value="DAILY">매일</option>
+                                    <option value="WEEKLY">매주</option>
+                                    <option value="MONTHLY">매월</option>
+                                </select>
+
+                                <label class="admin-calendar-form-label" for="adminCalendarDetailFormVisibility">공개 범위</label>
+                                <select id="adminCalendarDetailFormVisibility" class="admin-calendar-form-control">
+                                    <option value="PRIVATE">비공개</option>
+                                    <option value="COMPANY">공개</option>
+                                </select>
+
+                                <div class="admin-calendar-detail-form-footer">
+                                    <button type="button" id="adminCalendarDetailFormCancel" class="admin-calendar-outline-btn">
+                                        취소
+                                    </button>
+                                    <button type="submit" id="adminCalendarDetailFormSubmit" class="admin-calendar-primary-btn">
+                                        등록
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <!-- 관리자 참석자 선택 모달: 간단등록/상세등록/수정에서 공통 사용한다. -->
+                    <section id="adminCalendarParticipantModal" class="admin-calendar-participant-modal" hidden>
+                        <div class="admin-calendar-participant-dialog">
+                            <div class="admin-calendar-participant-header">
+                                <strong>멤버 초대하기</strong>
+                                <button type="button" id="adminCalendarParticipantClose" class="admin-calendar-popup-close" aria-label="닫기">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+
+                            <div class="admin-calendar-participant-body">
+                                <div class="admin-calendar-participant-filter">
+                                    <strong>검색 조건</strong>
+
+                                    <input
+                                            type="text"
+                                            id="adminCalendarParticipantKeyword"
+                                            class="admin-calendar-form-control"
+                                            placeholder="멤버 검색"
+                                    >
+
+                                    <!-- 이중 모달을 피하기 위해 팀 멤버/조직도 멤버를 같은 모달 안에서 전환한다. -->
+                                    <button type="button" id="adminCalendarParticipantTeamMode" class="admin-calendar-outline-btn">
+                                        팀 멤버 보기
+                                    </button>
+
+                                    <button type="button" id="adminCalendarParticipantOrgMode" class="admin-calendar-outline-btn">
+                                        조직도에서 멤버 선택
+                                    </button>
+
+                                    <select id="adminCalendarParticipantDeptSelect" class="admin-calendar-form-control" hidden>
+                                        <option value="">부서를 선택해주세요.</option>
+                                    </select>
+
+                                    <!-- Org mode department tree is rendered here to match the user calendar modal. -->
+                                    <div id="adminCalendarParticipantDeptTree" class="admin-calendar-participant-dept-tree" hidden></div>
+                                </div>
+
+                                <div class="admin-calendar-participant-list-wrap">
+                                    <div class="admin-calendar-participant-list-header">
+                                        <strong id="adminCalendarParticipantListTitle">팀 멤버</strong>
+
+                                        <label>
+                                            <input type="checkbox" id="adminCalendarParticipantSelectAll">
+                                            현재 목록 멤버 전체 선택
+                                        </label>
+                                    </div>
+
+                                    <div id="adminCalendarParticipantList" class="admin-calendar-participant-list"></div>
+
+                                    <div class="admin-calendar-participant-selected">
+                                        <strong id="adminCalendarParticipantSelectedCount">선택된 멤버 0</strong>
+                                        <div id="adminCalendarParticipantSelectedList" class="admin-calendar-participant-selected-list">
+                                            선택된 멤버가 없습니다.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="admin-calendar-participant-footer">
+                                <button type="button" id="adminCalendarParticipantCancel" class="admin-calendar-outline-btn">
+                                    닫기
+                                </button>
+                                <button type="button" id="adminCalendarParticipantApply" class="admin-calendar-primary-btn">
+                                    선택완료
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+            </div>
             </div>
             <!--end::Container-->
         </div>
@@ -51,7 +523,13 @@
 <!--end::App Wrapper-->
 <!--스크립트 시작-->
 <th:block th:replace="~{/admin/common/commonJs}"></th:block> <!-- 공통 사용 스크립트 불러오기-->
-<!-- 각 페이지 별로 필요한 스크립트 작성 혹은 임포트 -->
+
+<!-- 관리자 Thymeleaf 캘린더 화면에서 사용할 FullCalendar JS를 로드한다. -->
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/index.global.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.15/locales/ko.global.min.js"></script>
+
+<!-- 관리자 캘린더 화면 동작은 외부 JS로 분리한다. -->
+<script th:src="@{/js/calendar/adCalendar.js}"></script>
 <!--스크립트 끝-->
 </body>
 <!--end::Body-->

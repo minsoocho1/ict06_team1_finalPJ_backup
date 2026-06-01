@@ -1,3 +1,24 @@
+/**
+ * @FileName : RagRetrievalServiceImpl.java
+ * @Description : 사내 AI 챗봇 RAG 검색 Service 구현체
+ *                - 사용자 질문 기반 문서 청크 검색
+ *                - 사용자 조직/직책 권한 기준 RAG 문서 필터링
+ *                - pgvector 기반 유사도 검색 결과 후처리
+ *                - 최종 답변 prompt에 사용할 ragChunks 구성
+ *                - 권한 차단 및 no-context 케이스 처리
+ *
+ * @Author : 송혜진
+ * @Date : 2026. 04. 22
+ * @Modification_History
+ * @
+ * @ 수정일        수정자       수정내용
+ * @ ----------    ---------    ----------------------------------------
+ * @ 2026.04.22    송혜진       최초 생성
+ * @ 2026.05.22    송혜진       사용자 권한 기반 RAG 검색 필터링 기준 정리
+ * @ 2026.05.27    송혜진       본부/팀/직책 전원 및 다중 조건 처리 기준 반영
+ * @ 2026.05.28    송혜진       최종 ragChunks 기반 references 및 trace 연계 기준 정리
+ */
+
 package com.ict06.team1_fin_pj.domain.aiSecretary.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -571,8 +592,8 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
                     condition.requiredHeadquarter(),
-                    condition.requiredTeam(),
-                    condition.requiredPosition(),
+                    condition.requiredTeamsText(),
+                    condition.requiredPositionsText(),
                     employeeAccessContext.headquarterName(),
                     employeeAccessContext.teamName(),
                     employeeAccessContext.positionName(),
@@ -586,8 +607,8 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
                 "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}",
                 document.getDocId(),
                 condition.requiredHeadquarter(),
-                condition.requiredTeam(),
-                condition.requiredPosition()
+                condition.requiredTeamsText(),
+                condition.requiredPositionsText()
         );
 
         if (!isWildcard(condition.requiredHeadquarter())
@@ -597,8 +618,8 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
                     condition.requiredHeadquarter(),
-                    condition.requiredTeam(),
-                    condition.requiredPosition(),
+                    condition.requiredTeamsText(),
+                    condition.requiredPositionsText(),
                     employeeAccessContext.headquarterName(),
                     employeeAccessContext.teamName(),
                     employeeAccessContext.positionName(),
@@ -608,15 +629,15 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
             return false;
         }
 
-        if (!isWildcard(condition.requiredTeam())
-                && !condition.requiredTeam().equals(employeeAccessContext.teamName())) {
+        if (!hasWildcard(condition.requiredTeams())
+                && !matchesAny(condition.requiredTeams(), employeeAccessContext.teamName())) {
             recordPermissionDeniedInfoIfAbsent(document, targetDept, employeeAccessContext, "team-mismatch");
             log.debug(
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
                     condition.requiredHeadquarter(),
-                    condition.requiredTeam(),
-                    condition.requiredPosition(),
+                    condition.requiredTeamsText(),
+                    condition.requiredPositionsText(),
                     employeeAccessContext.headquarterName(),
                     employeeAccessContext.teamName(),
                     employeeAccessContext.positionName(),
@@ -626,15 +647,15 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
             return false;
         }
 
-        if (!isWildcard(condition.requiredPosition())
-                && !condition.requiredPosition().equals(employeeAccessContext.positionName())) {
+        if (!hasWildcard(condition.requiredPositions())
+                && !matchesAny(condition.requiredPositions(), employeeAccessContext.positionName())) {
             recordPermissionDeniedInfoIfAbsent(document, targetDept, employeeAccessContext, "position-mismatch");
             log.debug(
                     "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                     document.getDocId(),
                     condition.requiredHeadquarter(),
-                    condition.requiredTeam(),
-                    condition.requiredPosition(),
+                    condition.requiredTeamsText(),
+                    condition.requiredPositionsText(),
                     employeeAccessContext.headquarterName(),
                     employeeAccessContext.teamName(),
                     employeeAccessContext.positionName(),
@@ -648,8 +669,8 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
                 "[RAG permission] docId={}, parsedHeadquarter={}, parsedTeam={}, parsedPosition={}, userHeadquarter={}, userTeam={}, userPosition={}, allowed={}, reason={}",
                 document.getDocId(),
                 condition.requiredHeadquarter(),
-                condition.requiredTeam(),
-                condition.requiredPosition(),
+                condition.requiredTeamsText(),
+                condition.requiredPositionsText(),
                 employeeAccessContext.headquarterName(),
                 employeeAccessContext.teamName(),
                 employeeAccessContext.positionName(),
@@ -687,12 +708,14 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
     private TargetDeptCondition parseTargetDeptCondition(String targetDept) {
         String normalized = safe(targetDept);
         if (normalized.isBlank() || "-".equals(normalized)) {
-            return new TargetDeptCondition("", "", "", false, false);
+            return new TargetDeptCondition("", List.of(), List.of(), false, false);
         }
 
         String requiredHeadquarter = extractConditionValue(normalized, "본부", "대상 본부");
         String requiredTeam = extractConditionValue(normalized, "팀", "대상 팀");
         String requiredPosition = extractConditionValue(normalized, "직책", "직책 기준");
+        List<String> requiredTeams = splitConditionValues(requiredTeam);
+        List<String> requiredPositions = splitConditionValues(requiredPosition);
 
         boolean hasCondition =
                 normalized.contains("본부:")
@@ -706,13 +729,13 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
 
         boolean parseFailed = hasCondition
                 && requiredHeadquarter.isBlank()
-                && requiredTeam.isBlank()
-                && requiredPosition.isBlank();
+                && requiredTeams.isEmpty()
+                && requiredPositions.isEmpty();
 
         return new TargetDeptCondition(
                 requiredHeadquarter,
-                requiredTeam,
-                requiredPosition,
+                requiredTeams,
+                requiredPositions,
                 hasCondition,
                 parseFailed
         );
@@ -737,6 +760,23 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
         return "";
     }
 
+    private List<String> splitConditionValues(String value) {
+        String normalized = safe(value);
+        if (normalized.isBlank()) {
+            return List.of();
+        }
+
+        List<String> values = new ArrayList<>();
+        for (String token : normalized.split(",")) {
+            String trimmed = safe(token);
+            if (!trimmed.isBlank() && !values.contains(trimmed)) {
+                values.add(trimmed);
+            }
+        }
+
+        return values;
+    }
+
     private boolean isWildcard(String value) {
         String normalized = safe(value);
         if (normalized.isBlank() || "-".equals(normalized)) {
@@ -750,16 +790,46 @@ public class RagRetrievalServiceImpl implements RagRetrievalService {
         return normalized.startsWith("전원(") && normalized.endsWith(")");
     }
 
+    private boolean hasWildcard(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return true;
+        }
+
+        return values.stream().anyMatch(this::isWildcard);
+    }
+
+    private boolean matchesAny(List<String> values, String actualValue) {
+        String normalizedActual = safe(actualValue);
+        if (values == null || values.isEmpty()) {
+            return true;
+        }
+
+        return values.stream()
+                .map(this::safe)
+                .anyMatch(value -> value.equals(normalizedActual));
+    }
+
     private record ScoredChunk(DocumentEntity document, DocChunkEntity chunk, double similarityScore) {
     }
 
     private record TargetDeptCondition(
             String requiredHeadquarter,
-            String requiredTeam,
-            String requiredPosition,
+            List<String> requiredTeams,
+            List<String> requiredPositions,
             boolean hasCondition,
             boolean parseFailed
     ) {
+        private String requiredTeamsText() {
+            return requiredTeams == null || requiredTeams.isEmpty()
+                    ? ""
+                    : String.join(", ", requiredTeams);
+        }
+
+        private String requiredPositionsText() {
+            return requiredPositions == null || requiredPositions.isEmpty()
+                    ? ""
+                    : String.join(", ", requiredPositions);
+        }
     }
 
     private record EmployeeAccessContext(String empNo, String headquarterName, String teamName, String positionName) {

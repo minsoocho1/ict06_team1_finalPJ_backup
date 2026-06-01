@@ -1,16 +1,19 @@
 /**
  * @FileName : AiDocumentRepository.java
- * @Description : AI/RAG 문서 조회 및 상태 관리를 위한 DOCUMENT Repository
+ * @Description : AI/RAG 문서 관리 Repository
+ *                - AI_RAG 문서 목록 및 상세 데이터 조회
+ *                - 문서 상태, 접근 권한, 문서명 기준 필터링 조회
+ *                - 관리자 RAG 문서 관리 및 챗봇 검색 대상 문서 조회에 사용
+ *
  * @Author : 송혜진
- * @Date : 2026. 05. 20
+ * @Date : 2026. 05. 12
  * @Modification_History
  * @
- * @ 수정일         수정자        수정내용
- * @ ----------    ---------    ----------------------------------------
- * @ 2026.05.20    송혜진        최초 생성 (AI_RAG 문서 조회 및 관리자 RAG 관리 화면 연동)
- * @ 2026.05.22    송혜진        documentDomain 및 currentStage 기준 RAG 문서 조회 조건 정리
- * @ 2026.05.22    송혜진        PUBLISHED 상태 문서만 RAG 검색 대상으로 사용하도록 조회 기준 반영
- * @ 2026.05.22    송혜진        관리자 문서 활성화/비활성화 상태 전이에 필요한 문서 조회 기준 정리
+ * @ 수정일       수정자       수정내용
+ * @ ----------  ---------   ----------------------------------------
+ * @ 2026.05.12  송혜진       최초 생성
+ * @ 2026.05.22  송혜진       RAG 문서 상태 및 PUBLISHED 검색 기준 반영
+ * @ 2026.05.27  송혜진       문서 상세 관리 및 권한 조건 조회 기준 반영
  */
 
 package com.ict06.team1_fin_pj.domain.aiSecretary.repository;

@@ -9,6 +9,8 @@ import com.ict06.team1_fin_pj.domain.employee.repository.EmployeeRepository;
 import com.ict06.team1_fin_pj.domain.attendance.repository.LeaveTypeRepository;
 import com.ict06.team1_fin_pj.domain.attendance.entity.LeaveTypeEntity;
 import com.ict06.team1_fin_pj.domain.attendance.excel.LeaveExcelExporter;
+import com.ict06.team1_fin_pj.domain.attendance.repository.HolidayRepository;
+import com.ict06.team1_fin_pj.domain.attendance.entity.LeaveStatus;
 
 import com.ict06.team1_fin_pj.common.dto.attendance.LeaveHistoryDTO;
 import com.ict06.team1_fin_pj.common.dto.attendance.LeaveSummaryDTO;
@@ -21,6 +23,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 
+import java.time.DayOfWeek;
 import java.time.Period;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -43,6 +46,10 @@ public class LeaveServiceImpl implements LeaveService {
 
     // 휴가 유형 Repository
     private final LeaveTypeRepository leaveTypeRepository;
+
+    // 공휴일 Repository
+    // 휴가 일수 계산 시 HOLIDAY 테이블에 등록된 공휴일을 제외하기 위해 사용한다.
+    private final HolidayRepository holidayRepository;
 
     // ==============================
     // 1. 연차 요약 조회
@@ -485,5 +492,138 @@ public class LeaveServiceImpl implements LeaveService {
 
         // Excel 파일 byte 배열 반환
         return exporter.export(leaveList);
+    }
+
+    /**
+     * 휴가 신청 기간의 실제 사용 연차 일수를 계산한다.
+     *
+     * 계산 기준:
+     * - 시작일과 종료일을 모두 포함한다.
+     * - 토요일/일요일은 제외한다.
+     * - HOLIDAY 테이블에 등록된 활성 공휴일(is_active=true)은 제외한다.
+     *
+     * 예:
+     * - 금요일 ~ 월요일 신청
+     * - 토/일 제외
+     * - 실제 사용 연차는 금요일 + 월요일 = 2일
+     */
+    @Override
+    public BigDecimal calculateLeaveDaysExcludingHoliday(
+            LocalDate startDate,
+            LocalDate endDate
+    ) {
+        // 시작일/종료일이 비어 있으면 계산할 수 없으므로 예외 처리
+        if (startDate == null || endDate == null) {
+            throw new IllegalArgumentException("휴가 시작일과 종료일은 필수입니다.");
+        }
+
+        // 종료일이 시작일보다 빠르면 잘못된 기간이므로 예외 처리
+        if (endDate.isBefore(startDate)) {
+            throw new IllegalArgumentException("휴가 종료일은 시작일보다 빠를 수 없습니다.");
+        }
+
+        // 실제 연차로 차감할 근무일 수
+        int leaveDays = 0;
+
+        // 시작일부터 종료일까지 하루씩 확인
+        LocalDate date = startDate;
+
+        while (!date.isAfter(endDate)) {
+
+            // 요일 확인
+            DayOfWeek dayOfWeek = date.getDayOfWeek();
+
+            // 토요일/일요일 여부
+            boolean isWeekend =
+                    dayOfWeek == DayOfWeek.SATURDAY ||
+                            dayOfWeek == DayOfWeek.SUNDAY;
+
+            // HOLIDAY 테이블에 등록된 활성 공휴일 여부
+            boolean isHoliday =
+                    holidayRepository.existsByHolidayDateAndIsActiveTrue(date);
+
+            // 주말도 아니고 공휴일도 아니면 연차 사용일로 계산
+            if (!isWeekend && !isHoliday) {
+                leaveDays++;
+            }
+
+            // 다음 날짜로 이동
+            date = date.plusDays(1);
+        }
+
+        // BigDecimal 형태로 반환
+        // 예: 2일 -> 2.0
+        return BigDecimal.valueOf(leaveDays);
+    }
+
+    /**
+     * 승인 완료된 휴가/연차 사용분을 연차 발생 내역에 반영한다.
+     *
+     * 처리 흐름:
+     * 1. LEAVE_REQUEST 조회
+     * 2. 신청자의 해당 연도 연차 발생 내역 조회
+     * 3. used_days 증가
+     * 4. remain_days 감소
+     *
+     * 주의:
+     * - 실제 승인 처리 자체는 전자결재 영역
+     * - 이 메서드는 승인 완료 이후 연차 차감 반영만 담당한다.
+     */
+    @Override
+    public void applyApprovedLeaveUsage(Integer leaveRequestId) {
+
+        // 휴가 신청 내역 조회
+        LeaveRequestEntity leaveRequest =
+                leaveRequestRepository.findById(leaveRequestId)
+                        .orElseThrow(() ->
+                                new IllegalArgumentException("휴가 신청 내역이 존재하지 않습니다.")
+                        );
+
+        // 승인 상태가 아니면 연차 차감 처리하지 않는다.
+        if (leaveRequest.getStatus() != LeaveStatus.APPROVED) {
+            return;
+        }
+
+        // 신청자 사번
+        String empNo =
+                leaveRequest.getEmployee().getEmpNo();
+
+        // 연차 사용 연도
+        int targetYear =
+                leaveRequest.getStartDate().getYear();
+
+        // 해당 연도의 연차 발생 내역 조회
+        List<LeaveOccurrenceEntity> occurrences =
+                leaveOccurrenceRepository
+                        .findByEmployee_EmpNoAndTargetYear(
+                                empNo,
+                                targetYear
+                        );
+
+        // 연차 발생 내역이 없으면 처리 불가
+        if (occurrences.isEmpty()) {
+            throw new IllegalArgumentException("연차 발생 내역이 존재하지 않습니다.");
+        }
+
+        // 이번 휴가 신청의 실제 사용 연차 일수
+        BigDecimal leaveDays =
+                leaveRequest.getLeaveDays();
+
+        // 주말/공휴일만 포함된 신청처럼 실제 차감 일수가 0이면 연차 발생 내역을 변경하지 않는다.
+        if (leaveDays == null || leaveDays.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
+
+        // 가장 최신 연차 발생 내역 사용
+        // 현재 구조에서는 1개만 존재하는 경우가 대부분
+        LeaveOccurrenceEntity occurrence =
+                occurrences.get(0);
+
+        // Entity 내부 메서드를 통해 사용 연차/잔여 연차를 갱신한다.
+        // useDays() 내부에서 used_days 증가, remain_days 감소, 잔여일 부족 검증을 함께 처리한다.
+        occurrence.useDays(leaveDays);
+
+        // DB 저장
+        leaveOccurrenceRepository.save(occurrence);
     }
 }
