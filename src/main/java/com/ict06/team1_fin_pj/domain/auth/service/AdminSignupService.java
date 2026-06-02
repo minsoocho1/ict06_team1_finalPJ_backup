@@ -31,11 +31,12 @@ public class AdminSignupService {
     @Transactional
     public String signup(AdminSignupRequestDto request) {
         validateRequiredFields(request);
+        String phone = formatPhone(request.getPhone());
 
         if (empRepository.existsByEmpId(request.getEmpId().trim())) {
             throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
         }
-        if (empRepository.existsByPhone(request.getPhone().trim())) {
+        if (empRepository.existsByPhone(phone)) {
             throw new IllegalArgumentException("이미 사용 중인 연락처입니다.");
         }
         if (empRepository.existsByEmail(request.getEmail().trim())) {
@@ -60,7 +61,7 @@ public class AdminSignupService {
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(empId)
                 .email(request.getEmail().trim())
-                .phone(request.getPhone().trim())
+                .phone(phone)
                 .bank("미등록")
                 .accountNo("ADMIN-" + empNo)
                 .department(department)
@@ -84,6 +85,19 @@ public class AdminSignupService {
 
     private boolean isBlank(String value) {
         return value == null || value.trim().isEmpty();
+    }
+
+    private String formatPhone(String value) {
+        String digits = value.replaceAll("\\D", "");
+        if (!digits.matches("010\\d{8}")) {
+            throw new IllegalArgumentException("연락처는 010-0000-0000 형식으로 입력해 주세요.");
+        }
+
+        return digits.substring(0, 3)
+                + "-"
+                + digits.substring(3, 7)
+                + "-"
+                + digits.substring(7);
     }
 
     private String generateEmpNo() {

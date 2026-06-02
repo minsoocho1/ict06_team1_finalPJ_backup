@@ -20,6 +20,14 @@ const initialForm = {
   email: '',
 }
 
+const formatPhone = (value) => {
+  const digits = value.replace(/\D/g, '').slice(0, 11)
+
+  if (digits.length <= 3) return digits
+  if (digits.length <= 7) return `${digits.slice(0, 3)}-${digits.slice(3)}`
+  return `${digits.slice(0, 3)}-${digits.slice(3, 7)}-${digits.slice(7)}`
+}
+
 function AdminSignupPage() {
   const navigate = useNavigate()
   const [form, setForm] = useState(initialForm)
@@ -27,9 +35,11 @@ function AdminSignupPage() {
   const [isLoading, setIsLoading] = useState(false)
 
   const handleChange = (event) => {
+    const { name, value } = event.target
+
     setForm((current) => ({
       ...current,
-      [event.target.name]: event.target.value,
+      [name]: name === 'phone' ? formatPhone(value) : value,
     }))
   }
 
@@ -69,7 +79,16 @@ function AdminSignupPage() {
             style={inputStyle}
             required
           />
-          <input name="phone" placeholder="연락처" value={form.phone} onChange={handleChange} style={inputStyle} required />
+          <input
+            name="phone"
+            placeholder="연락처 (010-0000-0000)"
+            value={form.phone}
+            onChange={handleChange}
+            style={inputStyle}
+            maxLength={13}
+            inputMode="numeric"
+            required
+          />
           <input
             type="email"
             name="email"
