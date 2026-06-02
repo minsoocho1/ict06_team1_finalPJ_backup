@@ -4,6 +4,7 @@ import React from 'react';
 import {
     CBadge
 } from '@coreui/react';
+import { PATH } from 'src/constants/path';
 
 /*
  * 사원 상세 카드 컴포넌트
@@ -29,6 +30,12 @@ const EmployeeProfileCard = ({
         );
     }
 
+    const profileImage = selectedEmployee.profileImg || selectedEmployee.profile_img;
+    const backendOrigin = PATH.API.BASE.replace(/\/api$/, '');
+    const profileImageUrl = profileImage?.startsWith('/employee/uploads/')
+        ? `${backendOrigin}${profileImage}`
+        : profileImage;
+
     return (
         <div>
 
@@ -51,9 +58,9 @@ const EmployeeProfileCard = ({
                 >
 
                     {
-                        selectedEmployee.profileImg ? (
+                        profileImageUrl ? (
                             <img
-                                src={selectedEmployee.profileImg}
+                                src={profileImageUrl}
                                 alt="프로필"
                                 style={{
                                     width: '100%',
