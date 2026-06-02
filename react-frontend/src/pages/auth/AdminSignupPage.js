@@ -58,7 +58,7 @@ function AdminSignupPage() {
         <p style={cardDescription}>관리자 계정으로 사용할 정보를 입력해 주세요.</p>
 
         <form onSubmit={handleSubmit}>
-          <input value="가입 시 자동으로 부여됩니다." style={inputStyle} disabled />
+          <input value="사번은 가입 후 자동으로 부여됩니다." style={inputStyle} disabled />
           <input name="empId" placeholder="아이디" value={form.empId} onChange={handleChange} style={inputStyle} required />
           <input
             type="password"
