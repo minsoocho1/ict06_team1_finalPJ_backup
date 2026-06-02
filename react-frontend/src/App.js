@@ -7,6 +7,7 @@ import React, { Suspense } from 'react';
 //1. 기존 페이지 컴포넌트
 //[그룹 A] 독립 페이지(초기 진입 시 빠른 로딩을 위해 일반 import)
 import LoginPage from './pages/auth/LoginPage';
+import AdminSignupPage from './pages/auth/AdminSignupPage';
 import WelcomePage from './pages/auth/WelcomePage';
 import { UserProvider, useUser, } from './api/UserContext';
 import NotificationListener from './pages/auth/NotificationListener';
@@ -36,6 +37,7 @@ function AppContent() {
           <Route path={PATH.ROOT} element={<Navigate to={PATH.AUTH.LOGIN} />} />
           {/* 인증 */}
           <Route path={PATH.AUTH.LOGIN} element={<LoginPage />} />
+          <Route path={PATH.AUTH.ADMIN_SIGNUP} element={<AdminSignupPage />} />
           <Route path={PATH.AUTH.WELCOME} element={<WelcomePage />} />
           {/* 3. [그룹 B] 사이드바/헤더 있는 메인 서비스 레이아웃 */}
           {/* 메인 : routes/index.js에 정리된 모든 경로 지원*/}

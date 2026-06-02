@@ -210,6 +210,16 @@ function LoginPage() {
             >
               사번/비밀번호 찾기
             </span>
+            <div>
+              <span
+                onClick={() => navigate(PATH.AUTH.ADMIN_SIGNUP)}
+                style={helperLink}
+                onMouseOver={(e) => (e.target.style.color = '#321fdb')}
+                onMouseOut={(e) => (e.target.style.color = '#6b7280')}
+              >
+                관리자 회원가입
+              </span>
+            </div>
           </div>
         </div>
       </div>

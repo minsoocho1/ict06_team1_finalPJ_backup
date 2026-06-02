@@ -23,6 +23,7 @@ export const PATH = {
   // 대분류 : 인증/인가   
   AUTH: {
     LOGIN: "/auth/login",
+    ADMIN_SIGNUP: "/auth/admin-signup",
     WELCOME: "/auth/welcome",
     USERHOME: "/auth/userhome",
     MYPAGE: "/auth/mypage"
@@ -136,6 +137,7 @@ export const PATH = {
   // SpringBoot REST API
   API: {
     BASE: process.env.REACT_APP_SERVER_URL || 'http://localhost:8081/api',
+    ADMIN_SIGNUP: '/auth/admin-signup',
     USER_ME: '/user/me',
     USER_UPDATE: '/user/update',
 
