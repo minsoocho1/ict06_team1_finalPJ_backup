@@ -92,6 +92,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 공개 API(인증 불필요)
                         .requestMatchers("/api/auth/login").permitAll()
+                        .requestMatchers("/api/auth/admin-signup").permitAll()
                         .requestMatchers("/api/organization/**").permitAll()
 
                         // 인증 필요한 API

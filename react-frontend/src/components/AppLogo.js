@@ -22,7 +22,7 @@ const AppLogo = ({ collapsed = false }) => {
       className="d-flex align-items-center"
       style={{
         alignSelf: 'center',
-        background: 'linear-gradient(135deg, rgba(37, 99, 235, 0.12) 0%, rgba(255, 255, 255, 0.86) 100%)',
+        background: 'transparent',
         border: '0',
         borderBottom: '0',
         borderRadius: '16px',
@@ -72,7 +72,7 @@ const AppLogo = ({ collapsed = false }) => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', userSelect: 'none', minWidth: 0 }}>
           <span
             style={{
-              color: '#0F172A',
+              color: '#FFFFFF',
               fontSize: '1.2rem',
               fontWeight: 900,
               letterSpacing: '-0.06em',
@@ -80,11 +80,11 @@ const AppLogo = ({ collapsed = false }) => {
               textDecoration: 'none',
             }}
           >
-            CORE<span style={{ color: '#2563EB' }}>WORK</span>
+            CORE<span style={{ color: '#BFDBFE' }}>WORK</span>
           </span>
           <span
             style={{
-              color: '#64748B',
+              color: '#CEDCFC',
               fontSize: '0.58rem',
               fontWeight: 800,
               letterSpacing: '0.1em',

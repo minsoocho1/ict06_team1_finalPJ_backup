@@ -15,6 +15,8 @@
  */
 package com.ict06.team1_fin_pj.domain.auth.controller;
 
+import com.ict06.team1_fin_pj.common.dto.auth.AdminSignupRequestDto;
+import com.ict06.team1_fin_pj.domain.auth.service.AdminSignupService;
 import com.ict06.team1_fin_pj.domain.auth.service.AuthServiceImpl;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,17 @@ import java.util.Map;
 public class AuthController {
 
     private final AuthServiceImpl authService;
+    private final AdminSignupService adminSignupService;
+
+    @PostMapping("/admin-signup")
+    public ResponseEntity<?> adminSignup(@RequestBody AdminSignupRequestDto request) {
+        try {
+            String empNo = adminSignupService.signup(request);
+            return ResponseEntity.ok(Map.of("empNo", empNo));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
 
     /**
      * 로그인 처리

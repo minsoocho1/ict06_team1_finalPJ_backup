@@ -18,6 +18,7 @@
 package com.ict06.team1_fin_pj.domain.auth.repository;
 import com.ict06.team1_fin_pj.domain.employee.entity.EmpEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
@@ -32,5 +33,18 @@ public interface EmpRepository extends JpaRepository<EmpEntity, String>, EmpRepo
     List<EmpEntity> findByRole_RoleId(Integer roleId);
 
     Optional<EmpEntity> findByEmpNoOrEmpId(String empNo, String empId);
+
+    @Query("""
+            select e.empNo
+            from EmpEntity e
+            where e.empNo like concat(:yearPrefix, '%')
+            """)
+    List<String> findEmpNosByYearPrefix(String yearPrefix);
+
+    boolean existsByEmpId(String empId);
+
+    boolean existsByPhone(String phone);
+
+    boolean existsByEmail(String email);
 
 }
