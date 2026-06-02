@@ -1012,10 +1012,10 @@
              aria-labelledby="uploadDocumentModalLabel"
              aria-hidden="true">
           <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-            <div class="modal-content">
-              <form id="uploadDocumentForm"
-                    method="post"
-                    th:action="@{/admin/AiSecretary/rag/documents/direct}">
+            <form id="uploadDocumentForm"
+                  class="modal-content"
+                  method="post"
+                  th:action="@{/admin/AiSecretary/rag/documents/direct}">
                 <div class="modal-header">
                   <div>
                     <h5 class="modal-title fw-bold" id="uploadDocumentModalLabel">새 문서 업로드</h5>
@@ -1121,8 +1121,7 @@
                   <button type="submit" class="btn btn-primary" id="uploadDocumentSubmitButton">등록</button>
                   <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
                 </div>
-              </form>
-            </div>
+            </form>
           </div>
         </div>
 
